@@ -4,6 +4,8 @@ import { addIcons } from 'ionicons';
 import {
   add,
   aperture,
+  radioButtonOn,
+  radioButtonOff,
   bugOutline,
   cameraOutline,
   cameraReverse,
@@ -44,6 +46,8 @@ export class AppComponent {
   constructor() {
     addIcons({
       add,
+      radioButtonOn,
+      radioButtonOff,
       aperture,
       bugOutline,
       cameraOutline,

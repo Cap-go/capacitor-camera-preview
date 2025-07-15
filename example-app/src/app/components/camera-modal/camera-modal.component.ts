@@ -112,6 +112,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected readonly isRecording = signal(false);
   protected readonly currentOpacity = signal(100);
   protected readonly testResults = signal<string>('');
+  protected readonly showTestResults = signal(false);
 
   // Camera switching functionality
   protected readonly availableCameras = signal<CameraDevice[]>([]);
@@ -164,6 +165,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       disableAudio: this.disableAudio(),
       enableHighResolution: this.enableHighResolution(),
       lockAndroidOrientation: this.lockAndroidOrientation(),
+      toBack: true,
     };
 
     await this.#cameraViewService.start(startOptions);
@@ -309,6 +311,13 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   protected async testAllFeatures(): Promise<void> {
+    if (this.showTestResults()) {
+      // Hide test results
+      this.showTestResults.set(false);
+      this.testResults.set('');
+      return;
+    }
+
     let results = '=== Camera Modal Test Results ===\n';
 
     try {
@@ -328,10 +337,58 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       const flashMode = await this.#cameraViewService.getFlashMode();
       results += `\n✓ Flash mode: ${flashMode}`;
 
+      // Test lens information
+      const lenses = await this.#cameraViewService.getAvailableLenses();
+      results += `\n✓ Available lenses: ${lenses.length}`;
+
+      const currentLens = await this.#cameraViewService.getCurrentLens();
+      results += `\n✓ Current lens: ${currentLens.label} (${currentLens.deviceType})`;
+      results += `\n  - Base zoom: ${currentLens.baseZoomRatio}x`;
+      results += `\n  - Focal length: ${currentLens.focalLength}mm`;
+
       this.testResults.set(results);
+      this.showTestResults.set(true);
     } catch (error) {
       results += `\n✗ Error during testing: ${error}`;
       this.testResults.set(results);
+      this.showTestResults.set(true);
+    }
+  }
+
+  protected async testLensInfo(): Promise<void> {
+    if (this.showTestResults()) {
+      // Hide test results
+      this.showTestResults.set(false);
+      this.testResults.set('');
+      return;
+    }
+
+    try {
+      let results = `\n=== Lens Information Test ===`;
+
+      // Get available lenses
+      const lenses = await this.#cameraViewService.getAvailableLenses();
+      results += `\n✓ Available lenses: ${lenses.length}`;
+
+      lenses.forEach((lens, index) => {
+        results += `\n  ${index + 1}. ${lens.label}`;
+        results += `\n     Type: ${lens.deviceType}`;
+        results += `\n     Base Zoom: ${lens.baseZoomRatio}x`;
+        results += `\n     Zoom Range: ${lens.minZoom}x - ${lens.maxZoom}x`;
+        results += `\n     Focal Length: ${lens.focalLength}mm`;
+        results += `\n     Active: ${lens.isActive ? 'Yes' : 'No'}`;
+      });
+
+      // Get current lens
+      const currentLens = await this.#cameraViewService.getCurrentLens();
+      results += `\n✓ Current lens: ${currentLens.label} (${currentLens.deviceType})`;
+
+      this.testResults.set(results);
+      this.showTestResults.set(true);
+    } catch (error) {
+      const results = `\n✗ Lens info test failed: ${error}`;
+      this.testResults.set(results);
+      this.showTestResults.set(true);
     }
   }
 
@@ -343,11 +400,15 @@ export class CameraModalComponent implements OnInit, OnDestroy {
         disableAudio: this.disableAudio(),
       });
       this.isRecording.set(true);
-      const results = this.testResults() + `\n✓ Video recording started`;
-      this.testResults.set(results);
+      if (this.showTestResults()) {
+        const results = this.testResults() + `\n✓ Video recording started`;
+        this.testResults.set(results);
+      }
     } catch (error) {
-      const results = this.testResults() + `\n✗ Failed to start recording: ${error}`;
-      this.testResults.set(results);
+      if (this.showTestResults()) {
+        const results = this.testResults() + `\n✗ Failed to start recording: ${error}`;
+        this.testResults.set(results);
+      }
       console.error('Failed to start recording:', error);
     }
   }
@@ -361,8 +422,10 @@ export class CameraModalComponent implements OnInit, OnDestroy {
         type: 'video'
       });
     } catch (error) {
-      const results = this.testResults() + `\n✗ Failed to stop recording: ${error}`;
-      this.testResults.set(results);
+      if (this.showTestResults()) {
+        const results = this.testResults() + `\n✗ Failed to stop recording: ${error}`;
+        this.testResults.set(results);
+      }
       console.error('Failed to stop recording:', error);
     }
   }
@@ -393,6 +456,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   // }
 
   async #setZoom(zoomFactor: number): Promise<void> {
+    const previousLens = this.currentLens();
     this.currentZoomFactor.set(zoomFactor);
     console.log('availableLenses:', JSON.stringify(this.availableLenses(), null, 2));
     console.log('currentZoomFactor:', zoomFactor);
@@ -401,6 +465,13 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     await this.#cameraViewService.setZoom(zoomFactor, false);
     await this.#updateCurrentDeviceId();
     await this.#updateAvailableLenses();
+
+    // Check if lens changed and update test results
+    const newLens = this.currentLens();
+    if (previousLens && newLens && previousLens.id !== newLens.id && this.showTestResults()) {
+      const results = this.testResults() + `\n✓ Lens switched: ${newLens.label} (${newLens.deviceType}, ${newLens.baseZoomRatio}x) at ${zoomFactor.toFixed(1)}x zoom`;
+      this.testResults.set(results);
+    }
   }
 
 

@@ -23,6 +23,24 @@
           <span class="label">Zoom:</span>
           <span class="value">{{ currentZoomFactor() }}x ({{ minZoom() }}-{{ maxZoom() }})</span>
         </div>
+        @if (currentLens()) {
+          <div class="info-row">
+            <span class="label">Lens:</span>
+            <span class="value">{{ currentLens()!.label }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Type:</span>
+            <span class="value">{{ currentLens()!.deviceType }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Base Zoom:</span>
+            <span class="value">{{ currentLens()!.baseZoomRatio }}x</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Focal Length:</span>
+            <span class="value">{{ currentLens()!.focalLength }}mm</span>
+          </div>
+        }
         <div class="info-row">
           <span class="label">Flash:</span>
           <span class="value">{{ flashMode() }}</span>
@@ -35,6 +53,23 @@
           <span class="label">Opacity:</span>
           <span class="value">{{ currentOpacity() }}%</span>
         </div>
+
+        <!-- Available Lenses Info -->
+        @if (availableLenses().length > 1) {
+          <div class="info-section">
+            <h4>Available Lenses ({{ availableLenses().length }})</h4>
+            @for (lens of availableLenses(); track lens.id) {
+              <div class="lens-item" [class.active]="lens.isActive">
+                <ion-icon 
+                  [name]="lens.isActive ? 'radio-button-on' : 'radio-button-off'" 
+                  [color]="lens.isActive ? 'primary' : 'medium'"
+                  size="small">
+                </ion-icon>
+                <span class="lens-label">{{ lens.deviceType }} ({{ lens.baseZoomRatio }}x)</span>
+              </div>
+            }
+          </div>
+        }
 
         <!-- @if (availableDevices().length > 0) {
           <div class="device-selector">
@@ -68,9 +103,13 @@
       <ion-icon name="close-outline"></ion-icon>
     </ion-fab-button>
 
-    <!-- <ion-fab-button (click)="testAllFeatures()" size="small">
+    <ion-fab-button (click)="testLensInfo()" size="small">
+      <ion-icon name="camera-outline"></ion-icon>
+    </ion-fab-button>
+
+    <ion-fab-button (click)="testAllFeatures()" size="small">
       <ion-icon name="bug-outline"></ion-icon>
-    </ion-fab-button> -->
+    </ion-fab-button>
 
     <ion-fab-button (click)="refreshDeviceInfo()" size="small">
       <ion-icon name="refresh-outline"></ion-icon>
@@ -173,7 +212,7 @@
     </ion-fab> -->
 
     <!-- Test Results Display -->
-    @if (testResults()) {
+    @if (showTestResults() && testResults()) {
       <div class="test-results">
         <ion-card>
           <ion-card-header>

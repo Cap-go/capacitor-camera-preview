@@ -1,46 +1,37 @@
-import { Injectable } from '@angular/core';
-// import { PermissionState } from '@capacitor/core';
+import { Injectable, NgZone } from '@angular/core';
 import {
-  // BarcodeDetectionData,
   CameraDevice,
   CameraSessionConfiguration,
   CameraPreview,
   CameraPreviewPlugin,
   CameraPreviewPictureOptions,
   FlashMode,
-  PictureFormat,
 } from '@capgo/camera-preview';
 import type { CameraLens } from '../../../../src/definitions';
 import { BehaviorSubject } from 'rxjs';
-// import { BehaviorSubject, Subject } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
 })
 export class CapacitorCameraViewService {
   #cameraView: CameraPreviewPlugin;
-  // #barcodeData = new Subject<BarcodeDetectionData>();
-
-  /**
-   * Observable for barcode detection events
-   */
-  // readonly barcodeData = this.#barcodeData.asObservable();
 
   readonly #cameraStarted = new BehaviorSubject<boolean>(false);
   public readonly cameraStarted = this.#cameraStarted.asObservable();
 
-  constructor() {
+  constructor(private ngZone: NgZone) {
     this.#cameraView = CameraPreview;
 
     // Add event listeners
-    this.#cameraView.removeAllListeners().then(() => {
-      // this.#cameraView.addListener('barcodeDetected', (event) => {
-      //   this.#barcodeData.next(event);
-      // });
-    });
-
+    this.#cameraView.removeAllListeners();
     this.cameraStarted.subscribe((started) => {
-      document.body.classList.toggle('camera-running', started);
+      this.ngZone.runOutsideAngular(() => {
+        requestAnimationFrame(() => {
+          document.body.classList.toggle('camera-running', started);
+          // Force layout recalculation
+          document.body.offsetHeight;
+        });
+      });
     });
   }
 

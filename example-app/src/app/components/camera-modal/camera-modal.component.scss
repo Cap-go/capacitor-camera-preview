@@ -78,6 +78,46 @@
         }
       }
 
+      .info-section {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+
+        h4 {
+          margin: 0 0 8px 0;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.9);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .lens-item {
+          display: flex;
+          align-items: center;
+          margin-bottom: 4px;
+          padding: 2px 0;
+          font-size: 0.8rem;
+          opacity: 0.6;
+          transition: opacity 0.2s ease;
+
+          &.active {
+            opacity: 1;
+            color: var(--ion-color-primary);
+          }
+
+          ion-icon {
+            margin-right: 6px;
+            min-width: 16px;
+          }
+
+          .lens-label {
+            font-weight: 500;
+            font-family: monospace;
+          }
+        }
+      }
+
       .device-selector {
         margin-top: 12px;
         padding-top: 12px;
@@ -118,32 +158,6 @@ ion-fab-button {
 
   ion-spinner {
     --color: black;
-    color: black;
-  }
-}
-
-// Barcode elements
-.barcode-rect {
-  position: absolute;
-  border: 2px solid #00ff00;
-  border-radius: 4px;
-  background: rgba(0, 255, 0, 0.1);
-  visibility: hidden;
-  opacity: 0;
-  transition: all 0.2s ease;
-  z-index: 50;
-}
-
-ion-chip.barcode-detected {
-  --background: #dce358;
-  --color: black;
-  position: fixed;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  animation: fadeInUp 0.5s ease-out forwards;
-
-  ion-icon {
     color: black;
   }
 }

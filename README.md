@@ -189,6 +189,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`removeAllListeners()`](#removealllisteners)
 * [`setDeviceId(...)`](#setdeviceid)
 * [`getDeviceId()`](#getdeviceid)
+* [`getAvailableLenses()`](#getavailablelenses)
+* [`getCurrentLens()`](#getcurrentlens)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 
@@ -509,6 +511,36 @@ Get the current deviceId.
 --------------------
 
 
+### getAvailableLenses()
+
+```typescript
+getAvailableLenses() => Promise<{ lenses: CameraLens[]; }>
+```
+
+Get available camera lenses for the current camera position.
+
+**Returns:** <code>Promise&lt;{ lenses: CameraLens[]; }&gt;</code>
+
+**Since:** 7.5.0
+
+--------------------
+
+
+### getCurrentLens()
+
+```typescript
+getCurrentLens() => Promise<{ lens: CameraLens; }>
+```
+
+Get the currently active lens.
+
+**Returns:** <code>Promise&lt;{ lens: <a href="#cameralens">CameraLens</a>; }&gt;</code>
+
+**Since:** 7.5.0
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -570,6 +602,21 @@ Get the current deviceId.
 | **`label`**      | <code>string</code>                                           | Human readable device name                                                   |
 | **`position`**   | <code><a href="#cameraposition">CameraPosition</a></code>     | Camera position                                                              |
 | **`deviceType`** | <code><a href="#cameradevicetype">CameraDeviceType</a></code> | The type of the camera device (e.g., wide, ultra-wide, telephoto) - iOS only |
+
+
+#### CameraLens
+
+| Prop                | Type                                                          | Description                                      |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
+| **`id`**            | <code>string</code>                                           | Lens identifier (usually the physical camera ID) |
+| **`label`**         | <code>string</code>                                           | Human readable lens name                         |
+| **`position`**      | <code><a href="#cameraposition">CameraPosition</a></code>     | Camera position                                  |
+| **`deviceType`**    | <code><a href="#cameradevicetype">CameraDeviceType</a></code> | The type of the camera lens                      |
+| **`focalLength`**   | <code>number</code>                                           | Focal length in millimeters                      |
+| **`minZoom`**       | <code>number</code>                                           | Minimum zoom factor for this lens                |
+| **`maxZoom`**       | <code>number</code>                                           | Maximum zoom factor for this lens                |
+| **`baseZoomRatio`** | <code>number</code>                                           | Base zoom ratio (e.g., 0.5x, 1x, 2x, 3x)         |
+| **`isActive`**      | <code>boolean</code>                                          | Whether this lens is currently active            |
 
 
 ### Type Aliases
