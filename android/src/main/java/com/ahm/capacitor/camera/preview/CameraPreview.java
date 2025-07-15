@@ -27,6 +27,7 @@ import com.ahm.capacitor.camera.preview.model.CameraDevice;
 import com.ahm.capacitor.camera.preview.model.CameraSessionConfiguration;
 import com.ahm.capacitor.camera.preview.model.ZoomFactors;
 import com.ahm.capacitor.camera.preview.model.CameraLens;
+import com.ahm.capacitor.camera.preview.Camera2View;
 import java.util.List;
 import java.util.Objects;
 
@@ -503,7 +504,7 @@ public class CameraPreview
 
     final String position;
     if (positionParam == null || positionParam.isEmpty() || "rear".equals(positionParam) || "back".equals(positionParam)) {
-      position = "back";
+      position = "rear";
     } else {
       position = "front";
     }
@@ -521,7 +522,7 @@ public class CameraPreview
       call.getInt("paddingBottom", 0)
     );
     // For rear cameras, default to being behind the webview
-    final boolean defaultToBack = "back".equals(position);
+    final boolean defaultToBack = "rear".equals(position);
     final Boolean toBack = Objects.requireNonNull(
       call.getBoolean("toBack", defaultToBack)
     );

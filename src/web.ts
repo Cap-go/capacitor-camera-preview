@@ -372,6 +372,15 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     }
   }
 
+  async setZoomWithUltraWide(options: { level: number; ramp?: boolean }): Promise<void> {
+    // For web, ultra-wide switching isn't available, so we clamp to regular zoom range
+    const clampedLevel = Math.max(1.0, options.level);
+
+    console.warn(`setZoomWithUltraWide: Requested level ${options.level} clamped to ${clampedLevel} (ultra-wide switching not available on web)`);
+
+    await this.setZoom({ level: clampedLevel, ramp: options.ramp });
+  }
+
   async getFlashMode(): Promise<{ flashMode: FlashMode }> {
     throw new Error("getFlashMode not supported under the web platform");
   }

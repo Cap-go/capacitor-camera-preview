@@ -624,6 +624,87 @@ extension CameraController {
         }
     }
 
+    /**
+     * Enhanced setZoom that supports ultra-wide access via camera switching.
+     * If zoom level < 1.0, attempts to switch to ultra-wide camera.
+     */
+    func setZoomWithUltraWide(level: CGFloat, ramp: Bool = false) throws {
+        print("setZoomWithUltraWide: Requested zoom level: \(level)")
+
+        // If requesting zoom < 1.0, try to find and switch to ultra-wide camera
+        if level < 1.0 {
+            if let ultraWideId = findUltraWideCamera() {
+                let currentDeviceId = try getCurrentDeviceId()
+                if ultraWideId != currentDeviceId {
+                    print("setZoomWithUltraWide: Switching to ultra-wide camera: \(ultraWideId)")
+                    try swapToDevice(deviceId: ultraWideId)
+                    // Set zoom to 1.0 on ultra-wide (its natural field of view)
+                    try setZoom(level: 1.0, ramp: ramp)
+                    self.zoomFactor = level // Report the requested level
+                    return
+                } else {
+                    print("setZoomWithUltraWide: Already on ultra-wide camera")
+                    try setZoom(level: 1.0, ramp: ramp)
+                    self.zoomFactor = level
+                    return
+                }
+            } else {
+                print("setZoomWithUltraWide: No ultra-wide camera available, clamping to min zoom")
+                try setZoom(level: 1.0, ramp: ramp)
+                return
+            }
+        }
+
+        // For zoom >= 1.0, use regular zoom functionality
+        try setZoom(level: level, ramp: ramp)
+    }
+
+    /**
+     * Find ultra-wide camera ID if available.
+     */
+    private func findUltraWideCamera() -> String? {
+        let deviceTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInWideAngleCamera,
+            .builtInUltraWideCamera,
+            .builtInTelephotoCamera,
+            .builtInDualCamera,
+            .builtInDualWideCamera,
+            .builtInTripleCamera,
+            .builtInTrueDepthCamera
+        ]
+
+        let session = AVCaptureDevice.DiscoverySession(
+            deviceTypes: deviceTypes,
+            mediaType: .video,
+            position: .unspecified
+        )
+
+        let currentPosition = currentCameraPosition ?? .rear
+
+        // Filter devices to match current camera position
+        let devicesForPosition = session.devices.filter { device in
+            switch currentPosition {
+            case .front:
+                return device.position == .front
+            case .rear:
+                return device.position == .back
+            default:
+                return false
+            }
+        }
+
+        // Look for ultra-wide camera
+        for device in devicesForPosition {
+            if device.deviceType == .builtInUltraWideCamera {
+                print("findUltraWideCamera: Found ultra-wide camera: \(device.uniqueID)")
+                return device.uniqueID
+            }
+        }
+
+        print("findUltraWideCamera: No ultra-wide camera found")
+        return nil
+    }
+
     func getFlashMode() throws -> String {
         switch self.flashMode {
         case .off:

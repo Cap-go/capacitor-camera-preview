@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -79,7 +80,7 @@ public class Camera2View {
 
     // Camera state
     private String currentCameraId;
-    private String currentLogicalCameraId; // For physical cameras, this is the parent logical camera
+    private String currentLogicalCameraId;
     private boolean isCurrentCameraPhysical = false;
     private CameraCharacteristics cameraCharacteristics;
     private CaptureRequest.Builder previewRequestBuilder;
@@ -691,9 +692,12 @@ public class Camera2View {
             // Set flash
             previewRequestBuilder.set(CaptureRequest.CONTROL_AE_MODE, currentFlashMode);
 
-            // Set initial zoom
-            if (sessionConfig.getZoomFactor() != 1.0f) {
-                Log.d(TAG, "handleSessionConfigured: Setting initial zoom: " + sessionConfig.getZoomFactor());
+            // Set current zoom ratio when session is configured
+            if (currentZoomRatio != 1.0f) {
+                Log.d(TAG, "handleSessionConfigured: Setting current zoom: " + currentZoomRatio);
+                setZoomInternal(currentZoomRatio);
+            } else if (sessionConfig.getZoomFactor() != 1.0f) {
+                Log.d(TAG, "handleSessionConfigured: Setting initial session config zoom: " + sessionConfig.getZoomFactor());
                 setZoomInternal(sessionConfig.getZoomFactor());
             }
 
@@ -1094,9 +1098,9 @@ public class Camera2View {
                 // Ultra-wide: ~13-16mm (smartphone equivalent ~2.2-2.6mm)
                 // Wide: ~24-28mm (smartphone equivalent ~4-5mm)
                 // Telephoto: ~52-85mm (smartphone equivalent ~8.5-14mm)
-                if (focalLength < 3.0f) {
+                if (focalLength < 2.0f) {
                     return "ultraWide";
-                } else if (focalLength > 7.0f) {
+                } else if (focalLength > 5.0f) {
                     return "telephoto";
                 } else {
                     return "wideAngle";
@@ -1193,11 +1197,12 @@ public class Camera2View {
 
         // Fallback for single-lens cameras or older APIs
         if (cameraCharacteristics != null) {
-            Float maxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
-            if (maxZoom == null) {
-                maxZoom = 1.0f;
-            }
-            return new ZoomFactors(1.0f, maxZoom, currentZoomRatio);
+            Range<Float> zoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+            // Float maxZoom = cameraCharacteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+            // if (maxZoom == null) {
+            //     maxZoom = 1.0f;
+            // }
+            return new ZoomFactors(zoomRange.getLower(), zoomRange.getUpper(), currentZoomRatio);
         }
 
         // If no active session, check first available camera
@@ -1205,11 +1210,12 @@ public class Camera2View {
             String[] cameraIdList = cameraManager.getCameraIdList();
             if (cameraIdList.length > 0) {
                 CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(cameraIdList[0]);
-                Float maxZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
-                if (maxZoom == null) {
-                    maxZoom = 1.0f;
-                }
-                return new ZoomFactors(1.0f, maxZoom, 1.0f); // Default current zoom to 1.0
+                Range<Float> zoomRange = characteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+                // Float maxZoom = characteristics.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM);
+                // if (maxZoom == null) {
+                //     maxZoom = 1.0f;
+                // }
+                return new ZoomFactors(zoomRange.getLower(), zoomRange.getUpper(), 1.0f); // Default current zoom to 1.0
             }
         } catch (CameraAccessException e) {
             Log.e(TAG, "getZoomFactors: Error checking zoom capabilities", e);
@@ -1299,17 +1305,15 @@ public class Camera2View {
     }
 
     private String determineDeviceTypeFromLens(CameraLens lens) {
-        if (lens.getBaseZoomRatio() < 1.0f) {
+        if (lens.getBaseZoomRatio() <= 1.0f) {
             return "ultraWide";
-        } else if (lens.getBaseZoomRatio() == 1.0f) {
-            return "wideAngle";
         } else if (lens.getBaseZoomRatio() >= 2.0f) {
             return "telephoto";
         } else {
             // Determine by focal length if base zoom ratio is inconclusive
-            if (lens.getFocalLength() < 3.0f) {
+            if (lens.getFocalLength() < 2.0f) {
                 return "ultraWide";
-            } else if (lens.getFocalLength() > 7.0f) {
+            } else if (lens.getFocalLength() > 5.0f) {
                 return "telephoto";
             } else {
                 return "wideAngle";
@@ -1335,52 +1339,175 @@ public class Camera2View {
             throw new Exception("Camera not initialized or does not support zoom");
         }
 
-        Log.d(TAG, "setZoom: Requested zoom ratio: " + zoomRatio);
+        Range<Float> zoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+        Log.d(TAG, "setZoom: Zoom range: " + zoomRange.getLower() + " - " + zoomRange.getUpper());
 
-        // Apply zoom mapping for wide-angle lenses (0.5-1.0 range support)
-        // float mappedZoomRatio = mapUserZoomToLensZoom(zoomRatio);
-        float mappedZoomRatio = zoomRatio;
-        Log.d(TAG, "setZoom: Mapped zoom ratio: " + mappedZoomRatio);
+        if (zoomRatio < zoomRange.getLower()) {
+            zoomRatio = zoomRange.getLower();
+        } else if (zoomRatio > zoomRange.getUpper()) {
+            zoomRatio = zoomRange.getUpper();
+        }
 
-        // Find the best lens for the mapped zoom ratio
-        CameraLens targetLens = sortedLenses.get(0);
+        Float mappedZoomRatio = zoomRatio;
+
+        if (zoomRatio < 1.0f) {
+            Log.d(TAG, "setZoom: Zoom ratio is less than 1.0");
+            String ultraWideId = findUltraWideCamera();
+
+            if (ultraWideId != null && !ultraWideId.equals(currentCameraId)) {
+                Log.d(TAG, "setZoom: Switching to ultra-wide camera: " + ultraWideId);
+                switchToDevice(ultraWideId);
+            }
+            mappedZoomRatio = mapToUltraWideZoom(zoomRatio, ultraWideId);
+        } else if (zoomRatio >= 3.0f) {
+            String telephotoId = findTelephotoCamera();
+
+            if (telephotoId != null && !telephotoId.equals(currentCameraId)) {
+                 switchToDevice(telephotoId);
+             }
+             mappedZoomRatio = mapToTelephotoZoom(zoomRatio, telephotoId);
+        } else {
+            String wideAngleId = findLogicalCamera();
+            if (wideAngleId != null && !wideAngleId.equals(currentCameraId)) {
+                Log.d(TAG, "setZoom: Switching to wide-angle camera: " + wideAngleId);
+                switchToDevice(wideAngleId);
+            }
+            mappedZoomRatio = mappedZoomRatio;
+        }
+
+        setZoomInternal(mappedZoomRatio);
+        currentZoomRatio = zoomRatio;
+    }
+
+    private float mapToTelephotoZoom(float requestedZoomRatio, String telephotoCameraId) {
+        try {
+            CameraCharacteristics telephotoChars = cameraManager.getCameraCharacteristics(telephotoCameraId);
+            Range<Float> telephotoNativeZoomRange = telephotoChars.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+            Range<Float> logicalZoomRange = cameraCharacteristics.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+
+            if (telephotoNativeZoomRange == null || logicalZoomRange == null) return requestedZoomRatio;
+
+            CameraLens telephotoLens = null;
+            for (CameraLens lens : sortedLenses) {
+                if (lens.getId().equals(telephotoCameraId)) {
+                    telephotoLens = lens;
+                    break;
+                }
+            }
+
+            if (telephotoLens == null) return requestedZoomRatio;
+
+            // Define the ranges for mapping
+            float logicalMin = telephotoLens.getBaseZoomRatio();
+            float logicalMax = logicalZoomRange.getUpper();
+
+            float nativeMin = telephotoNativeZoomRange.getLower();
+            float nativeMax = telephotoNativeZoomRange.getUpper();
+
+            // Perform the linear mapping
+            float mappedZoom = nativeMin + (requestedZoomRatio - logicalMin) * (nativeMax - nativeMin) / (logicalMax - logicalMin) + 0.5f;
+
+            Log.d(TAG, "mapToTelephotoZoom: Requested " + requestedZoomRatio + " -> Mapped to " + mappedZoom);
+            Log.d(TAG, "mapToTelephotoZoom: Logical Range [" + logicalMin + ", " + logicalMax + "], Native Range [" + nativeMin + ", " + nativeMax + "]");
+
+            return Math.max(nativeMin, Math.min(nativeMax, mappedZoom));
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "mapToTelephotoZoom: Could not access telephoto camera characteristics. Falling back to digital zoom.", e);
+            return requestedZoomRatio;
+        }
+    }
+
+    private float mapToUltraWideZoom(float requestedZoomRatio, String ultraWideCameraId) {
+        try {
+            CameraCharacteristics ultraWideChars = cameraManager.getCameraCharacteristics(ultraWideCameraId);
+            Range<Float> ultraWideNativeZoomRange = ultraWideChars.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE);
+
+            if (ultraWideNativeZoomRange == null) return requestedZoomRatio;
+
+            CameraLens ultraWideLens = null;
+            CameraLens wideAngleLens = null;
+            for (int i = 0; i < sortedLenses.size(); i++) {
+                if (sortedLenses.get(i).getId().equals(ultraWideCameraId)) {
+                    ultraWideLens = sortedLenses.get(i);
+                    if (i + 1 < sortedLenses.size()) {
+                        wideAngleLens = sortedLenses.get(i + 1);
+                    }
+                    break;
+                }
+            }
+
+            if (ultraWideLens == null || wideAngleLens == null) {
+                return requestedZoomRatio / (ultraWideLens != null ? ultraWideLens.getBaseZoomRatio() : 1.0f);
+            }
+
+            // Define the ranges for mapping. Note the inverted logical range.
+            float logicalMin = wideAngleLens.getBaseZoomRatio(); // e.g., 1.0
+            float logicalMax = ultraWideLens.getBaseZoomRatio(); // e.g., 0.5
+
+            float nativeMin = ultraWideNativeZoomRange.getLower(); // e.g., 1.0
+            float nativeMax = ultraWideNativeZoomRange.getUpper(); // e.g., 3.0
+
+            // Perform the inverse linear mapping
+            // As logical zoom goes from 1.0 down to 0.5, native zoom goes from max down to min.
+            float mappedZoom = nativeMax - (logicalMin - requestedZoomRatio) * (nativeMax - nativeMin) / (logicalMin - logicalMax);
+
+            Log.d(TAG, "mapToUltraWideZoom: Requested " + requestedZoomRatio + " -> Mapped to " + mappedZoom);
+            Log.d(TAG, "mapToUltraWideZoom: Logical Range [" + logicalMin + ", " + logicalMax + "], Native Range [" + nativeMin + ", " + nativeMax + "]");
+
+            return Math.max(nativeMin, Math.min(nativeMax, mappedZoom));
+        } catch (CameraAccessException e) {
+            Log.e(TAG, "mapToUltraWideZoom: Could not access ultra-wide camera characteristics. Falling back to digital zoom.", e);
+            return requestedZoomRatio;
+        }
+    }
+
+    /**
+     * Find ultra-wide camera ID if available.
+     *
+     * @return Ultra-wide camera ID or null if not found
+     */
+    private String findUltraWideCamera() {
+        if (sortedLenses == null || sortedLenses.isEmpty()) {
+            Log.d(TAG, "findUltraWideCamera: No sorted lenses available.");
+            return null;
+        }
         for (CameraLens lens : sortedLenses) {
-            if (mappedZoomRatio >= lens.getBaseZoomRatio()) {
-                targetLens = lens;
-            } else {
-                break;
+            if ("ultraWide".equals(determineDeviceTypeFromLens(lens))) {
+                Log.d(TAG, "findUltraWideCamera: Found ultra-wide camera: " + lens.getId());
+                return lens.getId();
             }
         }
-        targetLens.setIsActive(true);
+        Log.d(TAG, "findUltraWideCamera: No ultra-wide camera found in sorted lenses.");
+        return null;
+    }
 
+    /**
+     * Find logical camera ID if available.
+     *
+     * @return logical camera ID or null if not found
+     */
+    private String findLogicalCamera() {
+        return this.currentLogicalCameraId;
+    }
 
-        float digitalZoom = mappedZoomRatio / targetLens.getBaseZoomRatio();
-        if (digitalZoom > targetLens.getMaxZoom()) {
-            digitalZoom = targetLens.getMaxZoom();
+    /**
+     * Find telephoto camera ID if available.
+     *
+     * @return Telephoto camera ID or null if not found
+     */
+    private String findTelephotoCamera() {
+        if (sortedLenses == null || sortedLenses.isEmpty()) {
+            Log.d(TAG, "findTelephotoCamera: No sorted lenses available.");
+            return null;
         }
-        if (digitalZoom < 1.0f) {
-            digitalZoom = 1.0f;
+        for (CameraLens lens : sortedLenses) {
+            if ("telephoto".equals(determineDeviceTypeFromLens(lens))) {
+                Log.d(TAG, "findTelephotoCamera: Found telephoto camera: " + lens.getId());
+                return lens.getId();
+            }
         }
-
-        final float finalDigitalZoom = digitalZoom;
-        final CameraLens finalTargetLens = targetLens;
-
-        // Switch to the target lens if it's not the active one
-        if (!finalTargetLens.getId().equals(currentCameraId)) {
-            Log.d(TAG, "setZoom: Switching lens from " + currentCameraId + " to " + finalTargetLens.getId() + " for zoom " + zoomRatio);
-            currentCameraId = finalTargetLens.getId();
-            // All lenses we target for zoom are physical lenses that are part of a logical camera group
-            isCurrentCameraPhysical = true;
-
-            // Reconfigure the session for the new physical camera
-            createCameraPreviewSession();
-        } else {
-             Log.d(TAG, "setZoom: Staying on lens " + currentCameraId + " for zoom " + zoomRatio);
-        }
-
-        // Apply digital zoom
-        Log.d(TAG, "setZoom: Applying digital zoom " + finalDigitalZoom + " on lens " + finalTargetLens.getId());
-        setZoomInternal(finalDigitalZoom);
+        Log.d(TAG, "findTelephotoCamera: No telephoto camera found in sorted lenses.");
+        return null;
     }
 
     private void setZoomInternal(float zoomRatio) {
@@ -1492,7 +1619,7 @@ public class Camera2View {
         return currentCameraId;
     }
 
-        public void switchToDevice(String deviceId) throws Exception {
+    public void switchToDevice(String deviceId) throws Exception {
         if (deviceId == null || deviceId.equals(currentCameraId)) {
             return;
         }

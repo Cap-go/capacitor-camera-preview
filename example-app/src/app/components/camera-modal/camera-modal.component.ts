@@ -119,9 +119,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   protected readonly canZoomIn = computed(() => {
     return this.currentZoomFactor() + 0.1 <= this.maxZoom();
+    return this.currentZoomFactor() + 0.1 <= this.maxZoom();
   });
 
   protected readonly canZoomOut = computed(() => {
+    return this.currentZoomFactor() - 0.1 >= this.minZoom();
     return this.currentZoomFactor() - 0.1 >= this.minZoom();
   });
 
@@ -280,6 +282,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   protected async switchToDevice(deviceId: string): Promise<void> {
+    await this.#cameraViewService.flipCamera();
     try {
       await this.#cameraViewService.setDeviceId(deviceId);
       await this.#updateCurrentDeviceId();
@@ -394,7 +397,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     console.log('availableLenses:', JSON.stringify(this.availableLenses(), null, 2));
     console.log('currentZoomFactor:', zoomFactor);
     console.log('mapUserZoomToCameraZoom:', this.mapUserZoomToCameraZoom(zoomFactor));
-    await this.#cameraViewService.setZoom(this.mapUserZoomToCameraZoom(zoomFactor), false);
+    // await this.#cameraViewService.setZoom(this.mapUserZoomToCameraZoom(zoomFactor), false);
+    await this.#cameraViewService.setZoom(zoomFactor, false);
     await this.#updateCurrentDeviceId();
     await this.#updateAvailableLenses();
   }

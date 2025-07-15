@@ -123,6 +123,22 @@ export class CapacitorCameraViewService {
   }
 
   /**
+   * Get current logical zoom capabilities and level
+   * @returns Object with min, max and current zoom levels
+   */
+  async getZoomLogical(): Promise<{ min: number; max: number; current: number }> {
+    return this.#cameraView.getZoomLogical();
+  }
+
+  /**
+   * Set the logical zoom level
+   * @param level The logical zoom level to set
+   */
+  async setZoomLogical(level: number): Promise<void> {
+    return this.#cameraView.setZoomLogical({ level });
+  }
+
+  /**
    * Get the current flash mode
    * @returns The current flash mode
    */
