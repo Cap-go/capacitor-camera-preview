@@ -1,0 +1,65 @@
+h3 {
+  margin: 20px 0 10px 0;
+  color: var(--ion-color-primary);
+  font-weight: 600;
+}
+
+.quick-tests {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+
+  ion-button {
+    flex: 1;
+    min-width: 120px;
+
+    @media (max-width: 480px) {
+      min-width: 100px;
+      font-size: 0.8rem;
+    }
+  }
+}
+
+ion-card {
+  ion-card-content {
+    pre {
+      font-size: 0.8rem;
+      line-height: 1.4;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+  }
+}
+
+ion-list {
+  ion-item {
+    &[button] {
+      --ripple-color: var(--ion-color-primary-tint);
+
+      &:hover {
+        --background: var(--ion-color-light);
+      }
+    }
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  h3 {
+    font-size: 1.1rem;
+    margin: 15px 0 8px 0;
+  }
+
+    .quick-tests {
+    flex-direction: column;
+    gap: 6px;
+
+    ion-button {
+      min-width: auto;
+    }
+  }
+}

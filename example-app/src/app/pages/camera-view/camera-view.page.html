@@ -1,0 +1,321 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Camera Preview</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Available Devices</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <!-- Rear Cameras -->
+      <ion-list>
+        <ion-item-divider>
+          <ion-label>Rear Cameras</ion-label>
+        </ion-item-divider>
+        @for(device of rearCameras(); track device.deviceId){
+          <ion-item>
+            <ion-label>
+              <h3>{{ device.label }} {{ device.isLogical ? '(Logical - Default)' : '' }}</h3>
+              <p>ID: {{ device.deviceId }}</p>
+              <p>Zoom: {{ device.minZoom }}x - {{ device.maxZoom }}x</p>
+              @for(lens of device.lenses; track lens.deviceType){
+                <p class="lens-info">Lens: {{ lens.deviceType }} ({{ lens.baseZoomRatio }}x)</p>
+              }
+            </ion-label>
+          </ion-item>
+        }
+      </ion-list>
+      <!-- Front Cameras -->
+      <ion-list>
+        <ion-item-divider>
+          <ion-label>Front Cameras</ion-label>
+        </ion-item-divider>
+        @for(device of frontCameras(); track device.deviceId){
+          <ion-item>
+            <ion-label>
+              <h3>{{ device.label }} {{ device.isLogical ? '(Logical - Default)' : '' }}</h3>
+              <p>ID: {{ device.deviceId }}</p>
+              <p>Zoom: {{ device.minZoom }}x - {{ device.maxZoom }}x</p>
+              @for(lens of device.lenses; track lens.deviceType){
+                <p class="lens-info">Lens: {{ lens.deviceType }} ({{ lens.baseZoomRatio }}x)</p>
+              }
+            </ion-label>
+          </ion-item>
+        }
+      </ion-list>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Camera Settings</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-list lines="full" class="ion-margin-bottom">
+        <ion-item>
+          <ion-select
+            [(ngModel)]="deviceId"
+            label="Device"
+            placeholder="Default camera device"
+            label-placement="floating"
+          >
+            <ion-select-option [value]="null">
+              Default camera device
+            </ion-select-option>
+
+            @for (device of cameraDevices(); track device.deviceId) {
+              <ion-select-option value="{{ device.deviceId }}">
+                ({{ device.position }}) - {{ device.label }} ({{ device.lenses.length }} lenses)
+              </ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+
+        @if (!deviceId()) {
+          <ion-item>
+            <ion-select
+              [(ngModel)]="position"
+              label="Camera Position"
+              label-placement="floating"
+            >
+              <ion-select-option value="back">Back</ion-select-option>
+              <ion-select-option value="front">Front</ion-select-option>
+            </ion-select>
+          </ion-item>
+        }
+
+        <ion-item>
+          <ion-range
+            [(ngModel)]="quality"
+            min="0"
+            max="100"
+            step="1"
+            [label]="'Photo Quality (' + quality() + ')'"
+            labelPlacement="stacked"
+          >
+            <ion-icon size="small" slot="start" name="sunny-outline"></ion-icon>
+            <ion-icon slot="end" name="sunny"></ion-icon>
+          </ion-range>
+        </ion-item>
+
+        <ion-item>
+          <ion-range
+            [(ngModel)]="initialZoomFactor"
+            min="1.0"
+            max="3.0"
+            step="0.1"
+            snaps="true"
+            [label]="'Initial Zoom Level (' + initialZoomFactor() + 'x)'"
+            labelPlacement="stacked"
+          >
+            <ion-icon size="small" slot="start" name="search-outline"></ion-icon>
+            <ion-icon slot="end" name="search"></ion-icon>
+          </ion-range>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="useTripleCameraIfAvailable"
+            color="primary"
+            justify="space-between"
+          >
+            Use Triple Camera (iPhone Pro only)
+          </ion-checkbox>
+        </ion-item>
+      </ion-list>
+
+      <!-- Advanced Picture Settings -->
+      <h3>Picture Settings</h3>
+      <!-- <ion-list lines="full" class="ion-margin-bottom">
+        <ion-item>
+          <ion-select
+            [(ngModel)]="pictureFormat"
+            label="Picture Format"
+            label-placement="floating"
+          >
+            <ion-select-option value="jpeg">JPEG</ion-select-option>
+            <ion-select-option value="png">PNG</ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <ion-item>
+          <ion-range
+            [(ngModel)]="pictureQuality"
+            min="0"
+            max="100"
+            step="5"
+            [label]="'Picture Quality (' + pictureQuality() + '%)'"
+            labelPlacement="stacked"
+          >
+            <ion-icon size="small" slot="start" name="image-outline"></ion-icon>
+            <ion-icon slot="end" name="image"></ion-icon>
+          </ion-range>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="useCustomSize"
+            color="primary"
+            justify="space-between"
+          >
+            Use Custom Picture Size
+          </ion-checkbox>
+        </ion-item>
+
+        @if (useCustomSize()) {
+          <ion-item>
+            <ion-input
+              [(ngModel)]="pictureWidth"
+              type="number"
+              label="Width (px)"
+              label-placement="floating"
+              placeholder="1920"
+            ></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-input
+              [(ngModel)]="pictureHeight"
+              type="number"
+              label="Height (px)"
+              label-placement="floating"
+              placeholder="1080"
+            ></ion-input>
+          </ion-item>
+        }
+      </ion-list> -->
+
+      <!-- Camera Behavior Settings -->
+      <h3>Camera Behavior</h3>
+      <ion-list lines="full" class="ion-margin-bottom">
+        <ion-item>
+          <ion-range
+            [(ngModel)]="opacity"
+            min="0"
+            max="100"
+            step="10"
+            [label]="'Camera Opacity (' + opacity() + '%)'"
+            labelPlacement="stacked"
+          >
+            <ion-icon size="small" slot="start" name="eye-off-outline"></ion-icon>
+            <ion-icon slot="end" name="eye"></ion-icon>
+          </ion-range>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="enableZoom"
+            color="primary"
+            justify="space-between"
+          >
+            Enable Zoom
+          </ion-checkbox>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="disableAudio"
+            color="primary"
+            justify="space-between"
+          >
+            Disable Audio Stream
+          </ion-checkbox>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="enableHighResolution"
+            color="primary"
+            justify="space-between"
+          >
+            Enable High Resolution (iOS)
+          </ion-checkbox>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="lockAndroidOrientation"
+            color="primary"
+            justify="space-between"
+          >
+            Lock Android Orientation
+          </ion-checkbox>
+        </ion-item>
+      </ion-list>
+
+      <!-- Testing Features -->
+      <h3>Advanced Testing</h3>
+      <!-- <ion-list lines="full" class="ion-margin-bottom">
+        <ion-item button (click)="testHorizontalFov()">
+          <ion-icon name="scan-outline" slot="start"></ion-icon>
+          <ion-label>Test Horizontal FOV</ion-label>
+        </ion-item>
+
+        <ion-item button (click)="testSupportedPictureSizes()">
+          <ion-icon name="resize-outline" slot="start"></ion-icon>
+          <ion-label>Test Supported Picture Sizes</ion-label>
+        </ion-item>
+
+        <ion-item button (click)="testFlashModes()">
+          <ion-icon name="flash-outline" slot="start"></ion-icon>
+          <ion-label>Test Flash Modes</ion-label>
+        </ion-item>
+
+        <ion-item button (click)="testZoomCapabilities()">
+          <ion-icon name="search-outline" slot="start"></ion-icon>
+          <ion-label>Test Zoom Capabilities</ion-label>
+        </ion-item>
+
+        <ion-item button (click)="testErrorScenarios()">
+          <ion-icon name="warning-outline" slot="start"></ion-icon>
+          <ion-label>Test Error Scenarios</ion-label>
+        </ion-item>
+
+        <ion-item button (click)="testAllFeatures()">
+          <ion-icon name="bug-outline" slot="start"></ion-icon>
+          <ion-label>Run All Tests</ion-label>
+        </ion-item>
+      </ion-list> -->
+
+      <!-- Start Camera Button -->
+      <ion-button (click)="startCamera()" expand="block" size="large">
+        <ion-icon name="camera-outline" slot="start" />
+        Start Camera with Current Settings
+      </ion-button>
+
+      <!-- Quick Test Buttons -->
+      <div class="quick-tests ion-margin-top">
+        <ion-button (click)="quickTestHighQuality()" fill="outline" size="small">
+          <ion-icon name="star" slot="start"></ion-icon>
+          High Quality Test
+        </ion-button>
+
+        <ion-button (click)="quickTestLowQuality()" fill="outline" size="small">
+          <ion-icon name="star-outline" slot="start"></ion-icon>
+          Low Quality Test
+        </ion-button>
+
+        <ion-button (click)="quickTestVideo()" fill="outline" size="small">
+          <ion-icon name="videocam" slot="start"></ion-icon>
+          Video Test
+        </ion-button>
+      </div>
+
+      <!-- Test Results -->
+      @if (testResults()) {
+        <ion-card class="ion-margin-top">
+          <ion-card-header>
+            <ion-card-title>Test Results</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <pre>{{ testResults() }}</pre>
+          </ion-card-content>
+        </ion-card>
+      }
+    </ion-card-content>
+  </ion-card>
+
+</ion-content>

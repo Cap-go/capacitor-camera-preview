@@ -1,0 +1,181 @@
+<div class="container" 
+     (touchstart)="handleTouchStart($event)" 
+     (touchmove)="handleTouchMove($event)" 
+     (touchend)="handleTouchEnd()">
+  <div id="cameraView">
+    @if (!cameraStarted()) {
+      <div class="loading-screen">
+        <ion-spinner color="white"></ion-spinner>
+      </div>
+    }
+  </div>
+
+  <!-- Floating Developer Info Panel -->
+  <div class="floating-info-panel">
+    <ion-card>
+      <ion-card-content>
+        <div class="info-row">
+          <span class="label">Status:</span>
+          <span class="value">{{ isRunning() ? 'Running' : 'Stopped' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Device:</span>
+          <span class="value">{{ currentDeviceId() || 'Unknown' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Zoom:</span>
+          <span class="value">{{ currentZoomFactor() }}x ({{ minZoom() }}-{{ maxZoom() }})</span>
+        </div>
+        @if (currentLens()) {
+          <div class="info-row">
+            <span class="label">Lens Type:</span>
+            <span class="value">{{ currentLens()!.deviceType }}</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Base Zoom:</span>
+            <span class="value">{{ currentLens()!.baseZoomRatio }}x</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Digital Zoom:</span>
+            <span class="value">{{ currentLens()!.digitalZoom }}x</span>
+          </div>
+          <div class="info-row">
+            <span class="label">Focal Length:</span>
+            <span class="value">{{ currentLens()!.focalLength }}mm</span>
+          </div>
+        }
+        <div class="info-row">
+          <span class="label">Flash:</span>
+          <span class="value">{{ flashMode() }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Recording:</span>
+          <span class="value">{{ isRecording() ? 'Yes' : 'No' }}</span>
+        </div>
+        <div class="info-row">
+          <span class="label">Opacity:</span>
+          <span class="value">{{ currentOpacity() }}%</span>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  </div>
+
+  <ion-fab
+    class="camera-actions"
+    slot="fixed"
+    horizontal="end"
+    vertical="center"
+  >
+    <!-- Control Actions -->
+    <ion-fab-button (click)="close()" size="small">
+      <ion-icon name="close-outline"></ion-icon>
+    </ion-fab-button>
+
+    <ion-fab-button (click)="testLensInfo()" size="small">
+      <ion-icon name="camera-outline"></ion-icon>
+    </ion-fab-button>
+
+    <ion-fab-button (click)="testAllFeatures()" size="small">
+      <ion-icon name="bug-outline"></ion-icon>
+    </ion-fab-button>
+
+    <ion-fab-button (click)="refreshDeviceInfo()" size="small">
+      <ion-icon name="refresh-outline"></ion-icon>
+    </ion-fab-button>
+
+    <!-- Camera Actions -->
+    @if (cameraStarted()) {
+      <ion-fab-button (click)="nextFlashMode()" size="small">
+        @let fm = flashMode();
+        @if (fm === "off") {
+          <ion-icon name="flash-off" size="small"></ion-icon>
+        } @else if (fm === "on") {
+          <ion-icon name="flash" size="small"></ion-icon>
+        } @else if (fm === "auto") {
+          <div style="line-height: 0.5; margin-top: -5px">
+            <ion-icon name="flash" size="small"></ion-icon><br />
+            <span style="font-size: 0.6rem">AUTO</span>
+          </div>
+        }
+      </ion-fab-button>
+
+      <ion-fab-button size="small" (click)="flipCamera()">
+        <ion-icon name="camera-reverse"></ion-icon>
+      </ion-fab-button>
+
+      <ion-fab-button [disabled]="!canZoomIn()" size="small" (click)="zoomIn()">
+        <ion-icon name="add"></ion-icon>
+      </ion-fab-button>
+
+      <ion-fab-button
+        [disabled]="!canZoomOut()"
+        size="small"
+        (click)="zoomOut()"
+      >
+        <ion-icon name="remove"></ion-icon>
+      </ion-fab-button>
+    }
+  </ion-fab>
+
+  @if (cameraStarted()) {
+
+    <!-- Video Recording Controls -->
+    <!-- <ion-fab
+      class="video-controls"
+      slot="fixed"
+      horizontal="start"
+      vertical="center"
+    >
+      @if (!isRecording()) {
+        <ion-fab-button (click)="startRecording()" color="danger" size="small">
+          <ion-icon name="videocam"></ion-icon>
+        </ion-fab-button>
+      } @else {
+        <ion-fab-button (click)="stopRecording()" color="dark" size="small">
+          <ion-icon name="stop"></ion-icon>
+        </ion-fab-button>
+      }
+    </ion-fab> -->
+
+    <ion-fab
+      class="camera-trigger"
+      slot="fixed"
+      horizontal="center"
+      vertical="bottom"
+    >
+      <ion-fab-button (click)="capturePhoto()" [disabled]="isCapturingPhoto()">
+        @if (isCapturingPhoto()) {
+          <ion-spinner></ion-spinner>
+        } @else {
+          <ion-icon name="camera-outline"></ion-icon>
+        }
+      </ion-fab-button>
+    </ion-fab>
+
+    <!-- Sample Capture -->
+    <!-- <ion-fab
+      class="capture-options"
+      slot="fixed"
+      horizontal="end"
+      vertical="bottom"
+    >
+      <ion-fab-button (click)="captureSample()" size="small">
+        <ion-icon name="aperture"></ion-icon>
+      </ion-fab-button>
+    </ion-fab> -->
+
+    <!-- Test Results Display -->
+    @if (showTestResults() && testResults()) {
+      <div class="test-results">
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Test Results</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <pre>{{ testResults() }}</pre>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+  }
+</div>

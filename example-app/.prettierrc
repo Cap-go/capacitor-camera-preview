@@ -1,0 +1,11 @@
+{
+  "overrides": [
+    {
+      "files": "*.html",
+      "options": {
+        "parser": "angular"
+      }
+    }
+  ],
+  "plugins": ["prettier-plugin-organize-imports", "prettier-plugin-packagejson"]
+}

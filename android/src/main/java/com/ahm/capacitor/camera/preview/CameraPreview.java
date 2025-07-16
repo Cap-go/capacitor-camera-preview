@@ -3,26 +3,11 @@ package com.ahm.capacitor.camera.preview;
 import static android.Manifest.permission.CAMERA;
 import static android.Manifest.permission.RECORD_AUDIO;
 
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
-import android.content.Context;
 import android.content.pm.ActivityInfo;
-import android.graphics.Color;
-import android.graphics.ImageFormat;
 import android.graphics.Point;
-import android.hardware.Camera;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.params.StreamConfigurationMap;
 import android.util.DisplayMetrics;
-import android.util.Size;
 import android.util.TypedValue;
 import android.view.Display;
-import android.view.MotionEvent;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -34,11 +19,14 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import java.io.File;
-import java.util.ArrayList;
+import com.ahm.capacitor.camera.preview.model.CameraDevice;
+import com.ahm.capacitor.camera.preview.model.CameraSessionConfiguration;
+import com.ahm.capacitor.camera.preview.model.ZoomFactors;
 import java.util.List;
 import java.util.Objects;
-import org.json.JSONArray;
+import android.util.Size;
+import android.util.Log;
+import com.ahm.capacitor.camera.preview.model.LensInfo;
 
 @CapacitorPlugin(
   name = "CameraPreview",
@@ -55,29 +43,20 @@ import org.json.JSONArray;
 )
 public class CameraPreview
   extends Plugin
-  implements CameraActivity.CameraPreviewListener {
+  implements CameraXView.CameraXViewListener {
 
   static final String CAMERA_WITH_AUDIO_PERMISSION_ALIAS = "cameraWithAudio";
   static final String CAMERA_ONLY_PERMISSION_ALIAS = "cameraOnly";
 
-  private static String VIDEO_FILE_PATH = "";
-  private static final String VIDEO_FILE_EXTENSION = ".mp4";
-
   private String captureCallbackId = "";
   private String snapshotCallbackId = "";
-  private String recordCallbackId = "";
   private String cameraStartCallbackId = "";
-
-  // keep track of previously specified orientation to support locking orientation:
-  private int previousOrientationRequest =
-    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
-
-  private CameraActivity fragment;
-  private final int containerViewId = 20;
+  private int previousOrientationRequest = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+  private CameraXView cameraXView;
 
   @PluginMethod
   public void start(PluginCall call) {
-    boolean disableAudio = call.getBoolean("disableAudio", false);
+    boolean disableAudio = Boolean.TRUE.equals(call.getBoolean("disableAudio", true));
     String permissionAlias = disableAudio
       ? CAMERA_ONLY_PERMISSION_ALIAS
       : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
@@ -95,118 +74,36 @@ public class CameraPreview
 
   @PluginMethod
   public void flip(PluginCall call) {
-    try {
-      fragment.switchCamera();
-      call.resolve();
-    } catch (Exception e) {
-      Logger.debug(getLogTag(), "Camera flip exception: " + e);
-      call.reject("failed to flip camera");
-    }
-  }
-
-  @PluginMethod
-  public void setOpacity(PluginCall call) {
-    if (!this.hasCamera(call)) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
       call.reject("Camera is not running");
       return;
     }
-
-    bridge.saveCall(call);
-    Float opacity = Objects.requireNonNull(call.getFloat("opacity", 1F));
-    fragment.setOpacity(opacity);
+    cameraXView.flipCamera();
+    call.resolve();
   }
 
   @PluginMethod
   public void capture(PluginCall call) {
-    if (!this.hasCamera(call)) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
       call.reject("Camera is not running");
       return;
     }
     bridge.saveCall(call);
     captureCallbackId = call.getCallbackId();
-
     Integer quality = Objects.requireNonNull(call.getInt("quality", 85));
-    // Image Dimensions - Optional
-    Integer width = Objects.requireNonNull(call.getInt("width", 0));
-    Integer height = Objects.requireNonNull(call.getInt("height", 0));
-    fragment.takePicture(width, height, quality);
+    cameraXView.capturePhoto(quality);
   }
 
   @PluginMethod
   public void captureSample(PluginCall call) {
-    if (!this.hasCamera(call)) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
       call.reject("Camera is not running");
       return;
     }
     bridge.saveCall(call);
     snapshotCallbackId = call.getCallbackId();
-
     Integer quality = Objects.requireNonNull(call.getInt("quality", 85));
-    fragment.takeSnapshot(quality);
-  }
-
-  @PluginMethod
-  public void getSupportedPictureSizes(final PluginCall call) {
-    CameraManager cameraManager = (CameraManager) this.getContext()
-      .getSystemService(Context.CAMERA_SERVICE);
-
-    JSArray ret = new JSArray();
-    try {
-      String[] cameraIdList = cameraManager.getCameraIdList();
-      for (String cameraId : cameraIdList) {
-        CameraCharacteristics characteristics =
-          cameraManager.getCameraCharacteristics(cameraId);
-
-        // Determine the facing of the camera
-        Integer lensFacing = characteristics.get(
-          CameraCharacteristics.LENS_FACING
-        );
-        String facing = "Unknown";
-        if (lensFacing != null) {
-          switch (lensFacing) {
-            case CameraCharacteristics.LENS_FACING_FRONT:
-              facing = "Front";
-              break;
-            case CameraCharacteristics.LENS_FACING_BACK:
-              facing = "Back";
-              break;
-            case CameraCharacteristics.LENS_FACING_EXTERNAL:
-              facing = "External";
-              break;
-          }
-        }
-
-        StreamConfigurationMap map = characteristics.get(
-          CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
-        );
-        if (map == null) {
-          continue;
-        }
-
-        Size[] jpegSizes = map.getOutputSizes(ImageFormat.JPEG);
-        JSObject camera = new JSObject();
-        camera.put("facing", facing);
-        JSArray supportedPictureSizes = new JSArray();
-        if (jpegSizes != null) {
-          for (Size size : jpegSizes) {
-            JSObject sizeJson = new JSObject();
-            sizeJson.put("width", size.getWidth());
-            sizeJson.put("height", size.getHeight());
-            supportedPictureSizes.put(sizeJson);
-          }
-          camera.put("supportedPictureSizes", supportedPictureSizes);
-          ret.put(camera);
-        }
-      }
-      JSObject finalRet = new JSObject();
-      finalRet.put("supportedPictureSizes", ret);
-      call.resolve(finalRet);
-    } catch (CameraAccessException ex) {
-      Logger.error(getLogTag(), "Cannot call getSupportedPictureSizes", ex);
-      call.reject(
-        String.format("Cannot call getSupportedPictureSizes. Error: %s", ex)
-      );
-    }
+    cameraXView.captureSample(quality);
   }
 
   @PluginMethod
@@ -214,190 +111,204 @@ public class CameraPreview
     bridge
       .getActivity()
       .runOnUiThread(
-        new Runnable() {
-          @Override
-          public void run() {
-            FrameLayout containerView = getBridge()
-              .getActivity()
-              .findViewById(containerViewId);
+        () -> {
+          getBridge()
+            .getActivity()
+            .setRequestedOrientation(previousOrientationRequest);
 
-            // allow orientation changes after closing camera:
-            getBridge()
-              .getActivity()
-              .setRequestedOrientation(previousOrientationRequest);
-
-            if (containerView != null) {
-              ((ViewGroup) getBridge().getWebView().getParent()).removeView(
-                  containerView
-                );
-              getBridge().getWebView().setBackgroundColor(Color.WHITE);
-              FragmentManager fragmentManager = getActivity()
-                .getFragmentManager();
-              FragmentTransaction fragmentTransaction =
-                fragmentManager.beginTransaction();
-              fragmentTransaction.remove(fragment);
-              fragmentTransaction.commit();
-              fragment = null;
-
-              call.resolve();
-            } else {
-              call.reject("camera already stopped");
-            }
+          if (cameraXView != null && cameraXView.isRunning()) {
+            cameraXView.stopSession();
+            cameraXView = null;
           }
+          call.resolve();
         }
       );
   }
 
   @PluginMethod
   public void getSupportedFlashModes(PluginCall call) {
-    if (!this.hasCamera(call)) {
-      call.reject("Camera is not running");
-      return;
+    List<String> supportedFlashModes = cameraXView.getSupportedFlashModes();
+    JSArray jsonFlashModes = new JSArray();
+    for (String mode : supportedFlashModes) {
+      jsonFlashModes.put(mode);
     }
-
-    Camera camera = fragment.getCamera();
-    Camera.Parameters params = camera.getParameters();
-    List<String> supportedFlashModes;
-    supportedFlashModes = params.getSupportedFlashModes();
-    JSONArray jsonFlashModes = new JSONArray();
-
-    if (supportedFlashModes != null) {
-      for (int i = 0; i < supportedFlashModes.size(); i++) {
-        jsonFlashModes.put(supportedFlashModes.get(i));
-      }
-    }
-
     JSObject jsObject = new JSObject();
     jsObject.put("result", jsonFlashModes);
     call.resolve(jsObject);
   }
 
   @PluginMethod
-  public void getHorizontalFov(PluginCall call) {
-    if (!this.hasCamera(call)) {
-      call.reject("Camera is not running");
-      return;
-    }
-
-    Camera camera = fragment.getCamera();
-    Camera.Parameters params = camera.getParameters();
-
-    float horizontalViewAngle = params.getHorizontalViewAngle();
-
-    JSObject jsObject = new JSObject();
-    jsObject.put("result", horizontalViewAngle);
-    call.resolve(jsObject);
-  }
-
-  @PluginMethod
   public void setFlashMode(PluginCall call) {
-    if (!this.hasCamera(call)) {
-      call.reject("Camera is not running");
-      return;
-    }
-
     String flashMode = call.getString("flashMode");
     if (flashMode == null || flashMode.isEmpty()) {
       call.reject("flashMode required parameter is missing");
       return;
     }
-
-    Camera camera = fragment.getCamera();
-    Camera.Parameters params = camera.getParameters();
-
-    List<String> supportedFlashModes;
-    supportedFlashModes = camera.getParameters().getSupportedFlashModes();
-    if (
-      supportedFlashModes != null && supportedFlashModes.contains(flashMode)
-    ) {
-      params.setFlashMode(flashMode);
-    } else {
-      call.reject("Flash mode not recognised: " + flashMode);
-      return;
-    }
-
-    fragment.setCameraParameters(params);
-
+    cameraXView.setFlashMode(flashMode);
     call.resolve();
   }
 
   @PluginMethod
-  public void startRecordVideo(final PluginCall call) {
-    if (!this.hasCamera(call)) {
+  public void getAvailableDevices(PluginCall call) {
+    List<CameraDevice> devices = CameraXView.getAvailableDevicesStatic(getContext());
+    JSArray devicesArray = new JSArray();
+    for (CameraDevice device : devices) {
+      JSObject deviceJson = new JSObject();
+      deviceJson.put("deviceId", device.getDeviceId());
+      deviceJson.put("label", device.getLabel());
+      deviceJson.put("position", device.getPosition());
+      JSArray lensesArray = new JSArray();
+      for (com.ahm.capacitor.camera.preview.model.LensInfo lens : device.getLenses()) {
+        JSObject lensJson = new JSObject();
+        lensJson.put("focalLength", lens.getFocalLength());
+        lensJson.put("deviceType", lens.getDeviceType());
+        lensJson.put("baseZoomRatio", lens.getBaseZoomRatio());
+        lensJson.put("digitalZoom", lens.getDigitalZoom());
+        lensesArray.put(lensJson);
+      }
+      deviceJson.put("lenses", lensesArray);
+      deviceJson.put("minZoom", device.getMinZoom());
+      deviceJson.put("maxZoom", device.getMaxZoom());
+      devicesArray.put(deviceJson);
+    }
+    JSObject result = new JSObject();
+    result.put("devices", devicesArray);
+    call.resolve(result);
+  }
+
+  @PluginMethod
+  public void getZoom(PluginCall call) {
+    ZoomFactors zoomFactors = cameraXView.getZoomFactors();
+    JSObject result = new JSObject();
+    result.put("min", zoomFactors.getMin());
+    result.put("max", zoomFactors.getMax());
+    result.put("current", zoomFactors.getCurrent());
+    call.resolve(result);
+  }
+
+  @PluginMethod
+  public void setZoom(PluginCall call) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
       call.reject("Camera is not running");
       return;
     }
-    final String filename = "videoTmp";
-    VIDEO_FILE_PATH = getActivity().getCacheDir().toString() + "/";
+    Float level = call.getFloat("level");
+    if (level == null) {
+      call.reject("level parameter is required");
+      return;
+    }
+    try {
+      cameraXView.setZoom(level);
+      call.resolve();
+    } catch (Exception e) {
+      call.reject("Failed to set zoom: " + e.getMessage());
+    }
+  }
 
-    final String position = Objects.requireNonNull(
-      call.getString("position", "front")
-    );
-    final Integer width = Objects.requireNonNull(call.getInt("width", 0));
-    final Integer height = Objects.requireNonNull(call.getInt("height", 0));
-    final Boolean withFlash = Objects.requireNonNull(
-      call.getBoolean("withFlash", false)
-    );
-    final Integer maxDuration = Objects.requireNonNull(
-      call.getInt("maxDuration", 0)
-    );
-    // final Integer quality = Objects.requireNonNull(call.getInt("quality", 0));
-    bridge.saveCall(call);
-    recordCallbackId = call.getCallbackId();
-
-    bridge
-      .getActivity()
-      .runOnUiThread(
-        new Runnable() {
-          @Override
-          public void run() {
-            fragment.startRecord(
-              getFilePath(),
-              position,
-              width,
-              height,
-              70,
-              withFlash,
-              maxDuration
-            );
-          }
-        }
-      );
-
+  @PluginMethod
+  public void setDeviceId(PluginCall call) {
+    String deviceId = call.getString("deviceId");
+    if (deviceId == null || deviceId.isEmpty()) {
+      call.reject("deviceId parameter is required");
+      return;
+    }
+    if (cameraXView == null || !cameraXView.isRunning()) {
+      call.reject("Camera is not running");
+      return;
+    }
+    cameraXView.switchToDevice(deviceId);
     call.resolve();
   }
 
   @PluginMethod
-  public void stopRecordVideo(PluginCall call) {
-    if (!this.hasCamera(call)) {
+  public void getSupportedPictureSizes(final PluginCall call) {
+    JSArray supportedPictureSizesResult = new JSArray();
+    List<Size> rearSizes = CameraXView.getSupportedPictureSizes("rear");
+    JSObject rear = new JSObject();
+    rear.put("facing", "rear");
+    JSArray rearSizesJs = new JSArray();
+    for(Size size : rearSizes) {
+      JSObject sizeJs = new JSObject();
+      sizeJs.put("width", size.getWidth());
+      sizeJs.put("height", size.getHeight());
+      rearSizesJs.put(sizeJs);
+    }
+    rear.put("supportedPictureSizes", rearSizesJs);
+    supportedPictureSizesResult.put(rear);
+    
+    List<Size> frontSizes = CameraXView.getSupportedPictureSizes("front");
+    JSObject front = new JSObject();
+    front.put("facing", "front");
+    JSArray frontSizesJs = new JSArray();
+    for(Size size : frontSizes) {
+      JSObject sizeJs = new JSObject();
+      sizeJs.put("width", size.getWidth());
+      sizeJs.put("height", size.getHeight());
+      frontSizesJs.put(sizeJs);
+    }
+    front.put("supportedPictureSizes", frontSizesJs);
+    supportedPictureSizesResult.put(front);
+    
+    JSObject ret = new JSObject();
+    ret.put("supportedPictureSizes", supportedPictureSizesResult);
+    call.resolve(ret);
+  }
+
+  @PluginMethod
+  public void setOpacity(PluginCall call) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
       call.reject("Camera is not running");
       return;
     }
+    Float opacity = call.getFloat("opacity", 1.0f);
+    cameraXView.setOpacity(opacity);
+    call.resolve();
+  }
 
-    System.out.println("stopRecordVideo - Callbackid=" + call.getCallbackId());
+  @PluginMethod
+  public void getHorizontalFov(PluginCall call) {
+    // CameraX does not provide a simple way to get FoV.
+    // This would require Camera2 interop to access camera characteristics.
+    // Returning a default/estimated value.
+    JSObject ret = new JSObject();
+    ret.put("result", 60.0); // A common default FoV
+    call.resolve(ret);
+  }
 
-    bridge.saveCall(call);
-    recordCallbackId = call.getCallbackId();
+  @PluginMethod
+  public void getDeviceId(PluginCall call) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
+      call.reject("Camera is not running");
+      return;
+    }
+    JSObject ret = new JSObject();
+    ret.put("deviceId", cameraXView.getCurrentDeviceId());
+    call.resolve(ret);
+  }
 
-    // bridge.getActivity().runOnUiThread(new Runnable() {
-    //     @Override
-    //     public void run() {
-    //         fragment.stopRecord();
-    //     }
-    // });
+  @PluginMethod
+  public void getFlashMode(PluginCall call) {
+    if (cameraXView == null || !cameraXView.isRunning()) {
+      call.reject("Camera is not running");
+      return;
+    }
+    JSObject ret = new JSObject();
+    ret.put("flashMode", cameraXView.getFlashMode());
+    call.resolve(ret);
+  }
 
-    fragment.stopRecord();
-    // call.resolve();
+  @PluginMethod
+  public void isRunning(PluginCall call) {
+    boolean running = cameraXView != null && cameraXView.isRunning();
+    JSObject jsObject = new JSObject();
+    jsObject.put("isRunning", running);
+    call.resolve(jsObject);
   }
 
   @PermissionCallback
   private void handleCameraPermissionResult(PluginCall call) {
-    boolean disableAudio = call.getBoolean("disableAudio", false);
-    String permissionAlias = disableAudio
-      ? CAMERA_ONLY_PERMISSION_ALIAS
-      : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
-
-    if (PermissionState.GRANTED.equals(getPermissionState(permissionAlias))) {
+    if (PermissionState.GRANTED.equals(getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS)) ||
+        PermissionState.GRANTED.equals(getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS))) {
       startCamera(call);
     } else {
       call.reject("Permission failed");
@@ -405,214 +316,75 @@ public class CameraPreview
   }
 
   private void startCamera(final PluginCall call) {
-    String position = call.getString("position");
+    String positionParam = call.getString("position");
+    String originalDeviceId = call.getString("deviceId");
+    String deviceId = originalDeviceId; // Use a mutable variable
 
-    if (position == null || position.isEmpty() || "rear".equals(position)) {
-      position = "back";
-    } else {
-      position = "front";
+    final String position = (positionParam == null || positionParam.isEmpty() || "rear".equals(positionParam) || "back".equals(positionParam)) ? "back" : "front";
+    final int x = call.getInt("x", 0);
+    final int y = call.getInt("y", 0);
+    final int width = call.getInt("width", 0);
+    final int height = call.getInt("height", 0);
+    final int paddingBottom = call.getInt("paddingBottom", 0);
+    final boolean toBack = call.getBoolean("toBack", true);
+    final boolean storeToFile = call.getBoolean("storeToFile", false);
+    final boolean enableOpacity = call.getBoolean("enableOpacity", false);
+    final boolean enableZoom = call.getBoolean("enableZoom", false);
+    final boolean disableExifHeaderStripping = call.getBoolean("disableExifHeaderStripping", false);
+    final boolean lockOrientation = call.getBoolean("lockAndroidOrientation", false);
+    final boolean disableAudio = call.getBoolean("disableAudio", true);
+    
+    float targetZoom = 1.0f;
+    // Check if the selected device is a physical ultra-wide
+    if (originalDeviceId != null) {
+        List<CameraDevice> devices = CameraXView.getAvailableDevicesStatic(getContext());
+        for (CameraDevice device : devices) {
+            if (originalDeviceId.equals(device.getDeviceId()) && !device.isLogical()) {
+                for (LensInfo lens : device.getLenses()) {
+                    if ("ultraWide".equals(lens.getDeviceType())) {
+                        Log.d("CameraPreview", "Ultra-wide lens selected. Targeting 0.5x zoom on logical camera.");
+                        targetZoom = 0.5f;
+                        // Force the use of the logical camera by clearing the specific deviceId
+                        deviceId = null; 
+                        break;
+                    }
+                }
+            }
+            if (deviceId == null) break; // Exit outer loop once we've made our decision
+        }
     }
 
-    @NonNull
-    final Integer x = Objects.requireNonNull(call.getInt("x", 0));
-    @NonNull
-    final Integer y = Objects.requireNonNull(call.getInt("y", 0));
-    @NonNull
-    final Integer width = Objects.requireNonNull(call.getInt("width", 0));
-    @NonNull
-    final Integer height = Objects.requireNonNull(call.getInt("height", 0));
-    @NonNull
-    final Integer paddingBottom = Objects.requireNonNull(
-      call.getInt("paddingBottom", 0)
-    );
-    final Boolean toBack = Objects.requireNonNull(
-      call.getBoolean("toBack", false)
-    );
-    final Boolean storeToFile = Objects.requireNonNull(
-      call.getBoolean("storeToFile", false)
-    );
-    final Boolean enableOpacity = Objects.requireNonNull(
-      call.getBoolean("enableOpacity", false)
-    );
-    final Boolean enableZoom = Objects.requireNonNull(
-      call.getBoolean("enableZoom", false)
-    );
-    final Boolean disableExifHeaderStripping = Objects.requireNonNull(
-      call.getBoolean("disableExifHeaderStripping", false)
-    );
-    final Boolean lockOrientation = Objects.requireNonNull(
-      call.getBoolean("lockAndroidOrientation", false)
-    );
-    previousOrientationRequest = getBridge()
-      .getActivity()
-      .getRequestedOrientation();
+    previousOrientationRequest = getBridge().getActivity().getRequestedOrientation();
+    cameraXView = new CameraXView(getContext(), getBridge().getWebView());
+    cameraXView.setListener(this);
 
-    fragment = new CameraActivity();
-    fragment.setEventListener(this);
-    fragment.defaultCamera = position;
-    fragment.tapToTakePicture = false;
-    fragment.dragEnabled = false;
-    fragment.tapToFocus = true;
-    fragment.disableExifHeaderStripping = disableExifHeaderStripping;
-    fragment.storeToFile = storeToFile;
-    fragment.toBack = toBack;
-    fragment.enableOpacity = enableOpacity;
-    fragment.enableZoom = enableZoom;
-    fragment.disableAudio = call.getBoolean("disableAudio", false);
-
-    bridge
-      .getActivity()
-      .runOnUiThread(
-        new Runnable() {
-          @Override
-          public void run() {
-            DisplayMetrics metrics = getBridge()
-              .getActivity()
-              .getResources()
-              .getDisplayMetrics();
-            // lock orientation if specified in options:
-            if (lockOrientation) {
-              getBridge()
-                .getActivity()
-                .setRequestedOrientation(
-                  ActivityInfo.SCREEN_ORIENTATION_LOCKED
-                );
-            }
-
-            // offset
-            int computedX = (int) TypedValue.applyDimension(
-              TypedValue.COMPLEX_UNIT_DIP,
-              x,
-              metrics
-            );
-            int computedY = (int) TypedValue.applyDimension(
-              TypedValue.COMPLEX_UNIT_DIP,
-              y,
-              metrics
-            );
-
-            // size
-            int computedWidth;
-            int computedHeight;
-            int computedPaddingBottom;
-
-            if (paddingBottom != 0) {
-              computedPaddingBottom = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                paddingBottom,
-                metrics
-              );
-            } else {
-              computedPaddingBottom = 0;
-            }
-
-            if (width != 0) {
-              computedWidth = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                width,
-                metrics
-              );
-            } else {
-              Display defaultDisplay = getBridge()
-                .getActivity()
-                .getWindowManager()
-                .getDefaultDisplay();
-              final Point size = new Point();
-              defaultDisplay.getSize(size);
-
-              computedWidth = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_PX,
-                size.x,
-                metrics
-              );
-            }
-
-            if (height != 0) {
-              computedHeight =
-                (int) TypedValue.applyDimension(
-                  TypedValue.COMPLEX_UNIT_DIP,
-                  height,
-                  metrics
-                ) -
-                computedPaddingBottom;
-            } else {
-              Display defaultDisplay = getBridge()
-                .getActivity()
-                .getWindowManager()
-                .getDefaultDisplay();
-              final Point size = new Point();
-              defaultDisplay.getSize(size);
-
-              computedHeight =
-                (int) TypedValue.applyDimension(
-                  TypedValue.COMPLEX_UNIT_PX,
-                  size.y,
-                  metrics
-                ) -
-                computedPaddingBottom;
-            }
-
-            fragment.setRect(
-              computedX,
-              computedY,
-              computedWidth,
-              computedHeight
-            );
-
-            FrameLayout containerView = getBridge()
-              .getActivity()
-              .findViewById(containerViewId);
-            if (containerView == null) {
-              containerView = new FrameLayout(
-                getActivity().getApplicationContext()
-              );
-              containerView.setId(containerViewId);
-
-              getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
-              ((ViewGroup) getBridge().getWebView().getParent()).addView(
-                  containerView
-                );
-              if (toBack) {
-                getBridge()
-                  .getWebView()
-                  .getParent()
-                  .bringChildToFront(getBridge().getWebView());
-                setupBroadcast();
-              }
-
-              FragmentManager fragmentManager = getBridge()
-                .getActivity()
-                .getFragmentManager();
-              FragmentTransaction fragmentTransaction =
-                fragmentManager.beginTransaction();
-              fragmentTransaction.add(containerView.getId(), fragment);
-              fragmentTransaction.commit();
-
-              // NOTE: we don't return invoke call.resolve here because it must be invoked in onCameraStarted
-              // otherwise the plugin start method might resolve/return before the camera is actually set in CameraActivity
-              // onResume method (see this line mCamera = Camera.open(defaultCameraId);) and the next subsequent plugin
-              // method invocations (for example, getSupportedFlashModes) might fails with "Camera is not running" error
-              // because camera is not available yet and hasCamera method will return false
-              // Please also see https://developer.android.com/reference/android/hardware/Camera.html#open%28int%29
-              bridge.saveCall(call);
-              cameraStartCallbackId = call.getCallbackId();
-            } else {
-              call.reject("camera already started");
-            }
-          }
+    String finalDeviceId = deviceId;
+    float finalTargetZoom = targetZoom;
+    getBridge().getActivity().runOnUiThread(() -> {
+        DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
+        if (lockOrientation) {
+          getBridge().getActivity().setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LOCKED);
         }
-      );
+        int computedX = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, x, metrics);
+        int computedY = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, y, metrics);
+        int computedWidth = width != 0 ? (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, width, metrics) : (int) getBridge().getWebView().getWidth();
+        int computedHeight = height != 0 ? (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, height, metrics) : (int) getBridge().getWebView().getHeight();
+        computedHeight -= (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, paddingBottom, metrics);
+
+        CameraSessionConfiguration config = new CameraSessionConfiguration(finalDeviceId, position, computedX, computedY, computedWidth, computedHeight, paddingBottom, toBack, storeToFile, enableOpacity, enableZoom, disableExifHeaderStripping, disableAudio, 1.0f);
+        config.setTargetZoom(finalTargetZoom);
+        
+        bridge.saveCall(call);
+        cameraStartCallbackId = call.getCallbackId();
+        cameraXView.startSession(config);
+      }
+    );
   }
 
   @Override
-  protected void handleOnResume() {
-    super.handleOnResume();
-  }
-
-  @Override
-  public void onPictureTaken(String originalPicture) {
+  public void onPictureTaken(String result) {
     JSObject jsObject = new JSObject();
-    jsObject.put("value", originalPicture);
+    jsObject.put("value", result);
     bridge.getSavedCall(captureCallbackId).resolve(jsObject);
   }
 
@@ -622,110 +394,32 @@ public class CameraPreview
   }
 
   @Override
-  public void onSnapshotTaken(String originalPicture) {
+  public void onSampleTaken(String result) {
     JSObject jsObject = new JSObject();
-    jsObject.put("value", originalPicture);
+    jsObject.put("value", result);
     bridge.getSavedCall(snapshotCallbackId).resolve(jsObject);
   }
 
   @Override
-  public void onSnapshotTakenError(String message) {
+  public void onSampleTakenError(String message) {
     bridge.getSavedCall(snapshotCallbackId).reject(message);
   }
 
   @Override
-  public void onFocusSet(int pointX, int pointY) {}
-
-  @Override
-  public void onFocusSetError(String message) {}
-
-  @Override
-  public void onBackButton() {}
-
-  @Override
   public void onCameraStarted() {
     PluginCall pluginCall = bridge.getSavedCall(cameraStartCallbackId);
-    pluginCall.resolve();
-    bridge.releaseCall(pluginCall);
+    if (pluginCall != null) {
+      pluginCall.resolve();
+      bridge.releaseCall(pluginCall);
+    }
   }
 
   @Override
-  public void onStartRecordVideo() {}
-
-  @Override
-  public void onStartRecordVideoError(String message) {
-    bridge.getSavedCall(recordCallbackId).reject(message);
-  }
-
-  @Override
-  public void onStopRecordVideo(String file) {
-    PluginCall pluginCall = bridge.getSavedCall(recordCallbackId);
-    JSObject jsObject = new JSObject();
-    jsObject.put("videoFilePath", file);
-    pluginCall.resolve(jsObject);
-  }
-
-  @Override
-  public void onStopRecordVideoError(String error) {
-    bridge.getSavedCall(recordCallbackId).reject(error);
-  }
-
-  private boolean hasView(PluginCall call) {
-    if (fragment == null) {
-      return false;
+  public void onCameraStartError(String message) {
+    PluginCall pluginCall = bridge.getSavedCall(cameraStartCallbackId);
+    if (pluginCall != null) {
+      pluginCall.reject(message);
+      bridge.releaseCall(pluginCall);
     }
-
-    return true;
-  }
-
-  private boolean hasCamera(PluginCall call) {
-    if (!this.hasView(call)) {
-      return false;
-    }
-
-    if (fragment.getCamera() == null) {
-      return false;
-    }
-
-    return true;
-  }
-
-  private String getFilePath() {
-    String fileName = "videoTmp";
-
-    int i = 1;
-
-    while (
-      new File(VIDEO_FILE_PATH + fileName + VIDEO_FILE_EXTENSION).exists()
-    ) {
-      // Add number suffix if file exists
-      fileName = "videoTmp" + '_' + i;
-      i++;
-    }
-
-    return VIDEO_FILE_PATH + fileName + VIDEO_FILE_EXTENSION;
-  }
-
-  private void setupBroadcast() {
-    /** When touch event is triggered, relay it to camera view if needed so it can support pinch zoom */
-
-    getBridge().getWebView().setClickable(true);
-    getBridge()
-      .getWebView()
-      .setOnTouchListener(
-        new View.OnTouchListener() {
-          @Override
-          public boolean onTouch(View v, MotionEvent event) {
-            if (
-              (null != fragment) &&
-              (fragment.toBack == true) &&
-              null != fragment.frameContainerLayout
-            ) {
-              fragment.frameContainerLayout.dispatchTouchEvent(event);
-            }
-            return false;
-          }
-        }
-      );
   }
 }

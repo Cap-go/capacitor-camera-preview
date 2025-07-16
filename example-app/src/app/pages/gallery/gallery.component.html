@@ -1,0 +1,11 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-title>Gallery</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  @for (photo of galleryService.photos(); track $index) {
+    <img [src]="photo" />
+  }
+</ion-content>
