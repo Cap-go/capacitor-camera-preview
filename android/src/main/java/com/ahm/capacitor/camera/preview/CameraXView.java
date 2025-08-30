@@ -56,6 +56,13 @@ import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.video.FileOutputOptions;
+import androidx.camera.video.Quality;
+import androidx.camera.video.QualitySelector;
+import androidx.camera.video.Recorder;
+import androidx.camera.video.Recording;
+import androidx.camera.video.VideoCapture;
+import androidx.camera.video.VideoRecordEvent;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import androidx.exifinterface.media.ExifInterface;
@@ -99,10 +106,19 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     void onCameraStartError(String message);
   }
 
+  public interface VideoRecordingCallback {
+    void onSuccess(String filePath);
+    void onError(String message);
+  }
+
   private ProcessCameraProvider cameraProvider;
   private Camera camera;
   private ImageCapture imageCapture;
   private ImageCapture sampleImageCapture;
+  private VideoCapture<Recorder> videoCapture;
+  private Recording currentRecording;
+  private File currentVideoFile;
+  private VideoRecordingCallback currentVideoCallback;
   private PreviewView previewView;
   private GridOverlayView gridOverlayView;
   private FrameLayout previewContainer;
@@ -725,6 +741,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
           .setTargetRotation(rotation)
           .build();
         sampleImageCapture = imageCapture;
+
+        // Setup VideoCapture
+        Recorder recorder = new Recorder.Builder()
+          .setQualitySelector(QualitySelector.from(Quality.HIGHEST))
+          .build();
+        videoCapture = VideoCapture.withOutput(recorder);
+
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
         // Unbind any existing use cases and bind new ones
         cameraProvider.unbindAll();
@@ -732,7 +755,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
           this,
           currentCameraSelector,
           preview,
-          imageCapture
+          imageCapture,
+          videoCapture
         );
 
         // Log details about the active camera
@@ -3701,5 +3725,104 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
       currentFocusFuture = null;
       Log.e(TAG, "triggerAutoFocus: Failed to trigger autofocus", e);
     }
+  }
+
+  public void startRecordVideo() throws Exception {
+    if (videoCapture == null) {
+      throw new Exception("VideoCapture is not initialized");
+    }
+
+    if (currentRecording != null) {
+      throw new Exception("Video recording is already in progress");
+    }
+
+    // Create output file
+    String fileName = "video_" + System.currentTimeMillis() + ".mp4";
+    File outputDir = new File(
+      context.getExternalFilesDir(Environment.DIRECTORY_MOVIES),
+      "CameraPreview"
+    );
+    if (!outputDir.exists()) {
+      outputDir.mkdirs();
+    }
+    currentVideoFile = new File(outputDir, fileName);
+
+    FileOutputOptions outputOptions = new FileOutputOptions.Builder(
+      currentVideoFile
+    ).build();
+
+    // Create recording event listener
+    androidx.core.util.Consumer<VideoRecordEvent> videoRecordEventListener =
+      videoRecordEvent -> {
+        if (videoRecordEvent instanceof VideoRecordEvent.Start) {
+          Log.d(TAG, "Video recording started");
+        } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {
+          VideoRecordEvent.Finalize finalizeEvent =
+            (VideoRecordEvent.Finalize) videoRecordEvent;
+          handleRecordingFinalized(finalizeEvent);
+        }
+      };
+
+    // Start recording
+    if (sessionConfig != null && !sessionConfig.isDisableAudio()) {
+      currentRecording = videoCapture
+        .getOutput()
+        .prepareRecording(context, outputOptions)
+        .withAudioEnabled()
+        .start(
+          ContextCompat.getMainExecutor(context),
+          videoRecordEventListener
+        );
+    } else {
+      currentRecording = videoCapture
+        .getOutput()
+        .prepareRecording(context, outputOptions)
+        .start(
+          ContextCompat.getMainExecutor(context),
+          videoRecordEventListener
+        );
+    }
+
+    Log.d(
+      TAG,
+      "Video recording started to: " + currentVideoFile.getAbsolutePath()
+    );
+  }
+
+  public void stopRecordVideo(VideoRecordingCallback callback) {
+    if (currentRecording == null) {
+      callback.onError("No video recording in progress");
+      return;
+    }
+
+    // Store the callback to use when recording is finalized
+    currentVideoCallback = callback;
+    currentRecording.stop();
+
+    Log.d(TAG, "Video recording stop requested");
+  }
+
+  private void handleRecordingFinalized(
+    VideoRecordEvent.Finalize finalizeEvent
+  ) {
+    if (!finalizeEvent.hasError()) {
+      Log.d(TAG, "Video recording completed successfully");
+      if (currentVideoCallback != null) {
+        String filePath = "file://" + currentVideoFile.getAbsolutePath();
+        currentVideoCallback.onSuccess(filePath);
+      }
+    } else {
+      Log.e(TAG, "Video recording failed: " + finalizeEvent.getError());
+      if (currentVideoCallback != null) {
+        currentVideoCallback.onError(
+          "Video recording failed: " + finalizeEvent.getError()
+        );
+      }
+    }
+
+    // Clean up
+    currentRecording = null;
+    currentVideoFile = null;
+    currentVideoCallback = null;
   }
 }
