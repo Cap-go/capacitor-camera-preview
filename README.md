@@ -228,18 +228,30 @@ Open `android/app/src/main/AndroidManifest.xml` and above the closing `</manifes
 
 For more help consult the [Capacitor docs](https://capacitorjs.com/docs/android/configuration#configuring-androidmanifestxml).
 
-### opaque WebView
+### Opaque WebView
 By default, the Android WebView background is opaque, hiding the video stream running behind it when using option `toBack: true`.
 
 To fix this, override `onCreate` in your `MainActivity.java` and set both the window and the WebView background to transparent:
 
 ```java
-@Override
-protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    // Minimal transparency fix
-    getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-    getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
+// 👇 Add to the top of the file
+import android.os.Bundle;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.Color;
+
+
+public class MainActivity {
+
+// 👇 Add this 
+  @Override
+  protected void onCreate(Bundle savedInstanceState) {
+      super.onCreate(savedInstanceState);
+  
+      getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+      getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
+  }
+
+
 }
 ```
 With this change, the camera preview or any background content will correctly show through the WebView.
