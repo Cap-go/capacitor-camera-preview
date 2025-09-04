@@ -213,6 +213,7 @@ In your `ios/App/App/Info.plist`, you must provide descriptions for the permissi
   ```
 
 ## Extra Android installation steps
+### Permissions
 
 **Important** `camera-preview` 3+ requires Gradle 7.
 Open `android/app/src/main/AndroidManifest.xml` and above the closing `</manifest>` tag add this line to request the CAMERA permission:
@@ -226,6 +227,23 @@ Open `android/app/src/main/AndroidManifest.xml` and above the closing `</manifes
 ```
 
 For more help consult the [Capacitor docs](https://capacitorjs.com/docs/android/configuration#configuring-androidmanifestxml).
+
+### opaque WebView
+By default, the Android WebView background is opaque, hiding the video stream running behind it when using option `toBack: true`.
+
+To fix this, override `onCreate` in your `MainActivity.java` and set both the window and the WebView background to transparent:
+
+```java
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    // Minimal transparency fix
+    getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+    getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
+}
+```
+With this change, the camera preview or any background content will correctly show through the WebView.
+
 
 ## Extra iOS installation steps
 
