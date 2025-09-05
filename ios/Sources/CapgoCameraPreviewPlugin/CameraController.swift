@@ -768,102 +768,131 @@ extension CameraController {
         }
     }
 
+    // Helper: pick the best preset the TARGET device supports for a given aspect ratio
+    private func bestPreset(for aspectRatio: String?, on device: AVCaptureDevice) -> AVCaptureSession.Preset {
+        // Preference order depends on aspect ratio
+        if aspectRatio == "16:9" {
+            // Prefer 4K → 1080p → 720p → high → photo → vga
+            if device.supportsSessionPreset(.hd4K3840x2160) { return .hd4K3840x2160 }
+            if device.supportsSessionPreset(.hd1920x1080) { return .hd1920x1080 }
+            if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
+            if device.supportsSessionPreset(.high)       { return .high }
+            if device.supportsSessionPreset(.photo)      { return .photo } // safe, though 4:3
+            return .vga640x480
+        } else {
+            // 4:3 or unknown: prefer photo → high → 1080p → 720p → vga
+            if device.supportsSessionPreset(.photo)      { return .photo }
+            if device.supportsSessionPreset(.high)       { return .high }
+            if device.supportsSessionPreset(.hd1920x1080){ return .hd1920x1080 }
+            if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
+            return .vga640x480
+        }
+    }
+
     func switchCameras() throws {
         guard let currentCameraPosition = currentCameraPosition,
               let captureSession = self.captureSession else {
             throw CameraControllerError.captureSessionIsMissing
         }
 
-        // Ensure we have the necessary cameras
-        guard (currentCameraPosition == .front && rearCamera != nil) ||
-                (currentCameraPosition == .rear && frontCamera != nil) else {
-            throw CameraControllerError.noCamerasAvailable
+        // Determine the device we’re switching TO
+        let targetDevice: AVCaptureDevice
+        switch currentCameraPosition {
+        case .front:
+            guard let rear = rearCamera else { throw CameraControllerError.invalidOperation }
+            targetDevice = rear
+        case .rear:
+            guard let front = frontCamera else { throw CameraControllerError.invalidOperation }
+            targetDevice = front
         }
 
-        // Store the current running state
-        let wasRunning = captureSession.isRunning
-        if wasRunning {
-            captureSession.stopRunning()
-        }
+        // Compute the desired preset for the TARGET device up front
+        let desiredPreset = bestPreset(for: self.requestedAspectRatio, on: targetDevice)
 
-        // Begin configuration
+        // Keep the preview layer visually stable during the swap
+        let savedPreviewFrame = self.previewLayer?.frame
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.previewLayer?.connection?.isEnabled = false  // reduce visible glitching
+
+        // No need to stopRunning; Apple recommends reconfiguring within begin/commit
         captureSession.beginConfiguration()
         defer {
             captureSession.commitConfiguration()
-            // Restart the session if it was running before
-            if wasRunning {
-                DispatchQueue.global(qos: .userInitiated).async {
-                    captureSession.startRunning()
-                }
+            self.previewLayer?.connection?.isEnabled = true
+            // Restore frame (it shouldn't change, but this ensures zero animation)
+            if let f = savedPreviewFrame { self.previewLayer?.frame = f }
+            CATransaction.commit()
+            DispatchQueue.main.async { [weak self] in
+                self?.setDefaultZoomAfterFlip()   // normalize zoom (UI 1.0x)
             }
         }
 
-        // Store audio input if it exists
-        let audioInput = captureSession.inputs.first { ($0 as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) ?? false }
+        // Preserve audio input (if any)
+        let existingAudioInput = captureSession.inputs.first {
+            ($0 as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) ?? false
+        }
 
-        // Remove only video inputs
-        captureSession.inputs.forEach { input in
+        // Remove ONLY video inputs
+        for input in captureSession.inputs {
             if (input as? AVCaptureDeviceInput)?.device.hasMediaType(.video) ?? false {
                 captureSession.removeInput(input)
             }
         }
 
-        // Configure new camera
-        switch currentCameraPosition {
-        case .front:
-            guard let rearCamera = rearCamera else {
-                throw CameraControllerError.invalidOperation
-            }
-
-            // Configure rear camera
-            try rearCamera.lockForConfiguration()
-            if rearCamera.isFocusModeSupported(.continuousAutoFocus) {
-                rearCamera.focusMode = .continuousAutoFocus
-            }
-            rearCamera.unlockForConfiguration()
-
-            if let newInput = try? AVCaptureDeviceInput(device: rearCamera),
-               captureSession.canAddInput(newInput) {
-                captureSession.addInput(newInput)
-                rearCameraInput = newInput
-                self.currentCameraPosition = .rear
-            } else {
-                throw CameraControllerError.invalidOperation
-            }
-        case .rear:
-            guard let frontCamera = frontCamera else {
-                throw CameraControllerError.invalidOperation
-            }
-
-            // Configure front camera
-            try frontCamera.lockForConfiguration()
-            if frontCamera.isFocusModeSupported(.continuousAutoFocus) {
-                frontCamera.focusMode = .continuousAutoFocus
-            }
-            frontCamera.unlockForConfiguration()
-
-            if let newInput = try? AVCaptureDeviceInput(device: frontCamera),
-               captureSession.canAddInput(newInput) {
-                captureSession.addInput(newInput)
-                frontCameraInput = newInput
-                self.currentCameraPosition = .front
-            } else {
-                throw CameraControllerError.invalidOperation
+        // Only downgrade to a safe preset if the TARGET cannot support the CURRENT one
+        let currentPreset = captureSession.sessionPreset
+        let targetSupportsCurrent = targetDevice.supportsSessionPreset(currentPreset)
+        if !targetSupportsCurrent {
+            // Choose the first preset supported by BOTH the target device and the session
+            let fallbacks: [AVCaptureSession.Preset] =
+                (self.requestedAspectRatio == "16:9")
+                ? [.hd4K3840x2160, .hd1920x1080, .hd1280x720, .high, .photo, .vga640x480]
+                : [.photo, .high, .hd1920x1080, .hd1280x720, .vga640x480]
+            for p in fallbacks {
+                if targetDevice.supportsSessionPreset(p), captureSession.canSetSessionPreset(p) {
+                    captureSession.sessionPreset = p
+                    break
+                }
             }
         }
 
-        // Re-add audio input if it existed
-        if let audioInput = audioInput, captureSession.canAddInput(audioInput) {
+        // Add the new video input
+        let newInput = try AVCaptureDeviceInput(device: targetDevice)
+        guard captureSession.canAddInput(newInput) else {
+            throw CameraControllerError.invalidOperation
+        }
+        captureSession.addInput(newInput)
+
+        // Update pointers / focus defaults
+        if targetDevice.position == .front {
+            self.frontCameraInput = newInput
+            self.currentCameraPosition = .front
+        } else {
+            self.rearCameraInput = newInput
+            self.currentCameraPosition = .rear
+        }
+        // (Lightweight focus config; non-fatal on failure)
+        try? targetDevice.lockForConfiguration()
+        if targetDevice.isFocusModeSupported(.continuousAutoFocus) {
+            targetDevice.focusMode = .continuousAutoFocus
+        }
+        targetDevice.unlockForConfiguration()
+
+        // Restore audio input if it existed
+        if let audioInput = existingAudioInput, captureSession.canAddInput(audioInput) {
             captureSession.addInput(audioInput)
         }
 
-        // Update video orientation
-        self.updateVideoOrientation()
-
-        // Set default 1.0 zoom level after camera switch to prevent iOS 18+ zoom jumps
-        DispatchQueue.main.async { [weak self] in
-            self?.setDefaultZoomAfterFlip()
+        // Now apply the BEST preset for the target device & requested AR
+        if captureSession.sessionPreset != desiredPreset,
+           targetDevice.supportsSessionPreset(desiredPreset),
+           captureSession.canSetSessionPreset(desiredPreset) {
+            captureSession.sessionPreset = desiredPreset
         }
+
+        // Keep orientation correct
+        self.updateVideoOrientation()
     }
 
     func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
