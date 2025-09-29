@@ -114,6 +114,8 @@ public class CameraPreview
   private String captureCallbackId = "";
   private String sampleCallbackId = "";
   private String cameraStartCallbackId = "";
+  private final Object pendingStartLock = new Object();
+  private PluginCall pendingStartCall;
   private int previousOrientationRequest =
     ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
   private CameraXView cameraXView;
@@ -237,7 +239,18 @@ public class CameraPreview
     // Prevent starting while an existing view is still active or stopping
     if (cameraXView != null) {
       try {
-        if (cameraXView.isRunning() || cameraXView.isBusy()) {
+        if (cameraXView.isRunning()) {
+          call.reject("Camera is already running");
+          return;
+        }
+        if (cameraXView.isBusy()) {
+          if (enqueuePendingStart(call)) {
+            Log.d(
+              TAG,
+              "start: Camera busy; queued start request until stop completes"
+            );
+            return;
+          }
           call.reject("Camera is busy or stopping. Please retry shortly.");
           return;
         }
@@ -259,6 +272,16 @@ public class CameraPreview
         "handleCameraPermissionResult"
       );
     }
+  }
+
+  private boolean enqueuePendingStart(PluginCall call) {
+    synchronized (pendingStartLock) {
+      if (pendingStartCall == null) {
+        pendingStartCall = call;
+        return true;
+      }
+    }
+    return false;
   }
 
   @PluginMethod
@@ -1555,6 +1578,22 @@ public class CameraPreview
   public void onCameraStopped() {
     // Ensure reference is cleared once underlying CameraXView has fully stopped
     cameraXView = null;
+
+    PluginCall queuedCall = null;
+    synchronized (pendingStartLock) {
+      if (pendingStartCall != null) {
+        queuedCall = pendingStartCall;
+        pendingStartCall = null;
+      }
+    }
+
+    if (queuedCall != null) {
+      PluginCall finalQueuedCall = queuedCall;
+      Log.d(TAG, "onCameraStopped: replaying pending start request");
+      getBridge()
+        .getActivity()
+        .runOnUiThread(() -> start(finalQueuedCall));
+    }
   }
 
   private JSObject getViewSize(
