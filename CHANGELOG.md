@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.21.7](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.6...7.21.7) (2025-09-29)
+
+
+### Bug Fixes
+
+* **android:** implement queued restart to avoid failure ([78a468d](https://github.com/Cap-go/capacitor-camera-preview/commit/78a468da1012ac53f4a9dfa577ac99cb19fb20fc))
+
 ## [7.21.6](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.5...7.21.6) (2025-09-29)
 
 ## [7.21.5](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.4...7.21.5) (2025-09-29)
