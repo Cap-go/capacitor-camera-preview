@@ -1590,9 +1590,7 @@ public class CameraPreview
     if (queuedCall != null) {
       PluginCall finalQueuedCall = queuedCall;
       Log.d(TAG, "onCameraStopped: replaying pending start request");
-      getBridge()
-        .getActivity()
-        .runOnUiThread(() -> start(finalQueuedCall));
+      getBridge().getActivity().runOnUiThread(() -> start(finalQueuedCall));
     }
   }
 
