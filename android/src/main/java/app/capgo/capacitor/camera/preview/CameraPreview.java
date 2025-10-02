@@ -239,11 +239,11 @@ public class CameraPreview
     // Prevent starting while an existing view is still active or stopping
     if (cameraXView != null) {
       try {
-        if (cameraXView.isRunning()) {
+        if (cameraXView.isRunning() && !cameraXView.isStopping())) {
           call.reject("Camera is already running");
           return;
         }
-        if (cameraXView.isBusy()) {
+        if (cameraXView.isStopping() || cameraXView.isBusy()) {
           if (enqueuePendingStart(call)) {
             Log.d(
               TAG,
