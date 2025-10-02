@@ -445,15 +445,11 @@ public class CameraPreview
         }
 
         if (cameraXView != null) {
-          boolean willDefer = false;
-          try {
-            willDefer = cameraXView.isCapturing();
-          } catch (Exception ignored) {}
           if (cameraXView.isRunning()) {
             cameraXView.stopSession();
           }
           // Only drop the reference if no deferred stop is pending
-          if (!willDefer) {
+          if (!cameraXView.isStopDeferred()) {
             cameraXView = null;
           }
         }
