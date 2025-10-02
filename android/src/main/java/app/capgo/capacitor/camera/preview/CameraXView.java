@@ -203,6 +203,18 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
   }
 
+  public boolean isStopDeferred() {
+    synchronized (operationLock) {
+      return stopPending && activeOperations > 0;
+    }
+  }
+
+  public boolean isStopping() {
+    synchronized (operationLock) {
+      return stopPending;
+    }
+  }
+
   public CameraXView(Context context, WebView webView) {
     this.context = context;
     this.webView = webView;
@@ -1174,11 +1186,19 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     final boolean embedTimestamp,
     final boolean embedLocation
   ) {
+    if (imageCapture == null) {
+      if (listener != null) {
+        listener.onPictureTakenError("Camera not ready");
+      }
+      return;
+    }
+
     // Prevent capture if a stop is pending
     if (IsOperationRunning("capturePhoto")) {
       Log.d(TAG, "capturePhoto: Ignored because stop is pending");
       return;
     }
+
     Log.d(
       TAG,
       "capturePhoto: Starting photo capture with: " +
@@ -1195,212 +1215,34 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
       embedLocation
     );
 
-    if (imageCapture == null) {
-      if (listener != null) {
-        listener.onPictureTakenError("Camera not ready");
+    boolean dispatched = false;
+    try {
+      synchronized (captureLock) {
+        isCapturingPhoto = true;
       }
-      return;
-    }
 
-    synchronized (captureLock) {
-      isCapturingPhoto = true;
-    }
+      final ByteArrayOutputStream imageStream = new ByteArrayOutputStream();
+      ImageCapture.Metadata metadata = new ImageCapture.Metadata();
+      if (location != null) {
+        metadata.setLocation(location);
+      }
+      ImageCapture.OutputFileOptions outputFileOptions =
+        new ImageCapture.OutputFileOptions.Builder(imageStream)
+          .setMetadata(metadata)
+          .build();
 
-    ByteArrayOutputStream imageStream = new ByteArrayOutputStream();
-    ImageCapture.Metadata metadata = new ImageCapture.Metadata();
-    if (location != null) {
-      metadata.setLocation(location);
-    }
-    ImageCapture.OutputFileOptions outputFileOptions =
-      new ImageCapture.OutputFileOptions.Builder(imageStream)
-        .setMetadata(metadata)
-        .build();
-
-    imageCapture.takePicture(
-      outputFileOptions,
-      cameraExecutor,
-      new ImageCapture.OnImageSavedCallback() {
-        @Override
-        public void onError(@NonNull ImageCaptureException exception) {
-          Log.e(TAG, "capturePhoto: Photo capture failed", exception);
-          if (listener != null) {
-            listener.onPictureTakenError(
-              "Photo capture failed: " + exception.getMessage()
-            );
-          }
-          // End of capture lifecycle
-          synchronized (captureLock) {
-            isCapturingPhoto = false;
-            if (stopRequested) {
-              performImmediateStop();
-            }
-          }
-          endOperation("capturePhoto");
-        }
-
-        @Override
-        public void onImageSaved(
-          @NonNull ImageCapture.OutputFileResults output
-        ) {
-          try {
-            byte[] originalCaptureBytes = imageStream.toByteArray();
-            byte[] bytes = originalCaptureBytes; // will be replaced if we transform
-            int finalWidthOut = -1;
-            int finalHeightOut = -1;
-            boolean transformedPixels = false;
-
-            ExifInterface exifInterface = new ExifInterface(
-              new ByteArrayInputStream(originalCaptureBytes)
-            );
-            // Build EXIF JSON from captured bytes (location applied by metadata if provided)
-            JSONObject exifData = getExifData(exifInterface);
-
-            if (width != null || height != null) {
-              Bitmap bitmap = BitmapFactory.decodeByteArray(
-                originalCaptureBytes,
-                0,
-                originalCaptureBytes.length
-              );
-              bitmap = applyExifOrientation(bitmap, exifInterface);
-              Bitmap resizedBitmap = resizeBitmapToMaxDimensions(
-                bitmap,
-                width,
-                height
-              );
-              if (embedTimestamp || embedLocation) {
-                resizedBitmap = drawTimestampAndLocationOntoBitmap(
-                  resizedBitmap,
-                  exifInterface,
-                  embedTimestamp,
-                  embedLocation
-                );
-              }
-              ByteArrayOutputStream stream = new ByteArrayOutputStream();
-              resizedBitmap.compress(
-                Bitmap.CompressFormat.JPEG,
-                quality,
-                stream
-              );
-              bytes = stream.toByteArray();
-              transformedPixels = true;
-
-              // Update EXIF JSON to reflect new dimensions; no in-place EXIF write to bytes
-              try {
-                exifData.put("PixelXDimension", resizedBitmap.getWidth());
-                exifData.put("PixelYDimension", resizedBitmap.getHeight());
-                exifData.put("ImageWidth", resizedBitmap.getWidth());
-                exifData.put("ImageLength", resizedBitmap.getHeight());
-                exifData.put(
-                  "Orientation",
-                  Integer.toString(ExifInterface.ORIENTATION_NORMAL)
-                );
-              } catch (Exception ignore) {}
-              finalWidthOut = resizedBitmap.getWidth();
-              finalHeightOut = resizedBitmap.getHeight();
-            } else {
-              // No explicit size/ratio: crop to match current preview content
-              Bitmap originalBitmap = BitmapFactory.decodeByteArray(
-                originalCaptureBytes,
-                0,
-                originalCaptureBytes.length
-              );
-              originalBitmap = applyExifOrientation(
-                originalBitmap,
-                exifInterface
-              );
-              Bitmap previewCropped = cropBitmapToMatchPreview(originalBitmap);
-              if (embedTimestamp || embedLocation) {
-                previewCropped = drawTimestampAndLocationOntoBitmap(
-                  previewCropped,
-                  exifInterface,
-                  embedTimestamp,
-                  embedLocation
-                );
-              }
-              ByteArrayOutputStream stream = new ByteArrayOutputStream();
-              previewCropped.compress(
-                Bitmap.CompressFormat.JPEG,
-                quality,
-                stream
-              );
-              bytes = stream.toByteArray();
-              transformedPixels = true;
-              // Update EXIF JSON to reflect cropped dimensions; no in-place EXIF write to bytes
-              try {
-                exifData.put("PixelXDimension", previewCropped.getWidth());
-                exifData.put("PixelYDimension", previewCropped.getHeight());
-                exifData.put("ImageWidth", previewCropped.getWidth());
-                exifData.put("ImageLength", previewCropped.getHeight());
-                exifData.put(
-                  "Orientation",
-                  Integer.toString(ExifInterface.ORIENTATION_NORMAL)
-                );
-              } catch (Exception ignore) {}
-              finalWidthOut = previewCropped.getWidth();
-              finalHeightOut = previewCropped.getHeight();
-            }
-
-            // After any transform, inject EXIF back into the in-memory JPEG bytes (no temp file)
-            if (transformedPixels) {
-              Integer fW = (finalWidthOut > 0) ? finalWidthOut : null;
-              Integer fH = (finalHeightOut > 0) ? finalHeightOut : null;
-              bytes = injectExifInMemory(bytes, originalCaptureBytes, fW, fH);
-            }
-
-            // Save to gallery asynchronously if requested, copy EXIF to file
-            if (saveToGallery) {
-              final byte[] finalBytes = bytes;
-              final ExifInterface exifForFile = exifInterface;
-              final Integer fW = (finalWidthOut > 0) ? finalWidthOut : null;
-              final Integer fH = (finalHeightOut > 0) ? finalHeightOut : null;
-              new Thread(() ->
-                saveImageToGallery(finalBytes, exifForFile, fW, fH)
-              ).start();
-            }
-
-            String resultValue;
-            boolean returnFileUri =
-              sessionConfig != null && sessionConfig.isStoreToFile();
-            if (returnFileUri) {
-              // Persist processed image to a file and return its URI to avoid heavy base64 bridging
-              try {
-                String fileName =
-                  "cpcp_" +
-                  new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(
-                    new java.util.Date()
-                  ) +
-                  ".jpg";
-                File outDir = context.getCacheDir();
-                File outFile = new File(outDir, fileName);
-                FileOutputStream outFos = new FileOutputStream(outFile);
-                outFos.write(bytes);
-                outFos.close();
-
-                // No EXIF rewrite here; bytes already contain EXIF when needed
-
-                // Return a file path; apps can convert via Capacitor.convertFileSrc on JS side
-                resultValue = outFile.getAbsolutePath();
-              } catch (IOException ioEx) {
-                Log.e(TAG, "capturePhoto: Failed to write image file", ioEx);
-                // Fallback to base64 if file write fails
-                resultValue = Base64.encodeToString(bytes, Base64.NO_WRAP);
-              }
-            } else {
-              // Backward-compatible behavior
-              resultValue = Base64.encodeToString(bytes, Base64.NO_WRAP);
-            }
-
-            if (listener != null) {
-              listener.onPictureTaken(resultValue, exifData);
-            }
-          } catch (Exception e) {
-            Log.e(TAG, "capturePhoto: Error processing image", e);
+      imageCapture.takePicture(
+        outputFileOptions,
+        cameraExecutor,
+        new ImageCapture.OnImageSavedCallback() {
+          @Override
+          public void onError(@NonNull ImageCaptureException exception) {
+            Log.e(TAG, "capturePhoto: Photo capture failed", exception);
             if (listener != null) {
               listener.onPictureTakenError(
-                "Error processing image: " + e.getMessage()
+                "Photo capture failed: " + exception.getMessage()
               );
             }
-          } finally {
             // End of capture lifecycle
             synchronized (captureLock) {
               isCapturingPhoto = false;
@@ -1410,9 +1252,202 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
             endOperation("capturePhoto");
           }
+
+          @Override
+          public void onImageSaved(
+            @NonNull ImageCapture.OutputFileResults output
+          ) {
+            try {
+              byte[] originalCaptureBytes = imageStream.toByteArray();
+              byte[] bytes = originalCaptureBytes; // will be replaced if we transform
+              int finalWidthOut = -1;
+              int finalHeightOut = -1;
+              boolean transformedPixels = false;
+
+              ExifInterface exifInterface = new ExifInterface(
+                new ByteArrayInputStream(originalCaptureBytes)
+              );
+              // Build EXIF JSON from captured bytes (location applied by metadata if provided)
+              JSONObject exifData = getExifData(exifInterface);
+
+              if (width != null || height != null) {
+                Bitmap bitmap = BitmapFactory.decodeByteArray(
+                  originalCaptureBytes,
+                  0,
+                  originalCaptureBytes.length
+                );
+                bitmap = applyExifOrientation(bitmap, exifInterface);
+                Bitmap resizedBitmap = resizeBitmapToMaxDimensions(
+                  bitmap,
+                  width,
+                  height
+                );
+                if (embedTimestamp || embedLocation) {
+                  resizedBitmap = drawTimestampAndLocationOntoBitmap(
+                    resizedBitmap,
+                    exifInterface,
+                    embedTimestamp,
+                    embedLocation
+                  );
+                }
+                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                resizedBitmap.compress(
+                  Bitmap.CompressFormat.JPEG,
+                  quality,
+                  stream
+                );
+                bytes = stream.toByteArray();
+                transformedPixels = true;
+
+                // Update EXIF JSON to reflect new dimensions; no in-place EXIF write to bytes
+                try {
+                  exifData.put("PixelXDimension", resizedBitmap.getWidth());
+                  exifData.put("PixelYDimension", resizedBitmap.getHeight());
+                  exifData.put("ImageWidth", resizedBitmap.getWidth());
+                  exifData.put("ImageLength", resizedBitmap.getHeight());
+                  exifData.put(
+                    "Orientation",
+                    Integer.toString(ExifInterface.ORIENTATION_NORMAL)
+                  );
+                } catch (Exception ignore) {}
+                finalWidthOut = resizedBitmap.getWidth();
+                finalHeightOut = resizedBitmap.getHeight();
+              } else {
+                // No explicit size/ratio: crop to match current preview content
+                Bitmap originalBitmap = BitmapFactory.decodeByteArray(
+                  originalCaptureBytes,
+                  0,
+                  originalCaptureBytes.length
+                );
+                originalBitmap = applyExifOrientation(
+                  originalBitmap,
+                  exifInterface
+                );
+                Bitmap previewCropped = cropBitmapToMatchPreview(
+                  originalBitmap
+                );
+                if (embedTimestamp || embedLocation) {
+                  previewCropped = drawTimestampAndLocationOntoBitmap(
+                    previewCropped,
+                    exifInterface,
+                    embedTimestamp,
+                    embedLocation
+                  );
+                }
+                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                previewCropped.compress(
+                  Bitmap.CompressFormat.JPEG,
+                  quality,
+                  stream
+                );
+                bytes = stream.toByteArray();
+                transformedPixels = true;
+                // Update EXIF JSON to reflect cropped dimensions; no in-place EXIF write to bytes
+                try {
+                  exifData.put("PixelXDimension", previewCropped.getWidth());
+                  exifData.put("PixelYDimension", previewCropped.getHeight());
+                  exifData.put("ImageWidth", previewCropped.getWidth());
+                  exifData.put("ImageLength", previewCropped.getHeight());
+                  exifData.put(
+                    "Orientation",
+                    Integer.toString(ExifInterface.ORIENTATION_NORMAL)
+                  );
+                } catch (Exception ignore) {}
+                finalWidthOut = previewCropped.getWidth();
+                finalHeightOut = previewCropped.getHeight();
+              }
+
+              // After any transform, inject EXIF back into the in-memory JPEG bytes (no temp file)
+              if (transformedPixels) {
+                Integer fW = (finalWidthOut > 0) ? finalWidthOut : null;
+                Integer fH = (finalHeightOut > 0) ? finalHeightOut : null;
+                bytes = injectExifInMemory(bytes, originalCaptureBytes, fW, fH);
+              }
+
+              // Save to gallery asynchronously if requested, copy EXIF to file
+              if (saveToGallery) {
+                final byte[] finalBytes = bytes;
+                final ExifInterface exifForFile = exifInterface;
+                final Integer fW = (finalWidthOut > 0) ? finalWidthOut : null;
+                final Integer fH = (finalHeightOut > 0) ? finalHeightOut : null;
+                new Thread(() ->
+                  saveImageToGallery(finalBytes, exifForFile, fW, fH)
+                ).start();
+              }
+
+              String resultValue;
+              boolean returnFileUri =
+                sessionConfig != null && sessionConfig.isStoreToFile();
+              if (returnFileUri) {
+                // Persist processed image to a file and return its URI to avoid heavy base64 bridging
+                try {
+                  String fileName =
+                    "cpcp_" +
+                    new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(
+                      new java.util.Date()
+                    ) +
+                    ".jpg";
+                  File outDir = context.getCacheDir();
+                  File outFile = new File(outDir, fileName);
+                  FileOutputStream outFos = new FileOutputStream(outFile);
+                  outFos.write(bytes);
+                  outFos.close();
+
+                  // No EXIF rewrite here; bytes already contain EXIF when needed
+
+                  // Return a file path; apps can convert via Capacitor.convertFileSrc on JS side
+                  resultValue = outFile.getAbsolutePath();
+                } catch (IOException ioEx) {
+                  Log.e(TAG, "capturePhoto: Failed to write image file", ioEx);
+                  // Fallback to base64 if file write fails
+                  resultValue = Base64.encodeToString(bytes, Base64.NO_WRAP);
+                }
+              } else {
+                // Backward-compatible behavior
+                resultValue = Base64.encodeToString(bytes, Base64.NO_WRAP);
+              }
+
+              if (listener != null) {
+                listener.onPictureTaken(resultValue, exifData);
+              }
+            } catch (Exception e) {
+              Log.e(TAG, "capturePhoto: Error processing image", e);
+              if (listener != null) {
+                listener.onPictureTakenError(
+                  "Error processing image: " + e.getMessage()
+                );
+              }
+            } finally {
+              // End of capture lifecycle
+              synchronized (captureLock) {
+                isCapturingPhoto = false;
+                if (stopRequested) {
+                  performImmediateStop();
+                }
+              }
+              endOperation("capturePhoto");
+            }
+          }
         }
+      );
+
+      dispatched = true;
+    } catch (Exception e) {
+      Log.e(TAG, "capturePhoto: Failed to start photo capture", e);
+      if (listener != null) {
+        listener.onPictureTakenError("Photo capture failed: " + e.getMessage());
       }
-    );
+    } finally {
+      if (!dispatched) {
+        synchronized (captureLock) {
+          isCapturingPhoto = false;
+          if (stopRequested) {
+            performImmediateStop();
+          }
+        }
+        endOperation("capturePhoto");
+      }
+    }
   }
 
   private Bitmap drawTimestampAndLocationOntoBitmap(
@@ -1970,6 +2005,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
   // we recompress JPEG in-memory and update EXIF info only in the returned JSON, not in the bytes.
 
   public void captureSample(int quality) {
+    if (sampleImageCapture == null) {
+      if (listener != null) {
+        listener.onSampleTakenError("Camera not ready");
+      }
+      return;
+    }
+
     if (IsOperationRunning("captureSample")) {
       Log.d(TAG, "captureSample: Ignored because stop is pending");
       return;
@@ -1979,52 +2021,59 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
       "captureSample: Starting sample capture with quality: " + quality
     );
 
-    if (sampleImageCapture == null) {
-      if (listener != null) {
-        listener.onSampleTakenError("Camera not ready");
-      }
-      return;
-    }
-
-    sampleImageCapture.takePicture(
-      cameraExecutor,
-      new ImageCapture.OnImageCapturedCallback() {
-        @Override
-        public void onError(@NonNull ImageCaptureException exception) {
-          Log.e(TAG, "captureSample: Sample capture failed", exception);
-          if (listener != null) {
-            listener.onSampleTakenError(
-              "Sample capture failed: " + exception.getMessage()
-            );
-          }
-          endOperation("captureSample");
-        }
-
-        @Override
-        public void onCaptureSuccess(@NonNull ImageProxy image) {
-          //noinspection TryFinallyCanBeTryWithResources
-          try {
-            // Convert ImageProxy to byte array
-            byte[] bytes = imageProxyToByteArray(image);
-            String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
-
-            if (listener != null) {
-              listener.onSampleTaken(base64);
-            }
-          } catch (Exception e) {
-            Log.e(TAG, "captureSample: Error processing sample", e);
+    boolean dispatched = false;
+    try {
+      sampleImageCapture.takePicture(
+        cameraExecutor,
+        new ImageCapture.OnImageCapturedCallback() {
+          @Override
+          public void onError(@NonNull ImageCaptureException exception) {
+            Log.e(TAG, "captureSample: Sample capture failed", exception);
             if (listener != null) {
               listener.onSampleTakenError(
-                "Error processing sample: " + e.getMessage()
+                "Sample capture failed: " + exception.getMessage()
               );
             }
-          } finally {
-            image.close();
             endOperation("captureSample");
           }
+
+          @Override
+          public void onCaptureSuccess(@NonNull ImageProxy image) {
+            //noinspection TryFinallyCanBeTryWithResources
+            try {
+              // Convert ImageProxy to byte array
+              byte[] bytes = imageProxyToByteArray(image);
+              String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
+
+              if (listener != null) {
+                listener.onSampleTaken(base64);
+              }
+            } catch (Exception e) {
+              Log.e(TAG, "captureSample: Error processing sample", e);
+              if (listener != null) {
+                listener.onSampleTakenError(
+                  "Error processing sample: " + e.getMessage()
+                );
+              }
+            } finally {
+              image.close();
+              endOperation("captureSample");
+            }
+          }
         }
+      );
+
+      dispatched = true;
+    } catch (Exception e) {
+      Log.e(TAG, "captureSample: Failed to start sample capture", e);
+      if (listener != null) {
+        listener.onSampleTakenError("Sample capture failed: " + e.getMessage());
       }
-    );
+    } finally {
+      if (!dispatched) {
+        endOperation("captureSample");
+      }
+    }
   }
 
   private byte[] imageProxyToByteArray(ImageProxy image) {
@@ -2377,18 +2426,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
       );
       return;
     }
-    if (IsOperationRunning("setFocus")) {
-      Log.d(TAG, "setFocus: Ignored because stop is pending");
-      return;
-    }
-    if (camera == null) {
-      throw new Exception("Camera not initialized");
-    }
-
-    if (previewView == null) {
-      throw new Exception("Preview view not initialized");
-    }
-
     // Validate that coordinates are within bounds (0-1 range)
     if (x < 0f || x > 1f || y < 0f || y > 1f) {
       Log.w(TAG, "setFocus: Coordinates out of bounds - x: " + x + ", y: " + y);
@@ -2426,21 +2463,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
       );
     }
 
-    // Only show focus indicator after validation passes
-    float indicatorX = x * viewWidth;
-    float indicatorY = y * viewHeight;
-    final long indicatorToken;
-    long indicatorToken1;
-    try {
-      indicatorToken1 = showFocusIndicator(indicatorX, indicatorY);
-    } catch (Exception ignore) {
-      // If we can't show the indicator (e.g., view is gone), still proceed with metering
-      // Use current token so hide is a no-op later
-      indicatorToken1 = focusIndicatorAnimationId;
-    }
-
-    // Create MeteringPoint using the preview view
-    indicatorToken = indicatorToken1;
     MeteringPointFactory factory = previewView.getMeteringPointFactory();
     MeteringPoint point = factory.createPoint(x * viewWidth, y * viewHeight);
 
@@ -2452,16 +2474,34 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
       .disableAutoCancel()
       .build();
 
-    try {
-      final ListenableFuture<FocusMeteringResult> future = camera
-        .getCameraControl()
-        .startFocusAndMetering(action);
-      currentFocusFuture = future;
+    if (IsOperationRunning("setFocus")) {
+      Log.d(TAG, "setFocus: Ignored because stop is pending");
+      return;
+    }
 
+    // Only show focus indicator after validation passes and operation is accepted
+    float indicatorX = x * viewWidth;
+    float indicatorY = y * viewHeight;
+    long indicatorToken = focusIndicatorAnimationId;
+    try {
+      indicatorToken = showFocusIndicator(indicatorX, indicatorY);
+    } catch (Exception ignore) {
+      // If we can't show the indicator (e.g., view is gone), still proceed with metering
+    }
+
+    ListenableFuture<FocusMeteringResult> future = null;
+    boolean dispatched = false;
+    try {
+      future = camera.getCameraControl().startFocusAndMetering(action);
+      currentFocusFuture = future;
+      dispatched = true;
+
+      final ListenableFuture<FocusMeteringResult> capturedFuture = future;
+      final long tokenForListener = indicatorToken;
       future.addListener(
         () -> {
           try {
-            FocusMeteringResult result = future.get();
+            FocusMeteringResult result = capturedFuture.get();
           } catch (Exception e) {
             // Handle cancellation gracefully - this is expected when rapid taps occur
             if (
@@ -2483,10 +2523,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
               Log.e(TAG, "Error during focus: " + e.getMessage());
             }
           } finally {
-            if (currentFocusFuture == future && currentFocusFuture.isDone()) {
+            if (
+              currentFocusFuture == capturedFuture &&
+              currentFocusFuture.isDone()
+            ) {
               currentFocusFuture = null;
             }
-            hideFocusIndicator(indicatorToken);
+            hideFocusIndicator(tokenForListener);
             endOperation("setFocus");
           }
         },
@@ -2495,9 +2538,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     } catch (Exception e) {
       currentFocusFuture = null;
       Log.e(TAG, "Failed to set focus: " + e.getMessage());
-      hideFocusIndicator(indicatorToken);
-      endOperation("setFocus");
       throw e;
+    } finally {
+      if (!dispatched) {
+        if (currentFocusFuture == future) {
+          currentFocusFuture = null;
+        }
+        hideFocusIndicator(indicatorToken);
+        endOperation("setFocus");
+      }
     }
   }
 
