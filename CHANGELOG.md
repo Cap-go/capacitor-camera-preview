@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.21.9](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.8...7.21.9) (2025-10-02)
+
+
+### Bug Fixes
+
+* **android:** CameraPreview too much parenthesis ([d73c3a2](https://github.com/Cap-go/capacitor-camera-preview/commit/d73c3a2cbe4f4d8dfad938f4120138c8b0ad48d0))
+* **android:** CameraX stop deferral deadlocks ([02dbeb8](https://github.com/Cap-go/capacitor-camera-preview/commit/02dbeb8b8462737eef6d9d2afbc1616cbaa4dcda))
+* **android:** use isStopping to ensure that camera is being stopped ([42bb11b](https://github.com/Cap-go/capacitor-camera-preview/commit/42bb11b3577fa3be75a19a448dc682bdff51d6c7))
+
 ## [7.21.8](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.7...7.21.8) (2025-09-29)
 
 ## [7.21.7](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.6...7.21.7) (2025-09-29)
