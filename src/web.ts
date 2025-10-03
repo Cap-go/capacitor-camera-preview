@@ -8,14 +8,19 @@ import type {
   CameraPreviewPictureOptions,
   CameraPreviewPlugin,
   CameraSampleOptions,
+  CameraPermissionStatus,
   DeviceOrientation,
   GridMode,
   ExposureMode,
   FlashMode,
   LensInfo,
+  PermissionRequestOptions,
   SafeAreaInsets,
 } from "./definitions";
+import type { PermissionState } from "@capacitor/core";
 import { DeviceType } from "./definitions";
+
+type WebPermissionState = "granted" | "denied" | "prompt";
 
 const DEFAULT_VIDEO_ID = "capgo_video";
 export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
@@ -31,6 +36,81 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
   constructor() {
     super();
+  }
+  async checkPermissions(options?: { disableAudio?: boolean }): Promise<CameraPermissionStatus> {
+    const result: CameraPermissionStatus = {
+      camera: "prompt",
+    };
+
+    const permissionsApi = (navigator as any)?.permissions;
+
+    if (permissionsApi?.query) {
+      try {
+        const cameraPermission = await permissionsApi.query({ name: "camera" });
+        result.camera = this.mapWebPermission(
+          cameraPermission.state as WebPermissionState,
+        );
+      } catch (error) {
+        console.warn("Camera permission query failed", error);
+      }
+
+      if (options?.disableAudio === false) {
+        try {
+          const microphonePermission = await permissionsApi.query({
+            name: "microphone",
+          });
+          result.microphone = this.mapWebPermission(
+            microphonePermission.state as WebPermissionState,
+          );
+        } catch (error) {
+          console.warn("Microphone permission query failed", error);
+          result.microphone = "prompt";
+        }
+      }
+    } else if (options?.disableAudio === false) {
+      result.microphone = "prompt";
+    }
+
+    return result;
+  }
+
+  async requestPermissions(
+    options?: PermissionRequestOptions,
+  ): Promise<CameraPermissionStatus> {
+    const disableAudio = options?.disableAudio ?? true;
+
+    if (navigator?.mediaDevices?.getUserMedia) {
+      const constraints: MediaStreamConstraints = disableAudio
+        ? { video: true }
+        : { video: true, audio: true };
+      try {
+        await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (error) {
+        console.warn("Unable to obtain camera or microphone stream", error);
+      }
+    }
+
+    const status = await this.checkPermissions({ disableAudio: disableAudio });
+
+    if (options?.showSettingsAlert) {
+      console.warn(
+        "showSettingsAlert is not supported on the web platform; returning permission status only.",
+      );
+    }
+
+    return status;
+  }
+
+  private mapWebPermission(state: WebPermissionState | undefined): PermissionState {
+    switch (state) {
+      case "granted":
+        return "granted";
+      case "denied":
+        return "denied";
+      case "prompt":
+      default:
+        return "prompt";
+    }
   }
   private getCurrentOrientation(): DeviceOrientation {
     try {

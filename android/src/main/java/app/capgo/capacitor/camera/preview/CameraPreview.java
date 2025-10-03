@@ -5,6 +5,8 @@ import static android.Manifest.permission.RECORD_AUDIO;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -13,6 +15,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
+import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Size;
@@ -21,6 +24,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
 import androidx.annotation.RequiresPermission;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -127,6 +131,7 @@ public class CameraPreview
   private String lastOrientationStr = "unknown";
   private boolean lastDisableAudio = true;
   private Drawable originalWindowBackground;
+  private boolean isCameraPermissionDialogShowing = false;
 
   @PluginMethod
   public void getExposureModes(PluginCall call) {
@@ -738,6 +743,205 @@ public class CameraPreview
     call.resolve(jsObject);
   }
 
+  private void showCameraPermissionDialog(
+    String title,
+    String message,
+    String openSettingsText,
+    String cancelText,
+    Runnable completion
+  ) {
+    Activity activity = getActivity();
+    if (activity == null) {
+      if (completion != null) {
+        completion.run();
+      }
+      return;
+    }
+
+    activity.runOnUiThread(() -> {
+      if (activity.isFinishing()) {
+        if (completion != null) {
+          completion.run();
+        }
+        return;
+      }
+
+      if (isCameraPermissionDialogShowing) {
+        if (completion != null) {
+          completion.run();
+        }
+        return;
+      }
+
+      AlertDialog dialog =
+        new AlertDialog.Builder(activity)
+          .setTitle(title)
+          .setMessage(message)
+          .setNegativeButton(cancelText, (d, which) -> {
+            d.dismiss();
+            isCameraPermissionDialogShowing = false;
+          })
+          .setPositiveButton(openSettingsText, (d, which) -> {
+            Intent intent = new Intent(
+              Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+            );
+            Uri uri =
+              Uri.fromParts("package", activity.getPackageName(), null);
+            intent.setData(uri);
+            activity.startActivity(intent);
+            isCameraPermissionDialogShowing = false;
+          })
+          .setOnDismissListener(d -> isCameraPermissionDialogShowing = false)
+          .create();
+
+      isCameraPermissionDialogShowing = true;
+      dialog.show();
+      if (completion != null) {
+        completion.run();
+      }
+    });
+  }
+
+  private String mapPermissionState(PermissionState state) {
+    if (state == null) {
+      return PermissionState.PROMPT.toString();
+    }
+
+    return state.toString();
+  }
+
+  @PluginMethod
+  public void checkPermissions(PluginCall call) {
+    boolean disableAudio =
+      call.getBoolean("disableAudio") != null
+        ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
+        : true;
+
+    PermissionState cameraState = getPermissionState(
+      CAMERA_ONLY_PERMISSION_ALIAS
+    );
+
+    JSObject result = new JSObject();
+    result.put("camera", mapPermissionState(cameraState));
+
+    if (!disableAudio) {
+      PermissionState audioState = getPermissionState(
+        CAMERA_WITH_AUDIO_PERMISSION_ALIAS
+      );
+      result.put("microphone", mapPermissionState(audioState));
+    }
+
+    call.resolve(result);
+  }
+
+  @Override
+  @PluginMethod
+  public void requestPermissions(PluginCall call) {
+    Boolean disableAudioOption = call.getBoolean("disableAudio");
+    boolean disableAudio = disableAudioOption == null
+      ? true
+      : Boolean.TRUE.equals(disableAudioOption);
+    this.lastDisableAudio = disableAudio;
+
+    String permissionAlias = disableAudio
+      ? CAMERA_ONLY_PERMISSION_ALIAS
+      : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
+
+    boolean cameraGranted =
+      PermissionState.GRANTED.equals(
+        getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS)
+      );
+    boolean audioGranted = disableAudio ||
+      PermissionState.GRANTED.equals(
+        getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS)
+      );
+
+    if (cameraGranted && audioGranted) {
+      JSObject result = new JSObject();
+      result.put("camera", mapPermissionState(PermissionState.GRANTED));
+      if (!disableAudio) {
+        result.put("microphone", mapPermissionState(PermissionState.GRANTED));
+      }
+      call.resolve(result);
+      return;
+    }
+
+    requestPermissionForAlias(
+      permissionAlias,
+      call,
+      "handleRequestPermissionsResult"
+    );
+  }
+
+  @PermissionCallback
+  private void handleRequestPermissionsResult(PluginCall call) {
+    Boolean disableAudioOption = call.getBoolean("disableAudio");
+    boolean disableAudio = disableAudioOption == null
+      ? true
+      : Boolean.TRUE.equals(disableAudioOption);
+    this.lastDisableAudio = disableAudio;
+
+    PermissionState cameraState = getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS);
+    JSObject result = new JSObject();
+    result.put("camera", mapPermissionState(cameraState));
+
+    if (!disableAudio) {
+      PermissionState audioState = getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS);
+      result.put("microphone", mapPermissionState(audioState));
+    }
+
+    boolean showSettingsAlert =
+      call.getBoolean("showSettingsAlert") != null
+        ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert"))
+        : false;
+
+    String cameraStateString = result.getString("camera");
+    boolean cameraNeedsSettings =
+      "denied".equals(cameraStateString) ||
+      "prompt-with-rationale".equals(cameraStateString);
+
+    boolean microphoneNeedsSettings = false;
+    if (result.has("microphone")) {
+      String micStateString = result.getString("microphone");
+      microphoneNeedsSettings =
+        "denied".equals(micStateString) ||
+        "prompt-with-rationale".equals(micStateString);
+    }
+
+    boolean shouldShowAlert =
+      showSettingsAlert && (cameraNeedsSettings || microphoneNeedsSettings);
+
+    if (shouldShowAlert) {
+      Activity activity = getActivity();
+      if (activity == null) {
+        call.resolve(result);
+        return;
+      }
+
+      String title = call.getString("title", "Camera Permission Needed");
+      String message =
+        call.getString(
+          "message",
+          "Enable camera access in Settings to use the preview."
+        );
+      String openSettingsText = call.getString("openSettingsButtonTitle", "Open Settings");
+      String cancelText = call.getString(
+        "cancelButtonTitle",
+        activity.getString(android.R.string.cancel)
+      );
+
+      showCameraPermissionDialog(
+        title,
+        message,
+        openSettingsText,
+        cancelText,
+        () -> call.resolve(result)
+      );
+    } else {
+      call.resolve(result);
+    }
+  }
+
   @PermissionCallback
   private void handleCameraPermissionResult(PluginCall call) {
     if (
@@ -750,7 +954,10 @@ public class CameraPreview
     ) {
       startCamera(call);
     } else {
-      call.reject("Permission failed");
+      call.reject(
+        "camera permission denied. enable camera access in Settings.",
+        "cameraPermissionDenied"
+      );
     }
   }
 
@@ -2016,6 +2223,7 @@ public class CameraPreview
     boolean disableAudio = call.getBoolean("disableAudio") != null
       ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
       : this.lastDisableAudio;
+    this.lastDisableAudio = disableAudio;
     String permissionAlias = disableAudio
       ? CAMERA_ONLY_PERMISSION_ALIAS
       : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
@@ -2097,7 +2305,10 @@ public class CameraPreview
         call.reject("Failed to start video recording: " + e.getMessage());
       }
     } else {
-      call.reject("Permission denied for video recording");
+      call.reject(
+        "camera permission denied. enable camera access in Settings.",
+        "cameraPermissionDenied"
+      );
     }
   }
 
