@@ -1,4 +1,4 @@
-import type { PluginListenerHandle } from "@capacitor/core";
+import type { PermissionState, PluginListenerHandle } from "@capacitor/core";
 
 export type CameraPosition = "rear" | "front";
 
@@ -7,6 +7,20 @@ export type FlashMode = CameraPreviewFlashMode;
 export type GridMode = "none" | "3x3" | "4x4";
 
 export type CameraPositioning = "center" | "top" | "bottom";
+
+export interface CameraPermissionStatus {
+  camera: PermissionState;
+  microphone?: PermissionState;
+}
+
+export interface PermissionRequestOptions {
+  disableAudio?: boolean;
+  showSettingsAlert?: boolean;
+  title?: string;
+  message?: string;
+  openSettingsButtonTitle?: string;
+  cancelButtonTitle?: string;
+}
 
 export enum DeviceType {
   ULTRA_WIDE = "ultraWide",
@@ -469,6 +483,30 @@ export interface CameraPreviewPlugin {
    * @since 8.0.0
    */
   getGridMode(): Promise<{ gridMode: GridMode }>;
+
+  /**
+   * Checks the current camera (and optionally microphone) permission status without prompting the system dialog.
+   *
+   * @param options Set `disableAudio` to `false` to also include microphone status (defaults to `true`).
+   * @returns {Promise<CameraPermissionStatus>} A promise resolving to the current authorization states.
+   * @since 8.7.0
+   */
+  checkPermissions(
+    options?: Pick<PermissionRequestOptions, "disableAudio">,
+  ): Promise<CameraPermissionStatus>;
+
+  /**
+   * Requests camera (and optional microphone) permissions. If permissions are already granted or denied,
+   * the current status is returned without prompting. When `showSettingsAlert` is true and permissions are denied,
+   * a platform specific alert guiding the user to the app settings will be presented.
+   *
+   * @param {PermissionRequestOptions} options - Configuration for the permission request behaviour.
+   * @returns {Promise<CameraPermissionStatus>} A promise resolving to the final authorization states.
+   * @since 8.7.0
+   */
+  requestPermissions(
+    options?: PermissionRequestOptions,
+  ): Promise<CameraPermissionStatus>;
 
   /**
    * Gets the horizontal field of view (FoV) for the active camera.

@@ -308,6 +308,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`getAspectRatio()`](#getaspectratio)
 * [`setGridMode(...)`](#setgridmode)
 * [`getGridMode()`](#getgridmode)
+* [`checkPermissions(...)`](#checkpermissions)
+* [`requestPermissions(...)`](#requestpermissions)
 * [`getHorizontalFov()`](#gethorizontalfov)
 * [`getSupportedPictureSizes()`](#getsupportedpicturesizes)
 * [`setFlashMode(...)`](#setflashmode)
@@ -499,6 +501,46 @@ Gets the current grid mode of the camera preview overlay.
 **Returns:** <code>Promise&lt;{ gridMode: <a href="#gridmode">GridMode</a>; }&gt;</code>
 
 **Since:** 8.0.0
+
+--------------------
+
+
+### checkPermissions(...)
+
+```typescript
+checkPermissions(options?: Pick<PermissionRequestOptions, "disableAudio"> | undefined) => Promise<CameraPermissionStatus>
+```
+
+Checks the current camera (and optionally microphone) permission status without prompting the system dialog.
+
+| Param         | Type                                                                                                                          | Description                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#pick">Pick</a>&lt;<a href="#permissionrequestoptions">PermissionRequestOptions</a>, 'disableAudio'&gt;</code> | Set `disableAudio` to `false` to also include microphone status (defaults to `true`). |
+
+**Returns:** <code>Promise&lt;<a href="#camerapermissionstatus">CameraPermissionStatus</a>&gt;</code>
+
+**Since:** 8.7.0
+
+--------------------
+
+
+### requestPermissions(...)
+
+```typescript
+requestPermissions(options?: PermissionRequestOptions | undefined) => Promise<CameraPermissionStatus>
+```
+
+Requests camera (and optional microphone) permissions. If permissions are already granted or denied,
+the current status is returned without prompting. When `showSettingsAlert` is true and permissions are denied,
+a platform specific alert guiding the user to the app settings will be presented.
+
+| Param         | Type                                                                          | Description                                           |
+| ------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **`options`** | <code><a href="#permissionrequestoptions">PermissionRequestOptions</a></code> | - Configuration for the permission request behaviour. |
+
+**Returns:** <code>Promise&lt;<a href="#camerapermissionstatus">CameraPermissionStatus</a>&gt;</code>
+
+**Since:** 8.7.0
 
 --------------------
 
@@ -1050,6 +1092,26 @@ Defines the options for capturing a sample frame from the camera preview.
 | **`quality`** | <code>number</code> | The quality of the captured sample, from 0 to 100. | <code>85</code> |
 
 
+#### CameraPermissionStatus
+
+| Prop             | Type                                                        |
+| ---------------- | ----------------------------------------------------------- |
+| **`camera`**     | <code><a href="#permissionstate">PermissionState</a></code> |
+| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> |
+
+
+#### PermissionRequestOptions
+
+| Prop                          | Type                 |
+| ----------------------------- | -------------------- |
+| **`disableAudio`**            | <code>boolean</code> |
+| **`showSettingsAlert`**       | <code>boolean</code> |
+| **`title`**                   | <code>string</code>  |
+| **`message`**                 | <code>string</code>  |
+| **`openSettingsButtonTitle`** | <code>string</code>  |
+| **`cancelButtonTitle`**       | <code>string</code>  |
+
+
 #### SupportedPictureSizes
 
 Represents the supported picture sizes for a camera facing a certain direction.
@@ -1168,6 +1230,18 @@ The available flash modes for the camera.
 'torch' is a continuous light mode.
 
 <code>"off" | "on" | "auto" | "torch"</code>
+
+
+#### PermissionState
+
+<code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
+
+
+#### Pick
+
+From T, pick a set of properties whose keys are in the union K
+
+<code>{ [P in K]: T[P]; }</code>
 
 
 #### FlashMode

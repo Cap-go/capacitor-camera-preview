@@ -35,6 +35,7 @@ import {
 import {
   CameraDevice,
   CameraPosition,
+  CameraPermissionStatus,
   ExifData,
   FlashMode,
   PictureFormat,
@@ -275,12 +276,47 @@ export class CameraViewPage implements OnInit {
     // Validate that aspect ratio and size (width/height) are not both set
     const hasAspectRatio = this.aspectRatio() !== 'custom';
     const hasSize = this.previewWidth() > 0 || this.previewHeight() > 0;
-    
+
     if (hasAspectRatio && hasSize) {
-      const results = this.testResults() + 
+      const results = this.testResults() +
         `\n✗ Error: Cannot set both aspect ratio and size (width/height). Use setPreviewSize after start.`;
       this.testResults.set(results);
       return;
+    }
+
+    const disableAudio = this.disableAudio();
+    const needsSettings = (perm: CameraPermissionStatus): boolean => {
+      const cameraBlocked = perm.camera === 'denied' || perm.camera === 'prompt-with-rationale';
+      const microphoneBlocked = perm.microphone !== undefined &&
+        (perm.microphone === 'denied' || perm.microphone === 'prompt-with-rationale');
+      return cameraBlocked || microphoneBlocked;
+    };
+
+    let permissions = await this.#cameraViewService.checkPermissions({ disableAudio });
+
+    if (needsSettings(permissions)) {
+      const message = permissions.microphone && permissions.microphone !== 'granted'
+        ? 'Camera or microphone permission denied. Enable access in Settings and try again.'
+        : 'Camera permission denied. Enable access in Settings and try again.';
+      let results = this.testResults() +
+        `\n✗ ${message} (camera: ${permissions.camera}${permissions.microphone ? `, microphone: ${permissions.microphone}` : ''})`;
+
+      try {
+        const followUp = await this.#cameraViewService.requestPermissions({
+          disableAudio,
+          showSettingsAlert: true,
+        });
+        permissions = followUp;
+        results += `\n  (after requestPermissions → camera: ${followUp.camera}${followUp.microphone ? `, microphone: ${followUp.microphone}` : ''})`;
+      } catch (err) {
+        console.warn('Unable to open settings prompt', err);
+      }
+
+      this.testResults.set(results);
+
+      if (needsSettings(permissions)) {
+        return;
+      }
     }
 
     const cameraModal = await this.#modalController.create({
@@ -321,7 +357,29 @@ export class CameraViewPage implements OnInit {
       options?: any;
       type?: string;
       error?: string;
+      permissions?: CameraPermissionStatus;
     }>();
+
+    console.log('Camera modal dismissed', data);
+    if (data?.type === 'permissionDenied') {
+      const message = data.error || 'Camera permission denied. Enable access in Settings and try again.';
+      const details = data.permissions
+        ? ` (camera: ${data.permissions.camera}${data.permissions.microphone ? `, microphone: ${data.permissions.microphone}` : ''})`
+        : '';
+      let results = this.testResults() + `\n✗ ${message}${details}`;
+      try {
+        const followUp = await this.#cameraViewService.requestPermissions({
+          disableAudio: this.disableAudio(),
+          showSettingsAlert: true,
+        });
+        const followUpDetails = ` (after requestPermissions → camera: ${followUp.camera}${followUp.microphone ? `, microphone: ${followUp.microphone}` : ''})`;
+        results += `\n  ${followUpDetails}`;
+      } catch (err) {
+        console.warn('Unable to open settings prompt', err);
+      }
+      this.testResults.set(results);
+      return;
+    }
 
     if (data?.error) {
       // Show error in test results
