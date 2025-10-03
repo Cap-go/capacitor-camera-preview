@@ -491,7 +491,9 @@ export interface CameraPreviewPlugin {
    * @returns {Promise<CameraPermissionStatus>} A promise resolving to the current authorization states.
    * @since 8.7.0
    */
-  checkPermissions(options?: Pick<PermissionRequestOptions, 'disableAudio'>): Promise<CameraPermissionStatus>;
+  checkPermissions(
+    options?: Pick<PermissionRequestOptions, "disableAudio">,
+  ): Promise<CameraPermissionStatus>;
 
   /**
    * Requests camera (and optional microphone) permissions. If permissions are already granted or denied,

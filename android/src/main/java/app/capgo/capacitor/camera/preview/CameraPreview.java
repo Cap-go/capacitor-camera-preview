@@ -773,26 +773,24 @@ public class CameraPreview
         return;
       }
 
-      AlertDialog dialog =
-        new AlertDialog.Builder(activity)
-          .setTitle(title)
-          .setMessage(message)
-          .setNegativeButton(cancelText, (d, which) -> {
-            d.dismiss();
-            isCameraPermissionDialogShowing = false;
-          })
-          .setPositiveButton(openSettingsText, (d, which) -> {
-            Intent intent = new Intent(
-              Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-            );
-            Uri uri =
-              Uri.fromParts("package", activity.getPackageName(), null);
-            intent.setData(uri);
-            activity.startActivity(intent);
-            isCameraPermissionDialogShowing = false;
-          })
-          .setOnDismissListener(d -> isCameraPermissionDialogShowing = false)
-          .create();
+      AlertDialog dialog = new AlertDialog.Builder(activity)
+        .setTitle(title)
+        .setMessage(message)
+        .setNegativeButton(cancelText, (d, which) -> {
+          d.dismiss();
+          isCameraPermissionDialogShowing = false;
+        })
+        .setPositiveButton(openSettingsText, (d, which) -> {
+          Intent intent = new Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+          );
+          Uri uri = Uri.fromParts("package", activity.getPackageName(), null);
+          intent.setData(uri);
+          activity.startActivity(intent);
+          isCameraPermissionDialogShowing = false;
+        })
+        .setOnDismissListener(d -> isCameraPermissionDialogShowing = false)
+        .create();
 
       isCameraPermissionDialogShowing = true;
       dialog.show();
@@ -812,10 +810,9 @@ public class CameraPreview
 
   @PluginMethod
   public void checkPermissions(PluginCall call) {
-    boolean disableAudio =
-      call.getBoolean("disableAudio") != null
-        ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
-        : true;
+    boolean disableAudio = call.getBoolean("disableAudio") != null
+      ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
+      : true;
 
     PermissionState cameraState = getPermissionState(
       CAMERA_ONLY_PERMISSION_ALIAS
@@ -847,11 +844,11 @@ public class CameraPreview
       ? CAMERA_ONLY_PERMISSION_ALIAS
       : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
-    boolean cameraGranted =
-      PermissionState.GRANTED.equals(
-        getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS)
-      );
-    boolean audioGranted = disableAudio ||
+    boolean cameraGranted = PermissionState.GRANTED.equals(
+      getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS)
+    );
+    boolean audioGranted =
+      disableAudio ||
       PermissionState.GRANTED.equals(
         getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS)
       );
@@ -881,19 +878,22 @@ public class CameraPreview
       : Boolean.TRUE.equals(disableAudioOption);
     this.lastDisableAudio = disableAudio;
 
-    PermissionState cameraState = getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS);
+    PermissionState cameraState = getPermissionState(
+      CAMERA_ONLY_PERMISSION_ALIAS
+    );
     JSObject result = new JSObject();
     result.put("camera", mapPermissionState(cameraState));
 
     if (!disableAudio) {
-      PermissionState audioState = getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS);
+      PermissionState audioState = getPermissionState(
+        CAMERA_WITH_AUDIO_PERMISSION_ALIAS
+      );
       result.put("microphone", mapPermissionState(audioState));
     }
 
-    boolean showSettingsAlert =
-      call.getBoolean("showSettingsAlert") != null
-        ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert"))
-        : false;
+    boolean showSettingsAlert = call.getBoolean("showSettingsAlert") != null
+      ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert"))
+      : false;
 
     String cameraStateString = result.getString("camera");
     boolean cameraNeedsSettings =
@@ -919,12 +919,14 @@ public class CameraPreview
       }
 
       String title = call.getString("title", "Camera Permission Needed");
-      String message =
-        call.getString(
-          "message",
-          "Enable camera access in Settings to use the preview."
-        );
-      String openSettingsText = call.getString("openSettingsButtonTitle", "Open Settings");
+      String message = call.getString(
+        "message",
+        "Enable camera access in Settings to use the preview."
+      );
+      String openSettingsText = call.getString(
+        "openSettingsButtonTitle",
+        "Open Settings"
+      );
       String cancelText = call.getString(
         "cancelButtonTitle",
         activity.getString(android.R.string.cancel)
