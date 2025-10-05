@@ -92,7 +92,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         console.warn("Unable to obtain camera or microphone stream", error);
       } finally {
         try {
-          stream?.getTracks().forEach(t => t.stop());
+          stream?.getTracks().forEach((t) => t.stop());
         } catch (_e) {
           /* no-op */
         }
