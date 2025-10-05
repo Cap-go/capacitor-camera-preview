@@ -170,10 +170,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     private func presentCameraPermissionAlert(title: String,
-                                               message: String,
-                                               openSettingsText: String,
-                                               cancelText: String,
-                                               completion: (() -> Void)? = nil) {
+                                              message: String,
+                                              openSettingsText: String,
+                                              cancelText: String,
+                                              completion: (() -> Void)? = nil) {
         DispatchQueue.main.async {
             guard let viewController = self.bridge?.viewController else {
                 completion?()
@@ -865,12 +865,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    public override func checkPermissions(_ call: CAPPluginCall) {
+    override public func checkPermissions(_ call: CAPPluginCall) {
         let disableAudio = call.getBool("disableAudio") ?? true
         let cameraStatus = self.mapAuthorizationStatus(AVCaptureDevice.authorizationStatus(for: .video))
 
         var result: [String: Any] = [
-            "camera": cameraStatus,
+            "camera": cameraStatus
         ]
 
         if disableAudio == false {
@@ -881,7 +881,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         call.resolve(result)
     }
 
-    public override func requestPermissions(_ call: CAPPluginCall) {
+    override public func requestPermissions(_ call: CAPPluginCall) {
         let disableAudio = call.getBool("disableAudio") ?? true
         self.disableAudio = disableAudio
 
@@ -922,7 +922,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             let cameraResult = self.mapAuthorizationStatus(currentCameraStatus)
             var result: [String: Any] = [
-                "camera": cameraResult,
+                "camera": cameraResult
             ]
 
             if let audioStatus = currentAudioStatus {
@@ -931,7 +931,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             let shouldShowAlert = showSettingsAlert &&
                 (cameraResult == "denied" ||
-                 ((result["microphone"] as? String) == "denied"))
+                    ((result["microphone"] as? String) == "denied"))
 
             guard shouldShowAlert else {
                 call.resolve(result)

@@ -67,7 +67,10 @@ import org.json.JSONObject;
       },
       alias = CameraPreview.CAMERA_WITH_LOCATION_PERMISSION_ALIAS
     ),
-    @Permission(strings = { RECORD_AUDIO }, alias = CameraPreview.MICROPHONE_ONLY_PERMISSION_ALIAS),
+    @Permission(
+      strings = { RECORD_AUDIO },
+      alias = CameraPreview.MICROPHONE_ONLY_PERMISSION_ALIAS
+    ),
   }
 )
 public class CameraPreview
