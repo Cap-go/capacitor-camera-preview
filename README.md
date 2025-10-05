@@ -1094,10 +1094,10 @@ Defines the options for capturing a sample frame from the camera preview.
 
 #### CameraPermissionStatus
 
-| Prop             | Type                                                        |
-| ---------------- | ----------------------------------------------------------- |
-| **`camera`**     | <code><a href="#permissionstate">PermissionState</a></code> |
-| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> |
+| Prop             | Type                                                        | Description                                                            |
+| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **`camera`**     | <code><a href="#permissionstate">PermissionState</a></code> | Current camera permission status.                                      |
+| **`microphone`** | <code><a href="#permissionstate">PermissionState</a></code> | Optional - microphone permission status when audio capture is requested. |
 
 
 #### PermissionRequestOptions
@@ -1241,7 +1241,9 @@ The available flash modes for the camera.
 
 From T, pick a set of properties whose keys are in the union K
 
-<code>{ [P in K]: T[P]; }</code>
+<code>{
+ [P in K]: T[P];
+ }</code>
 
 
 #### FlashMode

@@ -67,6 +67,7 @@ import org.json.JSONObject;
       },
       alias = CameraPreview.CAMERA_WITH_LOCATION_PERMISSION_ALIAS
     ),
+    @Permission(strings = { RECORD_AUDIO }, alias = CameraPreview.MICROPHONE_ONLY_PERMISSION_ALIAS),
   }
 )
 public class CameraPreview
@@ -114,6 +115,7 @@ public class CameraPreview
   static final String CAMERA_ONLY_PERMISSION_ALIAS = "cameraOnly";
   static final String CAMERA_WITH_LOCATION_PERMISSION_ALIAS =
     "cameraWithLocation";
+  static final String MICROPHONE_ONLY_PERMISSION_ALIAS = "microphoneOnly";
 
   private String captureCallbackId = "";
   private String sampleCallbackId = "";
@@ -826,7 +828,7 @@ public class CameraPreview
 
     if (!disableAudio) {
       PermissionState audioState = getPermissionState(
-        CAMERA_WITH_AUDIO_PERMISSION_ALIAS
+        MICROPHONE_ONLY_PERMISSION_ALIAS
       );
       result.put("microphone", mapPermissionState(audioState));
     }
@@ -853,7 +855,7 @@ public class CameraPreview
       );
     boolean audioGranted = disableAudio ||
       PermissionState.GRANTED.equals(
-        getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS)
+        getPermissionState(MICROPHONE_ONLY_PERMISSION_ALIAS)
       );
 
     if (cameraGranted && audioGranted) {
