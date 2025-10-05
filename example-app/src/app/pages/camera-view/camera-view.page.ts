@@ -285,40 +285,52 @@ export class CameraViewPage implements OnInit {
     }
 
     const disableAudio = this.disableAudio();
-    const needsSettings = (perm: CameraPermissionStatus): boolean => {
-      const cameraBlocked = perm.camera === 'denied' || perm.camera === 'prompt-with-rationale';
-      const microphoneBlocked = perm.microphone !== undefined &&
-        (perm.microphone === 'denied' || perm.microphone === 'prompt-with-rationale');
-      return cameraBlocked || microphoneBlocked;
-    };
+    const isDenied = (s?: CameraPermissionStatus['camera']) => s === 'denied';
+    const shouldRequest = (s?: CameraPermissionStatus['camera']) =>
+      s === 'prompt' || s === 'prompt-with-rationale';
 
     let permissions = await this.#cameraViewService.checkPermissions({ disableAudio });
+    const micNeeded = !disableAudio;
 
-    if (needsSettings(permissions)) {
-      const message = permissions.microphone && permissions.microphone !== 'granted'
-        ? 'Camera or microphone permission denied. Enable access in Settings and try again.'
-        : 'Camera permission denied. Enable access in Settings and try again.';
-      let results = this.testResults() +
-        `\n✗ ${message} (camera: ${permissions.camera}${permissions.microphone ? `, microphone: ${permissions.microphone}` : ''})`;
+    // First, request if either permission is in a prompt state
+    if (
+      shouldRequest(permissions.camera) ||
+      (micNeeded && shouldRequest(permissions.microphone))
+    ) {
+      permissions = await this.#cameraViewService.requestPermissions({
+        disableAudio,
+        showSettingsAlert: false,
+      });
+    }
 
+    // If still denied, guide to Settings (and log)
+    if (
+      isDenied(permissions.camera) ||
+      (micNeeded && isDenied(permissions.microphone))
+    ) {
+      const message =
+        micNeeded && isDenied(permissions.microphone)
+          ? 'Camera or microphone permission denied. Enable access in Settings and try again.'
+          : 'Camera permission denied. Enable access in Settings and try again.';
+      let results =
+        this.testResults() +
+        `\n✗ ${message} (camera: ${permissions.camera}${
+          permissions.microphone ? `, microphone: ${permissions.microphone}` : ''
+        })`;
       try {
         const followUp = await this.#cameraViewService.requestPermissions({
           disableAudio,
           showSettingsAlert: true,
         });
-        permissions = followUp;
-        results += `\n  (after requestPermissions → camera: ${followUp.camera}${followUp.microphone ? `, microphone: ${followUp.microphone}` : ''})`;
+        results += `\n  (after requestPermissions → camera: ${followUp.camera}${
+          followUp.microphone ? `, microphone: ${followUp.microphone}` : ''
+        })`;
       } catch (err) {
         console.warn('Unable to open settings prompt', err);
       }
-
       this.testResults.set(results);
-
-      if (needsSettings(permissions)) {
-        return;
-      }
+      return;
     }
-
     const cameraModal = await this.#modalController.create({
       component: CameraModalComponent,
       animated: false,
