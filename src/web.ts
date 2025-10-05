@@ -85,10 +85,17 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       const constraints: MediaStreamConstraints = disableAudio
         ? { video: true }
         : { video: true, audio: true };
+      let stream: MediaStream | undefined;
       try {
-        await navigator.mediaDevices.getUserMedia(constraints);
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (error) {
         console.warn("Unable to obtain camera or microphone stream", error);
+      } finally {
+        try {
+          stream?.getTracks().forEach(t => t.stop());
+        } catch (_e) {
+          /* no-op */
+        }
       }
     }
 
@@ -102,7 +109,6 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
     return status;
   }
-
   private mapWebPermission(
     state: WebPermissionState | undefined,
   ): PermissionState {
