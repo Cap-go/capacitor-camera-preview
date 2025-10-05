@@ -1,4 +1,5 @@
 import { WebPlugin } from "@capacitor/core";
+import type { PermissionState } from "@capacitor/core";
 
 import type {
   CameraDevice,
@@ -17,7 +18,6 @@ import type {
   PermissionRequestOptions,
   SafeAreaInsets,
 } from "./definitions";
-import type { PermissionState } from "@capacitor/core";
 import { DeviceType } from "./definitions";
 
 type WebPermissionState = "granted" | "denied" | "prompt";
@@ -37,7 +37,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   constructor() {
     super();
   }
-  async checkPermissions(options?: { disableAudio?: boolean }): Promise<CameraPermissionStatus> {
+  async checkPermissions(options?: {
+    disableAudio?: boolean;
+  }): Promise<CameraPermissionStatus> {
     const result: CameraPermissionStatus = {
       camera: "prompt",
     };
@@ -83,10 +85,17 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       const constraints: MediaStreamConstraints = disableAudio
         ? { video: true }
         : { video: true, audio: true };
+      let stream: MediaStream | undefined;
       try {
-        await navigator.mediaDevices.getUserMedia(constraints);
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (error) {
         console.warn("Unable to obtain camera or microphone stream", error);
+      } finally {
+        try {
+          stream?.getTracks().forEach((t) => t.stop());
+        } catch (_e) {
+          /* no-op */
+        }
       }
     }
 
@@ -100,8 +109,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
     return status;
   }
-
-  private mapWebPermission(state: WebPermissionState | undefined): PermissionState {
+  private mapWebPermission(
+    state: WebPermissionState | undefined,
+  ): PermissionState {
     switch (state) {
       case "granted":
         return "granted";
