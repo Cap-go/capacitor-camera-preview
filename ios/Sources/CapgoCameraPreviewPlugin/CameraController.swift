@@ -71,7 +71,7 @@ class CameraController: NSObject {
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
 
-    var zoomFactor: CGFloat = 2.0
+    var zoomFactor: CGFloat = 1.0
     private var lastZoomUpdateTime: TimeInterval = 0
     private let zoomUpdateThrottle: TimeInterval = 1.0 / 60.0 // 60 FPS max
 
@@ -532,10 +532,10 @@ extension CameraController {
         let minZoom = device.minAvailableVideoZoomFactor
         let maxZoom = min(device.maxAvailableVideoZoomFactor, saneMaxZoomFactor)
 
-        // Compute UI-level default = 1 * multiplier when not provided
+        // Compute UI-level default (1×) when not provided
         let multiplier = self.getDisplayZoomMultiplier()
-        // if level is nil, it's the initial zoom
-        let uiLevel: Float = level ?? (2.0 * multiplier)
+        // If level is nil, fall back to a UI zoom of 1.0×
+        let uiLevel: Float = level ?? 1.0
         // Map UI/display zoom to native zoom using iOS 18+ multiplier
         let adjustedLevel = multiplier != 1.0 ? (uiLevel / multiplier) : uiLevel
 
