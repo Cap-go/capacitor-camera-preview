@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.22.0](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.10...7.22.0) (2025-10-06)
+
+
+### Features
+
+* add checkPermissions and requestPermissions methods to handle user permissions ([5324090](https://github.com/Cap-go/capacitor-camera-preview/commit/532409066b31c1ff091c7ae5df096d0c186b5067))
+
 ## [7.21.10](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.9...7.21.10) (2025-10-03)
 
 
