@@ -5,6 +5,7 @@ import Capacitor
 import CoreImage
 import CoreLocation
 import MobileCoreServices
+import UIKit
 
 extension UIWindow {
     static var isLandscape: Bool {
@@ -66,6 +67,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "deleteFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getOrientation", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSafeAreaInsets", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "checkPermissions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "requestPermissions", returnType: CAPPluginReturnPromise),
         // Exposure control methods
         CAPPluginMethod(name: "getExposureModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureMode", returnType: CAPPluginReturnPromise),
@@ -100,6 +103,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var positioning: String = "center"
     private var permissionCallID: String?
     private var waitingForLocation: Bool = false
+    private var isPresentingPermissionAlert: Bool = false
 
     // MARK: - Helper Methods for Aspect Ratio
 
@@ -162,6 +166,71 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             // Force a layout pass to apply changes
             webView.setNeedsLayout()
             webView.layoutIfNeeded()
+        }
+    }
+
+    private func presentCameraPermissionAlert(title: String,
+                                              message: String,
+                                              openSettingsText: String,
+                                              cancelText: String,
+                                              completion: (() -> Void)? = nil) {
+        DispatchQueue.main.async {
+            guard let viewController = self.bridge?.viewController else {
+                completion?()
+                return
+            }
+
+            if self.isPresentingPermissionAlert {
+                completion?()
+                return
+            }
+
+            let alert = UIAlertController(title: title,
+                                          message: message,
+                                          preferredStyle: .alert)
+
+            let cancelAction = UIAlertAction(title: cancelText, style: .cancel) { _ in
+                self.isPresentingPermissionAlert = false
+            }
+            alert.addAction(cancelAction)
+
+            let openSettingsAction = UIAlertAction(title: openSettingsText, style: .default) { _ in
+                self.isPresentingPermissionAlert = false
+                guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(settingsURL, options: [:], completionHandler: nil)
+            }
+            alert.addAction(openSettingsAction)
+
+            self.isPresentingPermissionAlert = true
+            viewController.present(alert, animated: true) {
+                completion?()
+            }
+        }
+    }
+
+    private func mapAuthorizationStatus(_ status: AVAuthorizationStatus) -> String {
+        switch status {
+        case .authorized:
+            return "granted"
+        case .denied, .restricted:
+            return "denied"
+        case .notDetermined:
+            fallthrough
+        @unknown default:
+            return "prompt"
+        }
+    }
+
+    private func mapAudioPermission(_ permission: AVAudioSession.RecordPermission) -> String {
+        switch permission {
+        case .granted:
+            return "granted"
+        case .denied:
+            return "denied"
+        case .undetermined:
+            fallthrough
+        @unknown default:
+            return "prompt"
         }
     }
 
@@ -582,35 +651,62 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
             return
         }
-
-        AVCaptureDevice.requestAccess(for: .video, completionHandler: { (granted: Bool) in
-
-            guard granted else {
-                call.reject("permission failed")
+        let beginStart: () -> Void = {
+            if self.cameraController.captureSession?.isRunning ?? false {
+                DispatchQueue.main.async {
+                    self.isInitializing = false
+                    call.reject("camera already started")
+                }
                 return
             }
 
-            if self.cameraController.captureSession?.isRunning ?? false {
-                call.reject("camera already started")
-            } else {
-                self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator) {error in
-                    if let error = error {
-                        print(error)
-                        call.reject(error.localizedDescription)
-                        return
-                    }
-
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator) { error in
+                if let error = error {
+                    print(error)
                     DispatchQueue.main.async {
-                        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-                        NotificationCenter.default.addObserver(self,
-                                                               selector: #selector(self.handleOrientationChange),
-                                                               name: UIDevice.orientationDidChangeNotification,
-                                                               object: nil)
-                        self.completeStartCamera(call: call)
+                        self.isInitializing = false
+                        call.reject(error.localizedDescription)
                     }
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                    NotificationCenter.default.addObserver(self,
+                                                           selector: #selector(self.handleOrientationChange),
+                                                           name: UIDevice.orientationDidChangeNotification,
+                                                           object: nil)
+                    self.completeStartCamera(call: call)
                 }
             }
-        })
+        }
+
+        let handleDenied: (AVAuthorizationStatus) -> Void = { _ in
+            DispatchQueue.main.async {
+                self.isInitializing = false
+                call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied")
+            }
+        }
+
+        let authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+
+        switch authorizationStatus {
+        case .authorized:
+            beginStart()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                if granted {
+                    beginStart()
+                } else {
+                    let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
+                    handleDenied(currentStatus)
+                }
+            }
+        case .denied, .restricted:
+            handleDenied(authorizationStatus)
+        @unknown default:
+            handleDenied(authorizationStatus)
+        }
     }
 
     private func completeStartCamera(call: CAPPluginCall) {
@@ -766,6 +862,94 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
 
             call.resolve()
+        }
+    }
+
+    override public func checkPermissions(_ call: CAPPluginCall) {
+        let disableAudio = call.getBool("disableAudio") ?? true
+        let cameraStatus = self.mapAuthorizationStatus(AVCaptureDevice.authorizationStatus(for: .video))
+
+        var result: [String: Any] = [
+            "camera": cameraStatus
+        ]
+
+        if disableAudio == false {
+            let audioPermission = AVAudioSession.sharedInstance().recordPermission
+            result["microphone"] = self.mapAudioPermission(audioPermission)
+        }
+
+        call.resolve(result)
+    }
+
+    override public func requestPermissions(_ call: CAPPluginCall) {
+        let disableAudio = call.getBool("disableAudio") ?? true
+        self.disableAudio = disableAudio
+
+        let title = call.getString("title") ?? "Camera Permission Needed"
+        let message = call.getString("message") ?? "Enable camera access in Settings to use the preview."
+        let openSettingsText = call.getString("openSettingsButtonTitle") ?? "Open Settings"
+        let cancelText = call.getString("cancelButtonTitle") ?? "Cancel"
+        let showSettingsAlert = call.getBool("showSettingsAlert") ?? false
+
+        var currentCameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        let audioSession = AVAudioSession.sharedInstance()
+        var currentAudioStatus: AVAudioSession.RecordPermission? = disableAudio ? nil : audioSession.recordPermission
+
+        let dispatchGroup = DispatchGroup()
+        var pendingRequests = 0
+
+        if currentCameraStatus == .notDetermined {
+            pendingRequests += 1
+            dispatchGroup.enter()
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                currentCameraStatus = granted ? .authorized : .denied
+                dispatchGroup.leave()
+            }
+        }
+
+        if let audioStatus = currentAudioStatus,
+           audioStatus == .undetermined {
+            pendingRequests += 1
+            dispatchGroup.enter()
+            audioSession.requestRecordPermission { granted in
+                currentAudioStatus = granted ? .granted : .denied
+                dispatchGroup.leave()
+            }
+        }
+
+        let finalizeResponse: () -> Void = { [weak self] in
+            guard let self = self else { return }
+
+            let cameraResult = self.mapAuthorizationStatus(currentCameraStatus)
+            var result: [String: Any] = [
+                "camera": cameraResult
+            ]
+
+            if let audioStatus = currentAudioStatus {
+                result["microphone"] = self.mapAudioPermission(audioStatus)
+            }
+
+            let shouldShowAlert = showSettingsAlert &&
+                (cameraResult == "denied" ||
+                    ((result["microphone"] as? String) == "denied"))
+
+            guard shouldShowAlert else {
+                call.resolve(result)
+                return
+            }
+
+            self.presentCameraPermissionAlert(title: title,
+                                              message: message,
+                                              openSettingsText: openSettingsText,
+                                              cancelText: cancelText) {
+                call.resolve(result)
+            }
+        }
+
+        if pendingRequests == 0 {
+            DispatchQueue.main.async(execute: finalizeResponse)
+        } else {
+            dispatchGroup.notify(queue: .main, execute: finalizeResponse)
         }
     }
     // Get user's cache directory path

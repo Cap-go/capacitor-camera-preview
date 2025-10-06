@@ -10,6 +10,8 @@ import {
   CameraPreviewPlugin,
   GridMode,
   ExposureMode,
+  CameraPermissionStatus,
+  PermissionRequestOptions,
   getBase64FromFilePath,
   deleteFile,
 } from '@capgo/camera-preview';
@@ -68,6 +70,18 @@ export class CapacitorCameraViewService {
    */
   async isRunning(): Promise<boolean> {
     return (await this.#cameraView.isRunning()).isRunning;
+  }
+
+  async checkPermissions(options?: {
+    disableAudio?: boolean;
+  }): Promise<CameraPermissionStatus> {
+    return this.#cameraView.checkPermissions(options ?? {});
+  }
+
+  async requestPermissions(
+    options?: PermissionRequestOptions,
+  ): Promise<CameraPermissionStatus> {
+    return this.#cameraView.requestPermissions(options ?? {});
   }
 
   /**
