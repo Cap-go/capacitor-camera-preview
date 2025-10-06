@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.23.0](https://github.com/Cap-go/capacitor-camera-preview/compare/7.22.1...7.23.0) (2025-10-06)
+
+
+### Features
+
+* **ios:** automatic autofocus after zooming ([ae95c1b](https://github.com/Cap-go/capacitor-camera-preview/commit/ae95c1bda7b3ad2a0772fe6f93168bbe089904d5))
+
 ## [7.22.1](https://github.com/Cap-go/capacitor-camera-preview/compare/7.22.0...7.22.1) (2025-10-06)
 
 
