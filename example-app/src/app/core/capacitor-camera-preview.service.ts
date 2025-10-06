@@ -15,6 +15,7 @@ import {
   getBase64FromFilePath,
   deleteFile,
 } from '@capgo/camera-preview';
+import { Capacitor } from '@capacitor/core';
 import { BehaviorSubject } from 'rxjs';
 
 @Injectable({
@@ -22,6 +23,8 @@ import { BehaviorSubject } from 'rxjs';
 })
 export class CapacitorCameraViewService {
   #cameraView: CameraPreviewPlugin;
+  #isWeb = Capacitor.getPlatform() === 'web';
+  #zoomButtonsWarningShown = false;
 
   readonly #cameraStarted = new BehaviorSubject<boolean>(false);
   public readonly cameraStarted = this.#cameraStarted.asObservable();
@@ -135,6 +138,26 @@ export class CapacitorCameraViewService {
     lens: LensInfo;
   }> {
     return this.#cameraView.getZoom();
+  }
+
+  async getZoomButtonValues(): Promise<number[]> {
+    if (this.#isWeb) {
+      return [];
+    }
+
+    try {
+      const result = await (this.#cameraView as any).getZoomButtonValues();
+      const values = Array.isArray(result?.values) ? result.values : [];
+      return values.filter(
+        (value: number): value is number => typeof value === 'number' && !Number.isNaN(value),
+      );
+    } catch (error) {
+      if (!this.#zoomButtonsWarningShown) {
+        console.warn('getZoomButtonValues not available on this platform', error);
+        this.#zoomButtonsWarningShown = true;
+      }
+      return [];
+    }
   }
 
   /**
