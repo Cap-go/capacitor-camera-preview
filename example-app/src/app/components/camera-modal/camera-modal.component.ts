@@ -113,6 +113,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected readonly currentDeviceId = signal<string>('');
   protected readonly currentLens = signal<LensInfo | null>(null);
   protected readonly isRunning = signal(false);
+  protected readonly zoomButtonValues = signal<number[]>([]);
 
   // Video recording and testing state
   protected readonly isRecording = signal(false);
@@ -161,6 +162,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   #initialZoomFactorOnPinch = 1.0;
   #lastZoomCall = 0;
   #zoomThrottleMs = 100; // Throttle zoom calls to max 20fps
+  #zoomComparisonTolerance = 0.05;
 
   protected isHalfSize = signal(false);
 
@@ -587,6 +589,23 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     }
   }
 
+  protected async selectZoomValue(value: number): Promise<void> {
+    this.currentZoomFactor.set(value);
+    await this.setZoom(value, true);
+  }
+
+  protected isZoomValueActive(value: number): boolean {
+    return Math.abs(this.currentZoomFactor() - value) <= this.#zoomComparisonTolerance;
+  }
+
+  protected formatZoomValue(value: number): string {
+    const rounded = Math.round(value * 10) / 10;
+    if (Math.abs(rounded - Math.round(rounded)) < 0.0001) {
+      return Math.round(rounded).toString();
+    }
+    return rounded.toFixed(1).replace(/\.0+$/, '');
+  }
+
   protected async nextFlashMode(): Promise<void> {
     try {
       const supportedModes = this.#supportedFlashModes();
@@ -889,15 +908,27 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   async #initializeZoomLimits(): Promise<void> {
-    try {
-      const zoomData = await this.#cameraViewService.getZoom();
+    const [zoomData, buttonValues] = await Promise.all([
+      this.#cameraViewService
+        .getZoom()
+        .catch((error) => {
+          console.warn('Failed to get zoom limits', error);
+          return undefined;
+        }),
+      this.#cameraViewService.getZoomButtonValues(),
+    ]);
+
+    if (zoomData) {
       this.minZoom.set(zoomData.min);
       this.maxZoom.set(zoomData.max);
       // Do not set currentZoomFactor from here, as it's managed locally
       this.currentLens.set(zoomData.lens);
-    } catch {
-      console.warn('Failed to get zoom limits');
     }
+
+    const normalizedValues = Array.from(new Set(buttonValues)).sort(
+      (a, b) => a - b,
+    );
+    this.zoomButtonValues.set(normalizedValues);
   }
 
   async #initializeFlashModes(): Promise<void> {

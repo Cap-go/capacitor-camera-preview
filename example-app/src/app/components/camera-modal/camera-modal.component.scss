@@ -193,6 +193,39 @@ ion-content::part(background) {
   }
 }
 
+.zoom-button-stack {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 80;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  pointer-events: auto;
+
+  ion-fab-button {
+    --size: 48px;
+    --background: rgba(0, 0, 0, 0.7);
+    --background-activated: rgba(0, 0, 0, 0.85);
+    --background-hover: rgba(0, 0, 0, 0.85);
+    --color: white;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+
+    span {
+      pointer-events: none;
+    }
+  }
+
+  ion-fab-button.active {
+    --background: rgba(var(--ion-color-primary-rgb), 0.95);
+    --color: #fff;
+    box-shadow: 0 6px 18px rgba(var(--ion-color-primary-rgb), 0.35);
+  }
+}
+
 
 
 // Toolbar and icons
@@ -343,6 +376,15 @@ ion-fab-button {
   }
 
 
+
+  .zoom-button-stack {
+    gap: 6px;
+
+    ion-fab-button {
+      --size: 44px;
+      font-size: 0.7rem;
+    }
+  }
 
     .test-results {
     left: 10px;

@@ -137,6 +137,28 @@
     </div>
   }
 
+  @if (cameraStarted() && zoomButtonValues().length) {
+    <div
+      class="zoom-button-stack"
+      [style.top]="
+        currentPreviewHeight() && currentPreviewY()
+        ? (currentPreviewHeight() + currentPreviewY() - 56) + 'px'
+        : '165px'
+      "
+    >
+      @for (value of zoomButtonValues(); track value) {
+        <!-- 56px is the height of the div -->
+        <ion-fab-button
+          size="small"
+          [class.active]="isZoomValueActive(value)"
+          (click)="selectZoomValue(value)"
+        >
+          <span>{{ formatZoomValue(value) }}x</span>
+        </ion-fab-button>
+      }
+    </div>
+  }
+
   <ion-fab
     class="camera-actions"
     slot="fixed"
