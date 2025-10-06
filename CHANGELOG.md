@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.22.1](https://github.com/Cap-go/capacitor-camera-preview/compare/7.22.0...7.22.1) (2025-10-06)
+
+
+### Bug Fixes
+
+* **ios:** initial zoom ([f500ddf](https://github.com/Cap-go/capacitor-camera-preview/commit/f500ddf41b458541ebd4af0b0b13759ff3c30931))
+
 ## [7.22.0](https://github.com/Cap-go/capacitor-camera-preview/compare/7.21.10...7.22.0) (2025-10-06)
 
 
