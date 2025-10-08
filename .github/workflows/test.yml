@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         id: install_code
@@ -29,12 +29,8 @@ jobs:
     runs-on: macOS-latest
     steps:
       - name: Check out
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Setup Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
       - name: Install dependencies
         id: install_code
         run: bun i
@@ -46,7 +42,7 @@ jobs:
     name: 'Build code and test'
     steps:
       - name: Check out
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         id: install_code
