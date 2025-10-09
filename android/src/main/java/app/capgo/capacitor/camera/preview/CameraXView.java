@@ -111,7 +111,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     void onSampleTakenError(String message);
     void onCameraStarted(int width, int height, int x, int y);
     void onCameraStartError(String message);
-    void onCameraStopped();
+    void onCameraStopped(CameraXView source);
   }
 
   public interface VideoRecordingCallback {
@@ -470,7 +470,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
         if (listener != null) {
           try {
-            listener.onCameraStopped();
+            listener.onCameraStopped(this);
           } catch (Exception ignored) {}
         }
       }

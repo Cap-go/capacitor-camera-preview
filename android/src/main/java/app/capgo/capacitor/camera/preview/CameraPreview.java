@@ -455,14 +455,14 @@ public class CameraPreview
         }
 
         if (cameraXView != null) {
-          if (cameraXView.isRunning()) {
-            cameraXView.stopSession();
-          }
+          cameraXView.stopSession();
           // Only drop the reference if no deferred stop is pending
           if (!cameraXView.isStopDeferred()) {
             cameraXView = null;
           }
         }
+        // Manual stops should not trigger automatic resume with stale config
+        lastSessionConfig = null;
         // Restore original window background if modified earlier
         if (originalWindowBackground != null) {
           try {
@@ -1785,9 +1785,15 @@ public class CameraPreview
   }
 
   @Override
-  public void onCameraStopped() {
-    // Ensure reference is cleared once underlying CameraXView has fully stopped
-    cameraXView = null;
+  public void onCameraStopped(CameraXView source) {
+    if (cameraXView != null && cameraXView != source) {
+      Log.d(TAG, "onCameraStopped: ignoring callback from stale instance");
+      return;
+    }
+    // Ensure reference is cleared once the originating CameraXView has fully stopped
+    if (cameraXView == source) {
+      cameraXView = null;
+    }
 
     PluginCall queuedCall = null;
     synchronized (pendingStartLock) {
