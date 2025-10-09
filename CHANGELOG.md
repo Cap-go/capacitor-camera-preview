@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.23.5](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.4...7.23.5) (2025-10-09)
+
+
+### Bug Fixes
+
+* **android:** fix camera stop races ([7251309](https://github.com/Cap-go/capacitor-camera-preview/commit/72513091200f7326c9e88e567a5aa0c8d3edac9c))
+
 ## [7.23.4](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.3...7.23.4) (2025-10-08)
 
 ## [7.23.3](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.2...7.23.3) (2025-10-08)
