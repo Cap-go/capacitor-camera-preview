@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'io.ionic.starter',
-  appName: 'example-app',
+  appId: 'app.capgo.camera.preview',
+  appName: 'Camera Preview Example',
   webDir: 'www',
   android: {
     adjustMarginsForEdgeToEdge: 'auto',

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Camera app test</string>
-    <string name="title_activity_main">Camera app test</string>
-    <string name="package_name">io.ionic.starter</string>
-    <string name="custom_url_scheme">io.ionic.starter</string>
+    <string name="app_name">Camera Preview Example</string>
+    <string name="title_activity_main">Camera Preview Example</string>
+    <string name="package_name">app.capgo.camera.preview</string>
+    <string name="custom_url_scheme">app.capgo.camera.preview</string>
 </resources>
