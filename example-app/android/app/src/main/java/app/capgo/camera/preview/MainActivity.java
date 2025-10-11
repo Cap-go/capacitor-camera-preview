@@ -1,4 +1,4 @@
-package io.ionic.starter;
+package app.capgo.camera.preview;
 
 import com.getcapacitor.BridgeActivity;
 
