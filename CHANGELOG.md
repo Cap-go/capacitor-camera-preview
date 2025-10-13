@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.23.8](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.7...7.23.8) (2025-10-13)
+
+
+### Bug Fixes
+
+* **deps:** update camerax_version to v1.5.1 ([#246](https://github.com/Cap-go/capacitor-camera-preview/issues/246)) ([f3ee6d7](https://github.com/Cap-go/capacitor-camera-preview/commit/f3ee6d70c162976a63019c96e2b8fbadf4fefb43))
+
 ## [7.23.7](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.6...7.23.7) (2025-10-11)
 
 ## [7.23.6](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.5...7.23.6) (2025-10-10)
