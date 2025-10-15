@@ -1,12 +1,12 @@
-import type { PermissionState, PluginListenerHandle } from "@capacitor/core";
+import type { PermissionState, PluginListenerHandle } from '@capacitor/core';
 
-export type CameraPosition = "rear" | "front";
+export type CameraPosition = 'rear' | 'front';
 
 export type FlashMode = CameraPreviewFlashMode;
 
-export type GridMode = "none" | "3x3" | "4x4";
+export type GridMode = 'none' | '3x3' | '4x4';
 
-export type CameraPositioning = "center" | "top" | "bottom";
+export type CameraPositioning = 'center' | 'top' | 'bottom';
 
 export interface CameraPermissionStatus {
   camera: PermissionState;
@@ -23,13 +23,13 @@ export interface PermissionRequestOptions {
 }
 
 export enum DeviceType {
-  ULTRA_WIDE = "ultraWide",
-  WIDE_ANGLE = "wideAngle",
-  TELEPHOTO = "telephoto",
-  TRUE_DEPTH = "trueDepth",
-  DUAL = "dual",
-  DUAL_WIDE = "dualWide",
-  TRIPLE = "triple",
+  ULTRA_WIDE = 'ultraWide',
+  WIDE_ANGLE = 'wideAngle',
+  TELEPHOTO = 'telephoto',
+  TRUE_DEPTH = 'trueDepth',
+  DUAL = 'dual',
+  DUAL_WIDE = 'dualWide',
+  TRIPLE = 'triple',
 }
 
 /**
@@ -125,7 +125,7 @@ export interface CameraPreviewOptions {
    *
    * @since 2.0.0
    */
-  aspectRatio?: "4:3" | "16:9";
+  aspectRatio?: '4:3' | '16:9';
   /**
    * The grid overlay to display on the camera preview.
    * @default "none"
@@ -287,7 +287,7 @@ export interface CameraPreviewPictureOptions {
    * @platform ios
    * @default "speed"
    */
-  photoQualityPrioritization?: "speed" | "balanced" | "quality";
+  photoQualityPrioritization?: 'speed' | 'balanced' | 'quality';
 }
 
 /** Represents EXIF data extracted from an image. */
@@ -295,7 +295,7 @@ export interface ExifData {
   [key: string]: any;
 }
 
-export type PictureFormat = "jpeg" | "png";
+export type PictureFormat = 'jpeg' | 'png';
 
 /** Defines a standard picture size with width and height. */
 export interface PictureSize {
@@ -328,10 +328,10 @@ export interface CameraSampleOptions {
  * The available flash modes for the camera.
  * 'torch' is a continuous light mode.
  */
-export type CameraPreviewFlashMode = "off" | "on" | "auto" | "torch";
+export type CameraPreviewFlashMode = 'off' | 'on' | 'auto' | 'torch';
 
 /** Reusable exposure mode type for cross-platform support. */
-export type ExposureMode = "AUTO" | "LOCK" | "CONTINUOUS" | "CUSTOM";
+export type ExposureMode = 'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM';
 
 /**
  * Defines the options for setting the camera preview's opacity.
@@ -364,12 +364,7 @@ export interface SafeAreaInsets {
 /**
  * Canonical device orientation values across platforms.
  */
-export type DeviceOrientation =
-  | "portrait"
-  | "landscape-left"
-  | "landscape-right"
-  | "portrait-upside-down"
-  | "unknown";
+export type DeviceOrientation = 'portrait' | 'landscape-left' | 'landscape-right' | 'portrait-upside-down' | 'unknown';
 
 /**
  * The main interface for the CameraPreview plugin.
@@ -413,9 +408,7 @@ export interface CameraPreviewPlugin {
    *   - `exif`: extracted EXIF metadata when available
    * @since 0.0.1
    */
-  capture(
-    options: CameraPreviewPictureOptions,
-  ): Promise<{ value: string; exif: ExifData }>;
+  capture(options: CameraPreviewPictureOptions): Promise<{ value: string; exif: ExifData }>;
 
   /**
    * Captures a single frame from the camera preview stream.
@@ -447,11 +440,7 @@ export interface CameraPreviewPlugin {
    * @since 7.5.0
    * @platform android, ios
    */
-  setAspectRatio(options: {
-    aspectRatio: "4:3" | "16:9";
-    x?: number;
-    y?: number;
-  }): Promise<{
+  setAspectRatio(options: { aspectRatio: '4:3' | '16:9'; x?: number; y?: number }): Promise<{
     width: number;
     height: number;
     x: number;
@@ -465,7 +454,7 @@ export interface CameraPreviewPlugin {
    * @since 7.5.0
    * @platform android, ios
    */
-  getAspectRatio(): Promise<{ aspectRatio: "4:3" | "16:9" }>;
+  getAspectRatio(): Promise<{ aspectRatio: '4:3' | '16:9' }>;
 
   /**
    * Sets the grid mode of the camera preview overlay.
@@ -491,9 +480,7 @@ export interface CameraPreviewPlugin {
    * @returns {Promise<CameraPermissionStatus>} A promise resolving to the current authorization states.
    * @since 8.7.0
    */
-  checkPermissions(
-    options?: Pick<PermissionRequestOptions, "disableAudio">,
-  ): Promise<CameraPermissionStatus>;
+  checkPermissions(options?: Pick<PermissionRequestOptions, 'disableAudio'>): Promise<CameraPermissionStatus>;
 
   /**
    * Requests camera (and optional microphone) permissions. If permissions are already granted or denied,
@@ -504,9 +491,7 @@ export interface CameraPreviewPlugin {
    * @returns {Promise<CameraPermissionStatus>} A promise resolving to the final authorization states.
    * @since 8.7.0
    */
-  requestPermissions(
-    options?: PermissionRequestOptions,
-  ): Promise<CameraPermissionStatus>;
+  requestPermissions(options?: PermissionRequestOptions): Promise<CameraPermissionStatus>;
 
   /**
    * Gets the horizontal field of view (FoV) for the active camera.
@@ -536,9 +521,7 @@ export interface CameraPreviewPlugin {
    * @returns {Promise<void>} A promise that resolves when the flash mode is set.
    * @since 0.0.1
    */
-  setFlashMode(options: {
-    flashMode: CameraPreviewFlashMode | string;
-  }): Promise<void>;
+  setFlashMode(options: { flashMode: CameraPreviewFlashMode | string }): Promise<void>;
 
   /**
    * Toggles between the front and rear cameras.
@@ -623,11 +606,7 @@ export interface CameraPreviewPlugin {
    * @since 7.5.0
    * @platform android, ios
    */
-  setZoom(options: {
-    level: number;
-    ramp?: boolean;
-    autoFocus?: boolean;
-  }): Promise<void>;
+  setZoom(options: { level: number; ramp?: boolean; autoFocus?: boolean }): Promise<void>;
 
   /**
    * Gets the current flash mode.
@@ -684,12 +663,7 @@ export interface CameraPreviewPlugin {
    * @since 7.5.0
    * @platform android, ios
    */
-  setPreviewSize(options: {
-    x?: number;
-    y?: number;
-    width: number;
-    height: number;
-  }): Promise<{
+  setPreviewSize(options: { x?: number; y?: number; width: number; height: number }): Promise<{
     width: number;
     height: number;
     x: number;
@@ -720,13 +694,8 @@ export interface CameraPreviewPlugin {
    * @platform android, ios
    */
   addListener(
-    eventName: "screenResize",
-    listenerFunc: (data: {
-      width: number;
-      height: number;
-      x: number;
-      y: number;
-    }) => void,
+    eventName: 'screenResize',
+    listenerFunc: (data: { width: number; height: number; x: number; y: number }) => void,
   ): Promise<PluginListenerHandle>;
 
   /**
@@ -738,7 +707,7 @@ export interface CameraPreviewPlugin {
    * @platform android, ios
    */
   addListener(
-    eventName: "orientationChange",
+    eventName: 'orientationChange',
     listenerFunc: (data: { orientation: DeviceOrientation }) => void,
   ): Promise<PluginListenerHandle>;
   /**
