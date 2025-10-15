@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.23.11](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.10...7.23.11) (2025-10-15)
+
+
+### Bug Fixes
+
+* lint issue ([07d23c9](https://github.com/Cap-go/capacitor-camera-preview/commit/07d23c990e8aa73ff2903fa8873b82a02d10073b))
+
 ## [7.23.10](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.9...7.23.10) (2025-10-14)
 
 ## [7.23.9](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.8...7.23.9) (2025-10-13)
