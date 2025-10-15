@@ -521,13 +521,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 Log.d(
                     TAG,
                     "Container position - Left: " +
-                    previewContainer.getLeft() +
-                    ", Top: " +
-                    previewContainer.getTop() +
-                    ", Right: " +
-                    previewContainer.getRight() +
-                    ", Bottom: " +
-                    previewContainer.getBottom()
+                        previewContainer.getLeft() +
+                        ", Top: " +
+                        previewContainer.getTop() +
+                        ", Right: " +
+                        previewContainer.getRight() +
+                        ", Bottom: " +
+                        previewContainer.getBottom()
                 );
                 Log.d(TAG, "Container size - Width: " + previewContainer.getWidth() + ", Height: " + previewContainer.getHeight());
 
@@ -589,32 +589,32 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Log.d(
             TAG,
             "Screen dimensions - Pixels: " +
-            screenWidthPx +
-            "x" +
-            screenHeightPx +
-            ", DP: " +
-            screenWidthDp +
-            "x" +
-            screenHeightDp +
-            ", Density: " +
-            density
+                screenWidthPx +
+                "x" +
+                screenHeightPx +
+                ", DP: " +
+                screenWidthDp +
+                "x" +
+                screenHeightDp +
+                ", Density: " +
+                density
         );
         Log.d(TAG, "WebView dimensions: " + webViewWidth + "x" + webViewHeight);
         Log.d(TAG, "Parent dimensions: " + parentWidth + "x" + parentHeight);
         Log.d(
             TAG,
             "SessionConfig values - x:" +
-            x +
-            " y:" +
-            y +
-            " width:" +
-            width +
-            " height:" +
-            height +
-            " aspectRatio:" +
-            aspectRatio +
-            " isCentered:" +
-            sessionConfig.isCentered()
+                x +
+                " y:" +
+                y +
+                " width:" +
+                width +
+                " height:" +
+                height +
+                " aspectRatio:" +
+                aspectRatio +
+                " isCentered:" +
+                sessionConfig.isCentered()
         );
 
         // Apply aspect ratio if specified
@@ -684,13 +684,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Log.d(
             TAG,
             "Final layout params - Margins: left=" +
-            layoutParams.leftMargin +
-            ", top=" +
-            layoutParams.topMargin +
-            ", Size: " +
-            width +
-            "x" +
-            height
+                layoutParams.leftMargin +
+                ", top=" +
+                layoutParams.topMargin +
+                ", Size: " +
+                width +
+                "x" +
+                height
         );
         Log.d(TAG, "================================================================================");
 
@@ -725,20 +725,22 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 Log.d(
                     TAG,
                     "Building camera selector with deviceId: " +
-                    sessionConfig.getDeviceId() +
-                    " and position: " +
-                    sessionConfig.getPosition()
+                        sessionConfig.getDeviceId() +
+                        " and position: " +
+                        sessionConfig.getPosition()
                 );
                 currentCameraSelector = buildCameraSelector();
 
-                ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder()
-                    .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY);
+                ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
+                    ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+                );
 
                 if (sessionConfig.getAspectRatio() != null) {
                     int aspectRatio;
                     if ("16:9".equals(sessionConfig.getAspectRatio())) {
                         aspectRatio = AspectRatio.RATIO_16_9;
-                    } else { // "4:3"
+                    } else {
+                        // "4:3"
                         aspectRatio = AspectRatio.RATIO_4_3;
                     }
                     resolutionSelectorBuilder.setAspectRatioStrategy(
@@ -799,14 +801,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     Log.d(
                         TAG,
                         "Active Zoom State: " +
-                        "min=" +
-                        zoomState.getMinZoomRatio() +
-                        ", " +
-                        "max=" +
-                        zoomState.getMaxZoomRatio() +
-                        ", " +
-                        "current=" +
-                        zoomState.getZoomRatio()
+                            "min=" +
+                            zoomState.getMinZoomRatio() +
+                            ", " +
+                            "max=" +
+                            zoomState.getMaxZoomRatio() +
+                            ", " +
+                            "current=" +
+                            zoomState.getZoomRatio()
                     );
                 }
 
@@ -831,12 +833,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         Log.d(
                             TAG,
                             "Actual preview aspect ratio: " +
-                            actualRatio +
-                            " (width=" +
-                            currentPreviewResolution.getWidth() +
-                            ", height=" +
-                            currentPreviewResolution.getHeight() +
-                            ")"
+                                actualRatio +
+                                " (width=" +
+                                currentPreviewResolution.getWidth() +
+                                ", height=" +
+                                currentPreviewResolution.getHeight() +
+                                ")"
                         );
 
                         // Compare with requested ratio
@@ -882,12 +884,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             if (listener != null) {
                                 listener.onCameraStartError(
                                     "Initial zoom level " +
-                                    initialZoom +
-                                    " is not available. " +
-                                    "Valid range is " +
-                                    minZoom +
-                                    " to " +
-                                    maxZoom
+                                        initialZoom +
+                                        " is not available. " +
+                                        "Valid range is " +
+                                        minZoom +
+                                        " to " +
+                                        maxZoom
                                 );
                                 return;
                             }
@@ -912,13 +914,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         Log.d(
                             TAG,
                             "onCameraStarted callback - actualX=" +
-                            actualX +
-                            ", actualY=" +
-                            actualY +
-                            ", actualWidth=" +
-                            actualWidth +
-                            ", actualHeight=" +
-                            actualHeight
+                                actualX +
+                                ", actualY=" +
+                                actualY +
+                                ", actualWidth=" +
+                                actualWidth +
+                                ", actualHeight=" +
+                                actualHeight
                         );
 
                         // Update grid overlay bounds after camera is started
@@ -939,7 +941,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         final String deviceId = sessionConfig.getDeviceId();
 
         if (deviceId != null && !deviceId.isEmpty()) {
-            builder.addCameraFilter(cameraInfos -> {
+            builder.addCameraFilter((cameraInfos) -> {
                 for (CameraInfo cameraInfo : cameraInfos) {
                     if (deviceId.equals(Camera2CameraInfo.from(cameraInfo).getCameraId())) {
                         return Collections.singletonList(cameraInfo);
@@ -994,17 +996,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Log.d(
             TAG,
             "capturePhoto: Starting photo capture with: " +
-            quality +
-            ", width: " +
-            width +
-            ", height: " +
-            height +
-            ", saveToGallery: " +
-            saveToGallery +
-            ", embedTimestamp: " +
-            embedTimestamp +
-            ", embedLocation: " +
-            embedLocation
+                quality +
+                ", width: " +
+                width +
+                ", height: " +
+                height +
+                ", saveToGallery: " +
+                saveToGallery +
+                ", embedTimestamp: " +
+                embedTimestamp +
+                ", embedLocation: " +
+                embedLocation
         );
 
         boolean dispatched = false;
@@ -1440,8 +1442,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
 
             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-            new org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter()
-                .updateExifMetadataLossless(new java.io.ByteArrayInputStream(targetJpeg), out, outputSet);
+            new org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter().updateExifMetadataLossless(
+                new java.io.ByteArrayInputStream(targetJpeg),
+                out,
+                outputSet
+            );
             return out.toByteArray();
         } catch (Throwable t) {
             Log.w(TAG, "injectExifInMemory: Failed to write EXIF in memory", t);
@@ -2474,7 +2479,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     // This filter will receive a list of all cameras and must return the one we want.
 
                     currentCameraSelector = new CameraSelector.Builder()
-                        .addCameraFilter(cameras -> {
+                        .addCameraFilter((cameras) -> {
                             // This filter will receive a list of all cameras and must return the one we want.
                             return Collections.singletonList(finalTarget);
                         })
@@ -2893,32 +2898,32 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             Log.d(
                 TAG,
                 "getActualCameraBounds FILL_CENTER: container=" +
-                containerWidth +
-                "x" +
-                containerHeight +
-                ", camera=" +
-                cameraWidth +
-                "x" +
-                cameraHeight +
-                " (portrait=" +
-                isPortrait +
-                ")" +
-                ", scale=" +
-                scale +
-                ", scaled=" +
-                scaledWidth +
-                "x" +
-                scaledHeight +
-                ", excess=" +
-                excessWidth +
-                "x" +
-                excessHeight +
-                ", adjusted=" +
-                adjustedWidth +
-                "x" +
-                adjustedHeight +
-                ", ratio=" +
-                aspectRatio
+                    containerWidth +
+                    "x" +
+                    containerHeight +
+                    ", camera=" +
+                    cameraWidth +
+                    "x" +
+                    cameraHeight +
+                    " (portrait=" +
+                    isPortrait +
+                    ")" +
+                    ", scale=" +
+                    scale +
+                    ", scaled=" +
+                    scaledWidth +
+                    "x" +
+                    scaledHeight +
+                    ", excess=" +
+                    excessWidth +
+                    "x" +
+                    excessHeight +
+                    ", adjusted=" +
+                    adjustedWidth +
+                    "x" +
+                    adjustedHeight +
+                    ", ratio=" +
+                    aspectRatio
             );
 
             // Return slightly inset bounds for 4:3 to avoid blue line
@@ -2945,27 +2950,27 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Log.d(
             TAG,
             "getActualCameraBounds FIT_CENTER: container=" +
-            containerWidth +
-            "x" +
-            containerHeight +
-            ", camera=" +
-            cameraWidth +
-            "x" +
-            cameraHeight +
-            " (swapped=" +
-            isPortrait +
-            ")" +
-            ", scale=" +
-            scale +
-            ", scaled=" +
-            scaledWidth +
-            "x" +
-            scaledHeight +
-            ", offset=(" +
-            offsetX +
-            "," +
-            offsetY +
-            ")"
+                containerWidth +
+                "x" +
+                containerHeight +
+                ", camera=" +
+                cameraWidth +
+                "x" +
+                cameraHeight +
+                " (swapped=" +
+                isPortrait +
+                ")" +
+                ", scale=" +
+                scale +
+                ", scaled=" +
+                scaledWidth +
+                "x" +
+                scaledHeight +
+                ", offset=(" +
+                offsetX +
+                "," +
+                offsetY +
+                ")"
         );
 
         // Return the bounds relative to the container
@@ -3045,14 +3050,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 Log.d(
                     TAG,
                     "setPreviewSize: Updated to " +
-                    params.width +
-                    "x" +
-                    params.height +
-                    " at (" +
-                    params.leftMargin +
-                    "," +
-                    params.topMargin +
-                    ")"
+                        params.width +
+                        "x" +
+                        params.height +
+                        " at (" +
+                        params.leftMargin +
+                        "," +
+                        params.topMargin +
+                        ")"
                 );
 
                 // Update session config to reflect actual layout
@@ -3077,14 +3082,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         Log.d(
                             TAG,
                             "setPreviewSize: Calculated aspect ratio from " +
-                            params.width +
-                            "x" +
-                            params.height +
-                            " = " +
-                            calculatedAspectRatio +
-                            " (normalized ratio=" +
-                            ratio +
-                            ")"
+                                params.width +
+                                "x" +
+                                params.height +
+                                " = " +
+                                calculatedAspectRatio +
+                                " (normalized ratio=" +
+                                ratio +
+                                ")"
                         );
                     }
 
@@ -3113,10 +3118,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         Log.d(
                             TAG,
                             "setPreviewSize: Aspect ratio changed from " +
-                            currentAspectRatio +
-                            " to " +
-                            calculatedAspectRatio +
-                            ", rebinding camera"
+                                currentAspectRatio +
+                                " to " +
+                                calculatedAspectRatio +
+                                ", rebinding camera"
                         );
                         bindCameraUseCases();
 
@@ -3282,12 +3287,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 Log.d(
                     TAG,
                     "Display ratio check - Expected: " +
-                    expectedDisplayRatio +
-                    ", Actual: " +
-                    displayedRatio +
-                    ", Difference: " +
-                    difference +
-                    " (tolerance should be < 0.01)"
+                        expectedDisplayRatio +
+                        ", Actual: " +
+                        displayedRatio +
+                        ", Difference: " +
+                        difference +
+                        " (tolerance should be < 0.01)"
                 );
             }
 
@@ -3309,13 +3314,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     Log.d(
                         TAG,
                         "Post-layout verification - Actual position: " +
-                        previewContainer.getLeft() +
-                        "," +
-                        previewContainer.getTop() +
-                        ", Actual size: " +
-                        previewContainer.getWidth() +
-                        "x" +
-                        previewContainer.getHeight()
+                            previewContainer.getLeft() +
+                            "," +
+                            previewContainer.getTop() +
+                            ", Actual size: " +
+                            previewContainer.getWidth() +
+                            "x" +
+                            previewContainer.getHeight()
                     );
                     updateGridOverlayBounds();
                 });
@@ -3389,32 +3394,32 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Log.d(
             TAG,
             "getCurrentPreviewBounds DEBUG: " +
-            "actualBounds=(" +
-            actualX +
-            "," +
-            actualY +
-            "," +
-            actualWidth +
-            "x" +
-            actualHeight +
-            "), " +
-            "logicalBounds=(" +
-            x +
-            "," +
-            y +
-            "," +
-            width +
-            "x" +
-            height +
-            "), " +
-            "pixelRatio=" +
-            pixelRatio +
-            ", " +
-            "insets=(" +
-            webViewLeftInset +
-            "," +
-            webViewTopInset +
-            ")"
+                "actualBounds=(" +
+                actualX +
+                "," +
+                actualY +
+                "," +
+                actualWidth +
+                "x" +
+                actualHeight +
+                "), " +
+                "logicalBounds=(" +
+                x +
+                "," +
+                y +
+                "," +
+                width +
+                "x" +
+                height +
+                "), " +
+                "pixelRatio=" +
+                pixelRatio +
+                ", " +
+                "insets=(" +
+                webViewLeftInset +
+                "," +
+                webViewTopInset +
+                ")"
         );
 
         return new int[] { x, y, width, height };
@@ -3453,7 +3458,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         FileOutputOptions outputOptions = new FileOutputOptions.Builder(currentVideoFile).build();
 
         // Create recording event listener
-        androidx.core.util.Consumer<VideoRecordEvent> videoRecordEventListener = videoRecordEvent -> {
+        androidx.core.util.Consumer<VideoRecordEvent> videoRecordEventListener = (videoRecordEvent) -> {
             if (videoRecordEvent instanceof VideoRecordEvent.Start) {
                 Log.d(TAG, "Video recording started");
             } else if (videoRecordEvent instanceof VideoRecordEvent.Finalize) {

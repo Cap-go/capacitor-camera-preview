@@ -322,11 +322,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         fusedLocationClient
             .getLastLocation()
-            .addOnSuccessListener(getActivity(), location -> {
+            .addOnSuccessListener(getActivity(), (location) -> {
                 lastLocation = location;
                 proceedWithCapture(call, lastLocation);
             })
-            .addOnFailureListener(e -> {
+            .addOnFailureListener((e) -> {
                 Logger.error("Failed to get location: " + e.getMessage());
                 proceedWithCapture(call, null);
             });
@@ -557,15 +557,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
 
-        getActivity()
-            .runOnUiThread(() -> {
-                try {
-                    cameraXView.setFocus(x, y);
-                    call.resolve();
-                } catch (Exception e) {
-                    call.reject("Failed to set focus: " + e.getMessage());
-                }
-            });
+        getActivity().runOnUiThread(() -> {
+            try {
+                cameraXView.setFocus(x, y);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("Failed to set focus: " + e.getMessage());
+            }
+        });
     }
 
     @PluginMethod
@@ -707,7 +706,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     activity.startActivity(intent);
                     isCameraPermissionDialogShowing = false;
                 })
-                .setOnDismissListener(d -> isCameraPermissionDialogShowing = false)
+                .setOnDismissListener((d) -> isCameraPermissionDialogShowing = false)
                 .create();
 
             isCameraPermissionDialogShowing = true;
@@ -976,13 +975,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     Log.d(
                         "CameraPreview",
                         "  - webView margins: left=" +
-                        marginParams.leftMargin +
-                        ", top=" +
-                        marginParams.topMargin +
-                        ", right=" +
-                        marginParams.rightMargin +
-                        ", bottom=" +
-                        marginParams.bottomMargin
+                            marginParams.leftMargin +
+                            ", top=" +
+                            marginParams.topMargin +
+                            ", right=" +
+                            marginParams.rightMargin +
+                            ", bottom=" +
+                            marginParams.bottomMargin
                     );
                 }
 
@@ -990,13 +989,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 Log.d(
                     "CameraPreview",
                     "  - webView padding: left=" +
-                    webView.getPaddingLeft() +
-                    ", top=" +
-                    webView.getPaddingTop() +
-                    ", right=" +
-                    webView.getPaddingRight() +
-                    ", bottom=" +
-                    webView.getPaddingBottom()
+                        webView.getPaddingLeft() +
+                        ", top=" +
+                        webView.getPaddingTop() +
+                        ", right=" +
+                        webView.getPaddingRight() +
+                        ", bottom=" +
+                        webView.getPaddingBottom()
                 );
 
                 Log.d("CameraPreview", "  - Using webViewTopInset: " + webViewTopInset);
@@ -1029,11 +1028,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     Log.d(
                         "CameraPreview",
                         "Centering horizontally: screenWidth=" +
-                        screenWidth +
-                        ", computedWidth=" +
-                        computedWidth +
-                        ", computedX=" +
-                        computedX
+                            screenWidth +
+                            ", computedWidth=" +
+                            computedWidth +
+                            ", computedX=" +
+                            computedX
                     );
                 } else {
                     computedX = (int) (x * pixelRatio);
@@ -1054,11 +1053,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                             Log.d(
                                 "CameraPreview",
                                 "Positioning at bottom: screenHeight=" +
-                                screenHeight +
-                                ", computedHeight=" +
-                                computedHeight +
-                                ", computedY=" +
-                                computedY
+                                    screenHeight +
+                                    ", computedHeight=" +
+                                    computedHeight +
+                                    ", computedY=" +
+                                    computedY
                             );
                             break;
                         case "center":
@@ -1071,13 +1070,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                                 Log.d(
                                     "CameraPreview",
                                     "Centering vertically with WebView offset: screenHeight=" +
-                                    screenHeight +
-                                    ", webViewTop=" +
-                                    webViewTopInset +
-                                    ", computedHeight=" +
-                                    computedHeight +
-                                    ", computedY=" +
-                                    computedY
+                                        screenHeight +
+                                        ", webViewTop=" +
+                                        webViewTopInset +
+                                        ", computedHeight=" +
+                                        computedHeight +
+                                        ", computedY=" +
+                                        computedY
                                 );
                             } else {
                                 // Normal mode - use full screen height
@@ -1085,11 +1084,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                                 Log.d(
                                     "CameraPreview",
                                     "Centering vertically (normal): screenHeight=" +
-                                    screenHeight +
-                                    ", computedHeight=" +
-                                    computedHeight +
-                                    ", computedY=" +
-                                    computedY
+                                        screenHeight +
+                                        ", computedHeight=" +
+                                        computedHeight +
+                                        ", computedY=" +
+                                        computedY
                                 );
                             }
                             break;
@@ -1103,22 +1102,22 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         Log.d(
                             "CameraPreview",
                             "Edge-to-edge adjustment: Y position " +
-                            (int) (y * pixelRatio) +
-                            " + inset " +
-                            webViewTopInset +
-                            " = " +
-                            computedY
+                                (int) (y * pixelRatio) +
+                                " + inset " +
+                                webViewTopInset +
+                                " = " +
+                                computedY
                         );
                     }
                     Log.d(
                         "CameraPreview",
                         "Using provided Y position: " +
-                        y +
-                        " * " +
-                        pixelRatio +
-                        " = " +
-                        computedY +
-                        (isEdgeToEdgeActive ? " (adjusted for edge-to-edge)" : "")
+                            y +
+                            " * " +
+                            pixelRatio +
+                            " = " +
+                            computedY +
+                            (isEdgeToEdgeActive ? " (adjusted for edge-to-edge)" : "")
                     );
                 }
 
@@ -1190,7 +1189,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                                 lastOrientation = current;
                                 lastOrientationStr = currentStr;
                                 // Post to next frame so WebView has updated bounds before we recompute layout
-                                getBridge().getActivity().getWindow().getDecorView().post(() -> handleOrientationChange());
+                                getBridge()
+                                    .getActivity()
+                                    .getWindow()
+                                    .getDecorView()
+                                    .post(() -> handleOrientationChange());
                             }
                         }
                     };
@@ -1219,15 +1222,15 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         Log.d(
             TAG,
             "Screen dimensions - Pixels: " +
-            screenWidthPx +
-            "x" +
-            screenHeightPx +
-            ", DP: " +
-            screenWidthDp +
-            "x" +
-            screenHeightDp +
-            ", Density: " +
-            density
+                screenWidthPx +
+                "x" +
+                screenHeightPx +
+                ", DP: " +
+                screenWidthDp +
+                "x" +
+                screenHeightDp +
+                ", Density: " +
+                density
         );
 
         // Get WebView dimensions before rotation
@@ -1241,13 +1244,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         Log.d(
             TAG,
             "Current preview bounds before rotation: x=" +
-            oldBounds[0] +
-            ", y=" +
-            oldBounds[1] +
-            ", width=" +
-            oldBounds[2] +
-            ", height=" +
-            oldBounds[3]
+                oldBounds[0] +
+                ", y=" +
+                oldBounds[1] +
+                ", width=" +
+                oldBounds[2] +
+                ", height=" +
+                oldBounds[3]
         );
 
         getBridge()
@@ -1291,24 +1294,24 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     Log.d(
                         TAG,
                         "New bounds after orientation change: x=" +
-                        bounds[0] +
-                        ", y=" +
-                        bounds[1] +
-                        ", width=" +
-                        bounds[2] +
-                        ", height=" +
-                        bounds[3]
+                            bounds[0] +
+                            ", y=" +
+                            bounds[1] +
+                            ", width=" +
+                            bounds[2] +
+                            ", height=" +
+                            bounds[3]
                     );
                     Log.d(
                         TAG,
                         "Bounds change: deltaX=" +
-                        (bounds[0] - oldBounds[0]) +
-                        ", deltaY=" +
-                        (bounds[1] - oldBounds[1]) +
-                        ", deltaWidth=" +
-                        (bounds[2] - oldBounds[2]) +
-                        ", deltaHeight=" +
-                        (bounds[3] - oldBounds[3])
+                            (bounds[0] - oldBounds[0]) +
+                            ", deltaY=" +
+                            (bounds[1] - oldBounds[1]) +
+                            ", deltaWidth=" +
+                            (bounds[2] - oldBounds[2]) +
+                            ", deltaHeight=" +
+                            (bounds[3] - oldBounds[3])
                     );
 
                     JSObject data = new JSObject();
@@ -1446,7 +1449,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (queuedCall != null) {
             PluginCall finalQueuedCall = queuedCall;
             Log.d(TAG, "onCameraStopped: replaying pending start request");
-            getBridge().getActivity().runOnUiThread(() -> start(finalQueuedCall));
+            getBridge()
+                .getActivity()
+                .runOnUiThread(() -> start(finalQueuedCall));
         }
     }
 
@@ -1498,13 +1503,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(
                 "CameraPreview",
                 "11. RETURNED (logical) - x=" +
-                (x / pixelRatio) +
-                ", y=" +
-                (relativeY / pixelRatio) +
-                ", width=" +
-                (width / pixelRatio) +
-                ", height=" +
-                (height / pixelRatio)
+                    (x / pixelRatio) +
+                    ", y=" +
+                    (relativeY / pixelRatio) +
+                    ", width=" +
+                    (width / pixelRatio) +
+                    ", height=" +
+                    (height / pixelRatio)
             );
             Log.d("CameraPreview", "12. PIXEL RATIO - " + pixelRatio);
             Log.d("CameraPreview", "========================");
@@ -1529,13 +1534,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(
                 "CameraPreview",
                 "Logical values (rounded): x=" +
-                Math.round(logicalX) +
-                ", y=" +
-                Math.round(logicalY) +
-                ", width=" +
-                Math.round(logicalWidth) +
-                ", height=" +
-                Math.round(logicalHeight)
+                    Math.round(logicalX) +
+                    ", y=" +
+                    Math.round(logicalY) +
+                    ", width=" +
+                    Math.round(logicalWidth) +
+                    ", height=" +
+                    Math.round(logicalHeight)
             );
 
             // Check if previewContainer has any padding or margin that might cause offset
@@ -1545,13 +1550,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     Log.d(
                         "CameraPreview",
                         "PreviewContainer padding: left=" +
-                        previewContainer.getPaddingLeft() +
-                        ", top=" +
-                        previewContainer.getPaddingTop() +
-                        ", right=" +
-                        previewContainer.getPaddingRight() +
-                        ", bottom=" +
-                        previewContainer.getPaddingBottom()
+                            previewContainer.getPaddingLeft() +
+                            ", top=" +
+                            previewContainer.getPaddingTop() +
+                            ", right=" +
+                            previewContainer.getPaddingRight() +
+                            ", bottom=" +
+                            previewContainer.getPaddingBottom()
                     );
                     ViewGroup.LayoutParams params = previewContainer.getLayoutParams();
                     if (params instanceof ViewGroup.MarginLayoutParams) {
@@ -1559,13 +1564,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         Log.d(
                             "CameraPreview",
                             "PreviewContainer margins: left=" +
-                            marginParams.leftMargin +
-                            ", top=" +
-                            marginParams.topMargin +
-                            ", right=" +
-                            marginParams.rightMargin +
-                            ", bottom=" +
-                            marginParams.bottomMargin
+                                marginParams.leftMargin +
+                                ", top=" +
+                                marginParams.topMargin +
+                                ", right=" +
+                                marginParams.rightMargin +
+                                ", bottom=" +
+                                marginParams.bottomMargin
                         );
                     }
                 }
@@ -1576,22 +1581,22 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(
                 "CameraPreview",
                 "Returning to JS - x: " +
-                logicalX +
-                " (from " +
-                logicalX +
-                "), y: " +
-                logicalY +
-                " (from " +
-                logicalY +
-                "), width: " +
-                logicalWidth +
-                " (from " +
-                logicalWidth +
-                "), height: " +
-                logicalHeight +
-                " (from " +
-                logicalHeight +
-                ")"
+                    logicalX +
+                    " (from " +
+                    logicalX +
+                    "), y: " +
+                    logicalY +
+                    " (from " +
+                    logicalY +
+                    "), width: " +
+                    logicalWidth +
+                    " (from " +
+                    logicalWidth +
+                    "), height: " +
+                    logicalHeight +
+                    " (from " +
+                    logicalHeight +
+                    ")"
             );
 
             call.resolve(result);
@@ -1646,19 +1651,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         Float x = call.getFloat("x");
         Float y = call.getFloat("y");
 
-        getActivity()
-            .runOnUiThread(() -> {
-                cameraXView.setAspectRatio(aspectRatio, x, y, () -> {
-                    // Return the actual preview bounds after layout and camera operations are complete
-                    int[] bounds = cameraXView.getCurrentPreviewBounds();
-                    JSObject ret = new JSObject();
-                    ret.put("x", bounds[0]);
-                    ret.put("y", bounds[1]);
-                    ret.put("width", bounds[2]);
-                    ret.put("height", bounds[3]);
-                    call.resolve(ret);
-                });
+        getActivity().runOnUiThread(() -> {
+            cameraXView.setAspectRatio(aspectRatio, x, y, () -> {
+                // Return the actual preview bounds after layout and camera operations are complete
+                int[] bounds = cameraXView.getCurrentPreviewBounds();
+                JSObject ret = new JSObject();
+                ret.put("x", bounds[0]);
+                ret.put("y", bounds[1]);
+                ret.put("width", bounds[2]);
+                ret.put("height", bounds[3]);
+                call.resolve(ret);
             });
+        });
     }
 
     @PluginMethod
@@ -1680,11 +1684,10 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
         String gridMode = call.getString("gridMode", "none");
-        getActivity()
-            .runOnUiThread(() -> {
-                cameraXView.setGridMode(gridMode);
-                call.resolve();
-            });
+        getActivity().runOnUiThread(() -> {
+            cameraXView.setGridMode(gridMode);
+            call.resolve();
+        });
     }
 
     @PluginMethod
