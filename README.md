@@ -442,7 +442,7 @@ Gets the flash modes supported by the active camera.
 ### setAspectRatio(...)
 
 ```typescript
-setAspectRatio(options: { aspectRatio: "4:3" | "16:9"; x?: number; y?: number; }) => Promise<{ width: number; height: number; x: number; y: number; }>
+setAspectRatio(options: { aspectRatio: '4:3' | '16:9'; x?: number; y?: number; }) => Promise<{ width: number; height: number; x: number; y: number; }>
 ```
 
 Set the aspect ratio of the camera preview.
@@ -461,7 +461,7 @@ Set the aspect ratio of the camera preview.
 ### getAspectRatio()
 
 ```typescript
-getAspectRatio() => Promise<{ aspectRatio: "4:3" | "16:9"; }>
+getAspectRatio() => Promise<{ aspectRatio: '4:3' | '16:9'; }>
 ```
 
 Gets the current aspect ratio of the camera preview.
@@ -851,7 +851,7 @@ your HTML/JS (e.g., on the overlaying UI), then pass normalized coordinates here
 ### addListener('screenResize', ...)
 
 ```typescript
-addListener(eventName: "screenResize", listenerFunc: (data: { width: number; height: number; x: number; y: number; }) => void) => Promise<PluginListenerHandle>
+addListener(eventName: 'screenResize', listenerFunc: (data: { width: number; height: number; x: number; y: number; }) => void) => Promise<PluginListenerHandle>
 ```
 
 Adds a listener for screen resize events.
@@ -871,7 +871,7 @@ Adds a listener for screen resize events.
 ### addListener('orientationChange', ...)
 
 ```typescript
-addListener(eventName: "orientationChange", listenerFunc: (data: { orientation: DeviceOrientation; }) => void) => Promise<PluginListenerHandle>
+addListener(eventName: 'orientationChange', listenerFunc: (data: { orientation: DeviceOrientation; }) => void) => Promise<PluginListenerHandle>
 ```
 
 Adds a listener for orientation change events.
@@ -1206,22 +1206,22 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 
 #### GridMode
 
-<code>"none" | "3x3" | "4x4"</code>
+<code>'none' | '3x3' | '4x4'</code>
 
 
 #### CameraPosition
 
-<code>"rear" | "front"</code>
+<code>'rear' | 'front'</code>
 
 
 #### CameraPositioning
 
-<code>"center" | "top" | "bottom"</code>
+<code>'center' | 'top' | 'bottom'</code>
 
 
 #### PictureFormat
 
-<code>"jpeg" | "png"</code>
+<code>'jpeg' | 'png'</code>
 
 
 #### CameraPreviewFlashMode
@@ -1229,7 +1229,7 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 The available flash modes for the camera.
 'torch' is a continuous light mode.
 
-<code>"off" | "on" | "auto" | "torch"</code>
+<code>'off' | 'on' | 'auto' | 'torch'</code>
 
 
 #### PermissionState
@@ -1253,14 +1253,14 @@ From T, pick a set of properties whose keys are in the union K
 
 Canonical device orientation values across platforms.
 
-<code>"portrait" | "landscape-left" | "landscape-right" | "portrait-upside-down" | "unknown"</code>
+<code>'portrait' | 'landscape-left' | 'landscape-right' | 'portrait-upside-down' | 'unknown'</code>
 
 
 #### ExposureMode
 
 Reusable exposure mode type for cross-platform support.
 
-<code>"AUTO" | "LOCK" | "CONTINUOUS" | "CUSTOM"</code>
+<code>'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM'</code>
 
 
 ### Enums
@@ -1270,12 +1270,12 @@ Reusable exposure mode type for cross-platform support.
 
 | Members          | Value                    |
 | ---------------- | ------------------------ |
-| **`ULTRA_WIDE`** | <code>"ultraWide"</code> |
-| **`WIDE_ANGLE`** | <code>"wideAngle"</code> |
-| **`TELEPHOTO`**  | <code>"telephoto"</code> |
-| **`TRUE_DEPTH`** | <code>"trueDepth"</code> |
-| **`DUAL`**       | <code>"dual"</code>      |
-| **`DUAL_WIDE`**  | <code>"dualWide"</code>  |
-| **`TRIPLE`**     | <code>"triple"</code>    |
+| **`ULTRA_WIDE`** | <code>'ultraWide'</code> |
+| **`WIDE_ANGLE`** | <code>'wideAngle'</code> |
+| **`TELEPHOTO`**  | <code>'telephoto'</code> |
+| **`TRUE_DEPTH`** | <code>'trueDepth'</code> |
+| **`DUAL`**       | <code>'dual'</code>      |
+| **`DUAL_WIDE`**  | <code>'dualWide'</code>  |
+| **`TRIPLE`**     | <code>'triple'</code>    |
 
 </docgen-api>
