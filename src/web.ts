@@ -1237,4 +1237,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     void _options;
     throw new Error('deleteFile not supported under the web platform');
   }
+
+  async getPluginVersion(): Promise<{ version: string }> {
+    return { version: 'web' };
+  }
 }

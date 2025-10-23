@@ -34,6 +34,7 @@ extension UIWindow {
  */
 @objc(CameraPreview)
 public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
+    private let PLUGIN_VERSION: String = ""
     public let identifier = "CameraPreviewPlugin"
     public let jsName = "CameraPreview"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -75,8 +76,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "setExposureMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureCompensationRange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureCompensation", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setExposureCompensation", returnType: CAPPluginReturnPromise)
-
+        CAPPluginMethod(name: "setExposureCompensation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
     // Camera state tracking
     private var isInitializing: Bool = false
@@ -2193,4 +2194,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     @objc func getOrientation(_ call: CAPPluginCall) {
         call.resolve(["orientation": self.currentOrientationString()])
     }
+
+    @objc func getPluginVersion(_ call: CAPPluginCall) {
+        call.resolve(["version": self.PLUGIN_VERSION])
+    }
+
 }

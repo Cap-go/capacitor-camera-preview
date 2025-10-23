@@ -63,6 +63,8 @@ import org.json.JSONObject;
 )
 public class CameraPreview extends Plugin implements CameraXView.CameraXViewListener {
 
+    private final String PLUGIN_VERSION = "";
+
     @Override
     protected void handleOnPause() {
         super.handleOnPause();
@@ -1939,5 +1941,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             result = getContext().getResources().getDimensionPixelSize(resourceId);
         }
         return result;
+    }
+
+    @PluginMethod
+    public void getPluginVersion(final PluginCall call) {
+        try {
+            final JSObject ret = new JSObject();
+            ret.put("version", this.PLUGIN_VERSION);
+            call.resolve(ret);
+        } catch (final Exception e) {
+            call.reject("Could not get plugin version", e);
+        }
     }
 }
