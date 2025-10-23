@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.24.0](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.15...7.24.0) (2025-10-23)
+
+
+### Features
+
+* add getPluginVersion method to CameraPreview plugin and web implementation ([21bfed2](https://github.com/Cap-go/capacitor-camera-preview/commit/21bfed24c07587b2df71b6fa6a8d0e16a79cbed5))
+
 ## [7.23.15](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.14...7.23.15) (2025-10-20)
 
 ## [7.23.14](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.13...7.23.14) (2025-10-20)
