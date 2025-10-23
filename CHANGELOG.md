@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.24.1](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.0...7.24.1) (2025-10-23)
+
+
+### Bug Fixes
+
+* remove footer in discord ([c6fb96c](https://github.com/Cap-go/capacitor-camera-preview/commit/c6fb96c8fe74f5a54fffefb0ebe6ac9ca8573303))
+* update Discord webhook username to include repository name ([200637f](https://github.com/Cap-go/capacitor-camera-preview/commit/200637fe0d47f4cdbd8283e5b9b19dbb08475d30))
+
 ## [7.24.0](https://github.com/Cap-go/capacitor-camera-preview/compare/7.23.15...7.24.0) (2025-10-23)
 
 
