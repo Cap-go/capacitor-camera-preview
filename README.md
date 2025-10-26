@@ -160,6 +160,10 @@ Example app (Ionic):
 - EV controls (+/−) are placed in a top‑right floating action bar, outside the preview area.
 
 
+## Documentation
+
+The most complete doc is available here: https://capgo.app/docs/plugins/camera-preview/
+
 # Installation
 
 ```
