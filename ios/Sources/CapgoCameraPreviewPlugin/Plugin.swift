@@ -34,7 +34,7 @@ extension UIWindow {
  */
 @objc(CameraPreview)
 public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
-    private let PLUGIN_VERSION: String = "7.24.3"
+    private let PLUGIN_VERSION: String = "7.24.4"
     public let identifier = "CameraPreviewPlugin"
     public let jsName = "CameraPreview"
     public let pluginMethods: [CAPPluginMethod] = [

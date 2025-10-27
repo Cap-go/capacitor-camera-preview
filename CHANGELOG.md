@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.24.4](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.3...7.24.4) (2025-10-27)
+
+
+### Bug Fixes
+
+* prevent bump for app ([4180efc](https://github.com/Cap-go/capacitor-camera-preview/commit/4180efc59b0d3998a3db62000ed865656f56eccf))
+* remove old edge to egde ([dc1386a](https://github.com/Cap-go/capacitor-camera-preview/commit/dc1386a20b23d8d0e8280bb0e93dd76184899fc1))
+* script ([60c9eed](https://github.com/Cap-go/capacitor-camera-preview/commit/60c9eed04e8450f2a7f31994e487ad628dfaacb9))
+
 ## [7.24.3](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.2...7.24.3) (2025-10-26)
 
 
