@@ -28,7 +28,6 @@
     "@capacitor/ios": "^7.4.0",
     "@capacitor/keyboard": "7.0.3",
     "@capacitor/status-bar": "^7.0.1",
-    "@capawesome/capacitor-android-edge-to-edge-support": "^7.2.2",
     "@capgo/camera-preview": "file:..",
     "@capgo/home-indicator": "^7.1.3",
     "@ionic/angular": "^8.6.0",
