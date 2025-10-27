@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.24.5](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.4...7.24.5) (2025-10-27)
+
+
+### Bug Fixes
+
+* renovate capacitor dep ([f4030b3](https://github.com/Cap-go/capacitor-camera-preview/commit/f4030b310de7a8256234a64a599594b3cd85424d))
+
 ## [7.24.4](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.3...7.24.4) (2025-10-27)
 
 
