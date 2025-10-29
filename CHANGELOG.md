@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.24.8](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.7...7.24.8) (2025-10-29)
+
+
+### Bug Fixes
+
+* update AI model in build workflow ([e2e4bad](https://github.com/Cap-go/capacitor-camera-preview/commit/e2e4badbd68d9652a7a1370b891360c8892e55f0))
+
 ## [7.24.7](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.6...7.24.7) (2025-10-27)
 
 
