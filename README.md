@@ -18,6 +18,21 @@
 <p>
   Capacitor plugin that allows camera interaction from Javascript and HTML<br>(based on cordova-plugin-camera-preview).
 </p>
+
+## Why Camera Preview?
+
+A **free**, **fully-featured** alternative to paid camera plugins, built for maximum flexibility and performance:
+
+- **Complete UI control** - Build your own camera interface with HTML/JS overlays instead of native constraints
+- **Full hardware access** - Manual focus, zoom, exposure controls, flash modes, multiple cameras
+- **Video recording** - Record with custom settings, no arbitrary limitations
+- **Universal device support** - Tested across hundreds of Android and iOS devices
+- **Performance optimized** - Direct camera stream access, efficient memory usage
+- **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
+- **Same JavaScript API** - Compatible interface with paid alternatives
+
+Unlike restrictive paid plugins, you get full camera control to build exactly the experience you want - from QR scanners to professional video apps.
+
 <br>
 
 This plugin is compatible Capacitor 7 and above.
