@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.24.11](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.10...7.24.11) (2025-11-01)
+
+
+### Bug Fixes
+
+* flash crash ([a424c4b](https://github.com/Cap-go/capacitor-camera-preview/commit/a424c4bca1790557e496812a8602d450abca413b))
+
 ## [7.24.10](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.9...7.24.10) (2025-10-30)
 
 ## [7.24.9](https://github.com/Cap-go/capacitor-camera-preview/compare/7.24.8...7.24.9) (2025-10-30)
