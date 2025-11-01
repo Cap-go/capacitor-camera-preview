@@ -427,6 +427,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("flashMode required parameter is missing");
             return;
         }
+
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
         cameraXView.setFlashMode(flashMode);
         call.resolve();
     }
