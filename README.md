@@ -264,7 +264,7 @@ You will need to add two permissions to `Info.plist`. Follow the [Capacitor docs
 
 Add `import '@capgo/camera-preview'` to you entry script in ionic on `app.module.ts`, so capacitor can register the web platform from the plugin
 
-### Exemple with Capacitor uploader:
+### Example with Capacitor uploader:
 
 Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 

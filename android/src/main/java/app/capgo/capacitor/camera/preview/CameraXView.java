@@ -1768,7 +1768,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
-    // not workin for xiaomi https://xiaomi.eu/community/threads/mi-11-ultra-unable-to-access-camera-lenses-in-apps-camera2-api.61456/
+    // not working for xiaomi https://xiaomi.eu/community/threads/mi-11-ultra-unable-to-access-camera-lenses-in-apps-camera2-api.61456/
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     public static List<app.capgo.capacitor.camera.preview.model.CameraDevice> getAvailableDevicesStatic(Context context) {
         Log.d(TAG, "getAvailableDevicesStatic: Starting CameraX device enumeration with getPhysicalCameraInfos.");
