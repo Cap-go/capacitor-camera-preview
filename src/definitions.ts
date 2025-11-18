@@ -223,6 +223,13 @@ export interface CameraPreviewOptions {
    * @since 7.11.0
    */
   enableVideoMode?: boolean;
+  /**
+   * If true, forces the camera to start/restart even if it's already running or busy.
+   * This will kill the current camera session and start a new one, ignoring all state checks.
+   * @default false
+   * @platform android, ios, web
+   */
+  force?: boolean;
 }
 
 /**
@@ -391,10 +398,12 @@ export interface CameraPreviewPlugin {
   /**
    * Stops the camera preview.
    *
+   * @param {object} options - Optional configuration for stopping the camera.
+   * @param {boolean} options.force - If true, forces the camera to stop even if busy or capturing. Default: false.
    * @returns {Promise<void>} A promise that resolves when the camera preview is stopped.
    * @since 0.0.1
    */
-  stop(): Promise<void>;
+  stop(options?: { force?: boolean }): Promise<void>;
 
   /**
    * Captures a picture from the camera.

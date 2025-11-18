@@ -580,20 +580,48 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("  - positioning: \(call.getString("positioning") ?? "top")")
         print("  - initialZoomLevel: \(call.getFloat("initialZoomLevel") ?? 1.0)")
         print("  - disableFocusIndicator: \(call.getBool("disableFocusIndicator") ?? false)")
+        print("  - force: \(call.getBool("force") ?? false)")
 
-        if self.isInitializing {
-            call.reject("camera initialization in progress")
-            return
+        let force = call.getBool("force") ?? false
+
+        // If force is true, kill everything and restart no matter what
+        if force {
+            if self.isInitializing || self.isInitialized || self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+                // Force stop everything synchronously
+                DispatchQueue.main.sync {
+                    self.cameraController.removeGridOverlay()
+                    if let previewView = self.previewView {
+                        previewView.removeFromSuperview()
+                        self.previewView = nil
+                    }
+                    self.webView?.isOpaque = true
+
+                    // Force stop the camera controller regardless of state
+                    self.cameraController.stopRequestedAfterCapture = false
+                    self.cameraController.cleanup()
+                    NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+                    UIDevice.current.endGeneratingDeviceOrientationNotifications()
+                    self.isInitialized = false
+                    self.isInitializing = false
+                }
+            }
+        } else {
+            // Normal checks only when force is false
+            if self.isInitializing {
+                call.reject("camera initialization in progress")
+                return
+            }
+            if self.isInitialized {
+                call.reject("camera already started")
+                return
+            }
+            // Guard against starting while a deferred stop is pending due to in-flight capture
+            if self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+                call.reject("camera is stopping or busy, please retry shortly")
+                return
+            }
         }
-        if self.isInitialized {
-            call.reject("camera already started")
-            return
-        }
-        // Guard against starting while a deferred stop is pending due to in-flight capture
-        if self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
-            call.reject("camera is stopping or busy, please retry shortly")
-            return
-        }
+
         self.isInitializing = true
 
         self.cameraPosition = call.getString("position") ?? "rear"
@@ -653,7 +681,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
         let beginStart: () -> Void = {
-            if self.cameraController.captureSession?.isRunning ?? false {
+            if (self.cameraController.captureSession?.isRunning ?? false) && !force {
                 DispatchQueue.main.async {
                     self.isInitializing = false
                     call.reject("camera already started")
@@ -826,13 +854,18 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        if self.isInitializing {
-            call.reject("cannot stop camera while initialization is in progress")
-            return
-        }
-        if !self.isInitialized {
-            call.reject("camera not initialized")
-            return
+        let force = call.getBool("force") ?? false
+
+        // If force is true, skip all checks and force stop
+        if !force {
+            if self.isInitializing {
+                call.reject("cannot stop camera while initialization is in progress")
+                return
+            }
+            if !self.isInitialized {
+                call.reject("camera not initialized")
+                return
+            }
         }
 
         // UI operations must be on main thread
@@ -854,11 +887,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
             UIDevice.current.endGeneratingDeviceOrientationNotifications()
 
-            if self.cameraController.isCapturingPhoto {
-                // Defer heavy cleanup until capture callback completes
+            if self.cameraController.isCapturingPhoto && !force {
+                // Defer heavy cleanup until capture callback completes (only if not forcing)
                 self.cameraController.stopRequestedAfterCapture = true
             } else {
-                // No capture pending; cleanup now
+                // Force stop or no capture pending; cleanup now
+                if force {
+                    self.cameraController.stopRequestedAfterCapture = false
+                }
                 self.cameraController.cleanup()
             }
 

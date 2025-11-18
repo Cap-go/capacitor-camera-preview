@@ -170,8 +170,13 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     if (options.aspectRatio && (options.width || options.height)) {
       throw new Error('Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.');
     }
-    if (this.isStarted) {
+    if (this.isStarted && !options.force) {
       throw new Error('camera already started');
+    }
+
+    // If force is true and camera is already started, stop it first
+    if (this.isStarted && options.force) {
+      await this.stop({ force: true });
     }
 
     this.isBackCamera = true;
@@ -529,7 +534,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     }
   }
 
-  async stop(): Promise<void> {
+  async stop(_options?: { force?: boolean }): Promise<void> {
+    // Force option doesn't change behavior on web - we always stop immediately
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (video) {
       video.pause();

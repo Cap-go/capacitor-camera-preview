@@ -230,8 +230,22 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @PluginMethod
     public void start(PluginCall call) {
-        // Prevent starting while an existing view is still active or stopping
-        if (cameraXView != null) {
+        boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
+
+        // If force is true, kill everything and restart no matter what
+        if (force && cameraXView != null) {
+            try {
+                Log.d(TAG, "start: force=true, force stopping camera regardless of state");
+                // Force stop the camera session no matter what state it's in
+                cameraXView.stopSession();
+                cameraXView = null;
+            } catch (Exception e) {
+                Log.w(TAG, "start: Exception while force stopping camera", e);
+                // Continue anyway - we're forcing a restart
+                cameraXView = null;
+            }
+        } else if (cameraXView != null) {
+            // Normal checks only when force is false
             try {
                 if (cameraXView.isRunning() && !cameraXView.isStopping()) {
                     call.reject("Camera is already running");
@@ -247,6 +261,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 }
             } catch (Exception ignored) {}
         }
+
         boolean disableAudio = Boolean.TRUE.equals(call.getBoolean("disableAudio", true));
         String permissionAlias = disableAudio ? CAMERA_ONLY_PERMISSION_ALIAS : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
@@ -366,6 +381,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @PluginMethod
     public void stop(final PluginCall call) {
+        boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
+
         bridge
             .getActivity()
             .runOnUiThread(() -> {
@@ -386,8 +403,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
                 if (cameraXView != null) {
                     cameraXView.stopSession();
-                    // Only drop the reference if no deferred stop is pending
-                    if (!cameraXView.isStopDeferred()) {
+                    // If force is true, always drop the reference
+                    // Otherwise only drop the reference if no deferred stop is pending
+                    if (force || !cameraXView.isStopDeferred()) {
                         cameraXView = null;
                     }
                 }

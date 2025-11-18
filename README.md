@@ -319,7 +319,7 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 <docgen-index>
 
 * [`start(...)`](#start)
-* [`stop()`](#stop)
+* [`stop(...)`](#stop)
 * [`capture(...)`](#capture)
 * [`captureSample(...)`](#capturesample)
 * [`getSupportedFlashModes()`](#getsupportedflashmodes)
@@ -390,13 +390,17 @@ Starts the camera preview.
 --------------------
 
 
-### stop()
+### stop(...)
 
 ```typescript
-stop() => Promise<void>
+stop(options?: { force?: boolean | undefined; } | undefined) => Promise<void>
 ```
 
 Stops the camera preview.
+
+| Param         | Type                              | Description                                       |
+| ------------- | --------------------------------- | ------------------------------------------------- |
+| **`options`** | <code>{ force?: boolean; }</code> | - Optional configuration for stopping the camera. |
 
 **Since:** 0.0.1
 
@@ -1092,6 +1096,7 @@ Defines the configuration options for starting the camera preview.
 | **`initialZoomLevel`**             | <code>number</code>                                             | The initial zoom level when starting the camera preview. If the requested zoom level is not available, the native plugin will reject.                                                                   | <code>1.0</code>      | 2.2.0  |
 | **`positioning`**                  | <code><a href="#camerapositioning">CameraPositioning</a></code> | The vertical positioning of the camera preview.                                                                                                                                                         | <code>"center"</code> | 2.3.0  |
 | **`enableVideoMode`**              | <code>boolean</code>                                            | If true, enables video capture capabilities when the camera starts.                                                                                                                                     | <code>false</code>    | 7.11.0 |
+| **`force`**                        | <code>boolean</code>                                            | If true, forces the camera to start/restart even if it's already running or busy. This will kill the current camera session and start a new one, ignoring all state checks.                             | <code>false</code>    |        |
 
 
 #### ExifData
