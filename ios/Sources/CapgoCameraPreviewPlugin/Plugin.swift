@@ -106,6 +106,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var waitingForLocation: Bool = false
     private var isPresentingPermissionAlert: Bool = false
 
+    // Store original webview colors to restore them when stopping
+    private var originalWebViewBackgroundColor: UIColor?
+    private var originalWebViewSubviewColors: [UIView: UIColor] = [:]
+
     // MARK: - Helper Methods for Aspect Ratio
 
     /// Parses aspect ratio string and returns the appropriate ratio for the current orientation
@@ -141,6 +145,30 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func makeWebViewTransparent() {
         guard let webView = self.webView else { return }
 
+        // IMPORTANT: Save colors synchronously FIRST to prevent race condition
+        // If we don't have saved colors yet, save them now (before going async)
+        if self.originalWebViewBackgroundColor == nil {
+            self.originalWebViewBackgroundColor = webView.backgroundColor
+            self.originalWebViewSubviewColors.removeAll()
+
+            // Define a recursive function to traverse and save colors
+            func saveSubviewColors(_ view: UIView) {
+                // Save the original background color before changing it
+                if let bgColor = view.backgroundColor, bgColor != .clear {
+                    self.originalWebViewSubviewColors[view] = bgColor
+                }
+
+                // Recurse for all subviews
+                for subview in view.subviews {
+                    saveSubviewColors(subview)
+                }
+            }
+
+            // Save all subview colors synchronously
+            saveSubviewColors(webView)
+        }
+
+        // Now make the changes asynchronously on main thread
         DispatchQueue.main.async {
             _ = CFAbsoluteTimeGetCurrent()
 
@@ -168,6 +196,51 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             webView.setNeedsLayout()
             webView.layoutIfNeeded()
         }
+    }
+
+    private func restoreWebViewBackground(_ webView: UIView) {
+        // Restore the saved background colors
+        func restoreSubviewsBackground(_ view: UIView) {
+            // Restore the saved background color for this view
+            if let savedColor = self.originalWebViewSubviewColors[view] {
+                view.backgroundColor = savedColor
+            } else {
+                // Fallback: If no saved color, intelligently restore based on view type
+                let className = String(describing: type(of: view))
+                if className.contains("WKScrollView") || className.contains("WKContentView") {
+                    // Only restore if it's currently clear (meaning we likely made it transparent)
+                    if view.backgroundColor == .clear || view.backgroundColor == nil {
+                        view.backgroundColor = .white
+                    }
+                }
+            }
+
+            // Recurse for all subviews
+            for subview in view.subviews {
+                restoreSubviewsBackground(subview)
+            }
+        }
+
+        // Restore the main webview background color
+        if let originalColor = self.originalWebViewBackgroundColor {
+            webView.backgroundColor = originalColor
+        } else {
+            // Fallback: If no saved color and webview is clear, restore to white
+            if webView.backgroundColor == .clear || webView.backgroundColor == nil {
+                webView.backgroundColor = .white
+            }
+        }
+
+        // Restore all subviews
+        restoreSubviewsBackground(webView)
+
+        // Clear the saved colors dictionary
+        self.originalWebViewSubviewColors.removeAll()
+        self.originalWebViewBackgroundColor = nil
+
+        // Force a layout pass to apply changes
+        webView.setNeedsLayout()
+        webView.layoutIfNeeded()
     }
 
     private func presentCameraPermissionAlert(title: String,
@@ -594,7 +667,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                         previewView.removeFromSuperview()
                         self.previewView = nil
                     }
-                    self.webView?.isOpaque = true
+
+                    // Restore webView to opaque state with original background
+                    if let webView = self.webView {
+                        webView.isOpaque = true
+                        // Restore the original background colors that were saved
+                        self.restoreWebViewBackground(webView)
+                    }
 
                     // Force stop the camera controller regardless of state
                     self.cameraController.stopRequestedAfterCapture = false
@@ -878,7 +957,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.previewView = nil
             }
 
-            self.webView?.isOpaque = true
+            // Restore webView to opaque state with original background
+            if let webView = self.webView {
+                webView.isOpaque = true
+                // Restore the original background colors that were saved
+                self.restoreWebViewBackground(webView)
+            }
+
             self.isInitialized = false
             self.isInitializing = false
 
