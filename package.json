@@ -2,7 +2,7 @@
   "name": "@capgo/camera-preview",
   "version": "7.26.0",
   "description": "Camera preview",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/Cap-go/capacitor-camera-preview"
