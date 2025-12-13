@@ -470,8 +470,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             availableHeight = webViewHeight - paddingBottom
         } else {
             // Manual positioning - calculate remaining space
-            availableWidth = webViewWidth - self.posX!
-            availableHeight = webViewHeight - self.posY! - paddingBottom
+            availableWidth = webViewWidth - (self.posX ?? 0)
+            availableHeight = webViewHeight - (self.posY ?? 0) - paddingBottom
         }
 
         // Parse aspect ratio - convert to portrait orientation for camera use
@@ -722,20 +722,20 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         // Set x position - use exact CSS pixel value from web view, or mark for centering
-        if let x = call.getInt("x") {
-            self.posX = CGFloat(x)
+        if let xPosition = call.getInt("x") {
+            self.posX = CGFloat(xPosition)
         } else {
             self.posX = -1 // Use -1 to indicate auto-centering
         }
 
         // Set y position - use exact CSS pixel value from web view, or mark for centering
-        if let y = call.getInt("y") {
-            self.posY = CGFloat(y)
+        if let yPosition = call.getInt("y") {
+            self.posY = CGFloat(yPosition)
         } else {
             self.posY = -1 // Use -1 to indicate auto-centering
         }
-        if call.getInt("paddingBottom") != nil {
-            self.paddingBottom = CGFloat(call.getInt("paddingBottom")!)
+        if let paddingBottomValue = call.getInt("paddingBottom") {
+            self.paddingBottom = CGFloat(paddingBottomValue)
         }
 
         self.rotateWhenOrientationChanged = call.getBool("rotateWhenOrientationChanged") ?? true
@@ -823,7 +823,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Add preview view to hierarchy first
         self.webView?.addSubview(self.previewView)
-        if self.toBack! {
+        if self.toBack == true {
             self.webView?.sendSubviewToBack(self.previewView)
         }
 
@@ -1177,13 +1177,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             if Thread.isMainThread {
                 return (self.previewView.frame.width, self.previewView.frame.height)
             }
-            var w: CGFloat = 0
-            var h: CGFloat = 0
+            var width: CGFloat = 0
+            var height: CGFloat = 0
             DispatchQueue.main.sync {
-                w = self.previewView.frame.width
-                h = self.previewView.frame.height
+                width = self.previewView.frame.width
+                height = self.previewView.frame.height
             }
-            return (w, h)
+            return (width, height)
         }()
         print("[CameraPreview] Preview dimensions: \(previewWidth)x\(previewHeight)")
 
@@ -1398,7 +1398,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func captureSample(_ call: CAPPluginCall) {
-        let quality: Int? = call.getInt("quality", 85)
+        let quality: Int = call.getInt("quality") ?? 85
 
         self.cameraController.captureSample { image, error in
             guard let image = image else {
@@ -1410,14 +1410,17 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             let imageData: Data?
             if self.cameraPosition == "front" {
                 let flippedImage = image.withHorizontallyFlippedOrientation()
-                imageData = flippedImage.jpegData(compressionQuality: CGFloat(quality!/100))
+                imageData = flippedImage.jpegData(compressionQuality: CGFloat(quality)/100)
             } else {
-                imageData = image.jpegData(compressionQuality: CGFloat(quality!/100))
+                imageData = image.jpegData(compressionQuality: CGFloat(quality)/100)
             }
 
             if self.storeToFile == false {
-                let imageBase64 = imageData?.base64EncodedString()
-                call.resolve(["value": imageBase64!])
+                guard let imageBase64 = imageData?.base64EncodedString() else {
+                    call.reject("Failed to encode image to base64")
+                    return
+                }
+                call.resolve(["value": imageBase64])
             } else {
                 do {
                     let fileUrl = self.getTempFilePath()
@@ -1464,8 +1467,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 flashModeAsEnum = AVCaptureDevice.FlashMode.auto
             default: break
             }
-            if flashModeAsEnum != nil {
-                try self.cameraController.setFlashMode(flashMode: flashModeAsEnum!)
+            if let flashModeEnum = flashModeAsEnum {
+                try self.cameraController.setFlashMode(flashMode: flashModeEnum)
             } else if flashMode == "torch" {
                 try self.cameraController.setTorchMode()
             } else {
@@ -1905,12 +1908,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    private func calculateCameraFrame(x: CGFloat? = nil, y: CGFloat? = nil, width: CGFloat? = nil, height: CGFloat? = nil, aspectRatio: String? = nil) -> CGRect {
+    private func calculateCameraFrame(xPosition: CGFloat? = nil, yPosition: CGFloat? = nil, width: CGFloat? = nil, height: CGFloat? = nil, aspectRatio: String? = nil) -> CGRect {
         // Use provided values or existing ones
         let currentWidth = width ?? self.width ?? UIScreen.main.bounds.size.width
         let currentHeight = height ?? self.height ?? UIScreen.main.bounds.size.height
-        let currentX = x ?? self.posX ?? -1
-        let currentY = y ?? self.posY ?? -1
+        let currentX = xPosition ?? self.posX ?? -1
+        let currentY = yPosition ?? self.posY ?? -1
         let currentAspectRatio = aspectRatio ?? self.aspectRatio
 
         let paddingBottom = self.paddingBottom ?? 0

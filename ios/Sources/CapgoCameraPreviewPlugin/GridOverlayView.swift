@@ -47,17 +47,17 @@ class GridOverlayView: UIView {
         let stepY = rect.height / CGFloat(divisions)
 
         // Draw vertical lines
-        for i in 1..<divisions {
-            let x = CGFloat(i) * stepX
-            context.move(to: CGPoint(x: x, y: 0))
-            context.addLine(to: CGPoint(x: x, y: rect.height))
+        for index in 1..<divisions {
+            let xPosition = CGFloat(index) * stepX
+            context.move(to: CGPoint(x: xPosition, y: 0))
+            context.addLine(to: CGPoint(x: xPosition, y: rect.height))
         }
 
         // Draw horizontal lines
-        for i in 1..<divisions {
-            let y = CGFloat(i) * stepY
-            context.move(to: CGPoint(x: 0, y: y))
-            context.addLine(to: CGPoint(x: rect.width, y: y))
+        for index in 1..<divisions {
+            let yPosition = CGFloat(index) * stepY
+            context.move(to: CGPoint(x: 0, y: yPosition))
+            context.addLine(to: CGPoint(x: rect.width, y: yPosition))
         }
 
         context.strokePath()

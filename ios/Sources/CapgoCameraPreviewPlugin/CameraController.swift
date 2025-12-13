@@ -100,8 +100,8 @@ class CameraController: NSObject {
         let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera
         if #available(iOS 18.0, *), let device = device {
             if let value = device.value(forKey: "displayVideoZoomFactorMultiplier") as? NSNumber {
-                let m = value.floatValue
-                if m > 0 { multiplier = m }
+                let multiplierValue = value.floatValue
+                if multiplierValue > 0 { multiplier = multiplierValue }
             }
         }
         return multiplier
@@ -820,7 +820,7 @@ extension CameraController {
             captureSession.commitConfiguration()
             self.previewLayer?.connection?.isEnabled = true
             // Restore frame (it shouldn't change, but this ensures zero animation)
-            if let f = savedPreviewFrame { self.previewLayer?.frame = f }
+            if let savedFrame = savedPreviewFrame { self.previewLayer?.frame = savedFrame }
             CATransaction.commit()
             DispatchQueue.main.async { [weak self] in
                 self?.setDefaultZoomAfterFlip()   // normalize zoom (UI 1.0x)
@@ -848,9 +848,9 @@ extension CameraController {
                 (self.requestedAspectRatio == "16:9")
                 ? [.hd4K3840x2160, .hd1920x1080, .hd1280x720, .high, .photo, .vga640x480]
                 : [.photo, .high, .hd1920x1080, .hd1280x720, .vga640x480]
-            for p in fallbacks {
-                if targetDevice.supportsSessionPreset(p), captureSession.canSetSessionPreset(p) {
-                    captureSession.sessionPreset = p
+            for preset in fallbacks {
+                if targetDevice.supportsSessionPreset(preset), captureSession.canSetSessionPreset(preset) {
+                    captureSession.sessionPreset = preset
                     break
                 }
             }
@@ -1058,13 +1058,13 @@ extension CameraController {
                 ctx.cgContext.restoreGState()
 
                 // high-quality text
-                let g = ctx.cgContext
-                g.setAllowsAntialiasing(true)
-                g.setShouldAntialias(true)
-                g.setAllowsFontSmoothing(true)
-                g.setShouldSmoothFonts(true)
-                g.setShouldSubpixelPositionFonts(true)
-                g.interpolationQuality = .high
+                let graphics = ctx.cgContext
+                graphics.setAllowsAntialiasing(true)
+                graphics.setShouldAntialias(true)
+                graphics.setAllowsFontSmoothing(true)
+                graphics.setShouldSmoothFonts(true)
+                graphics.setShouldSubpixelPositionFonts(true)
+                graphics.interpolationQuality = .high
 
                 (text as NSString).draw(at: CGPoint(x: rect.minX + paddingH, y: rect.minY + paddingV),
                                         withAttributes: attrs)
@@ -1073,11 +1073,11 @@ extension CameraController {
             }
 
             var top = margin
-            if let w = when, !w.isEmpty {
-                top = drawPill(w, top: top) + gap
+            if let whenText = when, !whenText.isEmpty {
+                top = drawPill(whenText, top: top) + gap
             }
-            if let loc = whereStr, !loc.isEmpty {
-                _ = drawPill(loc, top: (top == margin ? margin : top))
+            if let locationText = whereStr, !locationText.isEmpty {
+                _ = drawPill(locationText, top: (top == margin ? margin : top))
             }
         }
     }
@@ -1085,11 +1085,11 @@ extension CameraController {
     func makeTimestampString(from photoData: Data?, metadata: [AnyHashable: Any]?) -> String {
         func extractDateString(from meta: [String: Any]) -> String? {
             if let exif = meta[kCGImagePropertyExifDictionary as String] as? [String: Any] {
-                if let s = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String { return s }
-                if let s = exif[kCGImagePropertyExifDateTimeDigitized as String] as? String { return s }
+                if let dateTimeOriginal = exif[kCGImagePropertyExifDateTimeOriginal as String] as? String { return dateTimeOriginal }
+                if let dateTimeDigitized = exif[kCGImagePropertyExifDateTimeDigitized as String] as? String { return dateTimeDigitized }
             }
             if let tiff = meta[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
-                if let s = tiff[kCGImagePropertyTIFFDateTime as String] as? String { return s }
+                if let dateTime = tiff[kCGImagePropertyTIFFDateTime as String] as? String { return dateTime }
             }
             return nil
         }
@@ -1110,12 +1110,12 @@ extension CameraController {
         outFmt.dateFormat = "yyyy-MM-dd HH:mm:ss"
 
         if let raw = raw {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: "en_US_POSIX")
-            df.timeZone = .current
-            df.dateFormat = raw.contains(".") ? "yyyy:MM:dd HH:mm:ss.SSS" : "yyyy:MM:dd HH:mm:ss"
-            if let d = df.date(from: raw) {
-                return outFmt.string(from: d)
+            let dateFormatter = DateFormatter()
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            dateFormatter.timeZone = .current
+            dateFormatter.dateFormat = raw.contains(".") ? "yyyy:MM:dd HH:mm:ss.SSS" : "yyyy:MM:dd HH:mm:ss"
+            if let date = dateFormatter.date(from: raw) {
+                return outFmt.string(from: date)
             }
         }
 
@@ -1146,7 +1146,7 @@ extension CameraController {
             return nil
         }
 
-        if let md = metadata as? [String: Any], let (lat, lon) = extractGPS(md) {
+        if let metaDict = metadata as? [String: Any], let (lat, lon) = extractGPS(metaDict) {
             return String(format: "%.5f, %.5f", lat, lon)
         }
 
@@ -1180,7 +1180,7 @@ extension CameraController {
            let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [String: Any] {
             var merged = props
             if let explicit = originalMetadata as? [String: Any] {
-                for (k, v) in explicit { merged[k] = v }
+                for (key, value) in explicit { merged[key] = value }
             }
             baseMetadata = merged
         } else if let explicit = originalMetadata as? [String: Any] {

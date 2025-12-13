@@ -536,6 +536,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
   async stop(_options?: { force?: boolean }): Promise<void> {
     // Force option doesn't change behavior on web - we always stop immediately
+    void _options; // Mark as intentionally unused
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (video) {
       video.pause();
@@ -1219,6 +1220,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   }
 
   async setExposureMode(_options: { mode: ExposureMode }): Promise<void> {
+    void _options; // Mark as intentionally unused
     throw new Error('setExposureMode not supported under the web platform');
   }
 
@@ -1235,6 +1237,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   }
 
   async setExposureCompensation(_options: { value: number }): Promise<void> {
+    void _options; // Mark as intentionally unused
     throw new Error('setExposureCompensation not supported under the web platform');
   }
 
