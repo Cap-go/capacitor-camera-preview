@@ -1636,7 +1636,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // First, convert from UI/display zoom to native zoom using the iOS 18 multiplier
         let displayMultiplier = self.cameraController.getDisplayZoomMultiplier()
         if displayMultiplier != 1.0 {
-            level = level / displayMultiplier
+            level /= displayMultiplier
         }
 
         let ramp = call.getBool("ramp") ?? true
@@ -2017,11 +2017,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             if currentRatio > ratio {
                 let newWidth = frame.height * ratio
-                frame.origin.x = frame.origin.x + (frame.width - newWidth) / 2
+                frame.origin.x += (frame.width - newWidth) / 2
                 frame.size.width = newWidth
             } else {
                 let newHeight = frame.width / ratio
-                frame.origin.y = frame.origin.y + (frame.height - newHeight) / 2
+                frame.origin.y += (frame.height - newHeight) / 2
                 frame.size.height = newHeight
             }
         }
@@ -2074,14 +2074,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         // Always set to -1 for auto-centering if not explicitly provided
-        if let x = call.getInt("x") {
-            self.posX = CGFloat(x)
+        if let xValue = call.getInt("x") {
+            self.posX = CGFloat(xValue)
         } else {
             self.posX = -1 // Auto-center if X not provided
         }
 
-        if let y = call.getInt("y") {
-            self.posY = CGFloat(y)
+        if let yValue = call.getInt("y") {
+            self.posY = CGFloat(yValue)
         } else {
             self.posY = -1 // Auto-center if Y not provided
         }
@@ -2110,13 +2110,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
 
-        guard let x = call.getFloat("x"), let y = call.getFloat("y") else {
+        guard let xCoord = call.getFloat("x"), let yCoord = call.getFloat("y") else {
             call.reject("x and y parameters are required")
             return
         }
 
         // Reject if values are outside 0-1 range
-        if x < 0 || x > 1 || y < 0 || y > 1 {
+        if xCoord < 0 || xCoord > 1 || yCoord < 0 || yCoord > 1 {
             call.reject("Focus coordinates must be between 0 and 1")
             return
         }
@@ -2124,8 +2124,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         DispatchQueue.main.async {
             do {
                 // Convert normalized coordinates to view coordinates
-                let viewX = CGFloat(x) * self.previewView.bounds.width
-                let viewY = CGFloat(y) * self.previewView.bounds.height
+                let viewX = CGFloat(xCoord) * self.previewView.bounds.width
+                let viewY = CGFloat(yCoord) * self.previewView.bounds.height
                 let focusPoint = CGPoint(x: viewX, y: viewY)
 
                 // Convert view coordinates to device coordinates
@@ -2235,13 +2235,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             // Snap to valid range and step
             var range = try self.cameraController.getExposureCompensationRange()
             if range.step <= 0 { range.step = 0.1 }
-            let lo = min(range.min, range.max)
-            let hi = max(range.min, range.max)
-            // Clamp to [lo, hi]
-            value = max(lo, min(hi, value))
+            let minValue = min(range.min, range.max)
+            let maxValue = max(range.min, range.max)
+            // Clamp to [minValue, maxValue]
+            value = max(minValue, min(maxValue, value))
             // Snap to nearest step
-            let steps = round((value - lo) / range.step)
-            let snapped = lo + steps * range.step
+            let steps = round((value - minValue) / range.step)
+            let snapped = minValue + steps * range.step
 
             try self.cameraController.setExposureCompensation(snapped)
             call.resolve()
