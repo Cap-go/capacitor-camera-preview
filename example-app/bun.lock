@@ -16,7 +16,7 @@
         "@capacitor/android": "^7.4.0",
         "@capacitor/app": "7.1.1",
         "@capacitor/core": "7.4.4",
-        "@capacitor/haptics": "7.0.2",
+        "@capacitor/haptics": "7.0.3",
         "@capacitor/ios": "^7.4.0",
         "@capacitor/keyboard": "7.0.3",
         "@capacitor/status-bar": "^7.0.1",
@@ -307,7 +307,7 @@
 
     "@capacitor/docgen": ["@capacitor/docgen@0.3.0", "", { "dependencies": { "@types/node": "^14.18.0", "colorette": "^2.0.20", "github-slugger": "^1.5.0", "minimist": "^1.2.8", "typescript": "~4.2.4" }, "bin": { "docgen": "bin/docgen" } }, "sha512-WPggobo5Ql70F+2xOIUwNSApJXaL9F/9+Al6B+sNuSAmcg484OAksyUPKgiynF4BVlxeY5a0sDkgdVkmmA3ElQ=="],
 
-    "@capacitor/haptics": ["@capacitor/haptics@7.0.2", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-vqfeEM6s2zMgLjpITCTUIy7P/hadq/Gr5E/RClFgMJPB41Y5FsqOKD+j85/uwh8N2cf/aWaPeXUmjnTzJbEB2g=="],
+    "@capacitor/haptics": ["@capacitor/haptics@7.0.3", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-6O5W4jtYKPGrulqt3pEeXKH1vWT5deSUoiiN2sVj7F6UgrEOxCmm06XS07Eeum0lDXEmksKARwtA+iQwHPswtA=="],
 
     "@capacitor/ios": ["@capacitor/ios@7.4.4", "", { "peerDependencies": { "@capacitor/core": "^7.4.0" } }, "sha512-Xp3bGWlSQAwsZGngRMWTdoD2agdMV12Whnm+/xsYPxfQSj+Tksbr7r/8Mso7VWkpnTKO4iMlx762g3PjW+wi4w=="],
 
