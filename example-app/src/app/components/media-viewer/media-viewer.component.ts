@@ -1,4 +1,4 @@
-import { Component, inject, input, ElementRef } from '@angular/core';
+import { Component, inject, input, ElementRef, AfterViewInit, OnDestroy } from '@angular/core';
 import { JsonPipe } from '@angular/common';
 import { IonContent, IonHeader, IonToolbar, IonButtons, IonButton, IonIcon, GestureController } from '@ionic/angular/standalone';
 import { ModalController } from '@ionic/angular/standalone';
@@ -20,7 +20,7 @@ import { Gesture } from '@ionic/core';
   ],
   standalone: true,
 })
-export class MediaViewerComponent {
+export class MediaViewerComponent implements AfterViewInit, OnDestroy {
   public readonly item = input.required<MediaItem>();
   protected readonly modalCtrl = inject(ModalController);
   protected readonly gestureCtrl = inject(GestureController);

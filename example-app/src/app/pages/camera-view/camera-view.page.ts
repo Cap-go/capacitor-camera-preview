@@ -39,10 +39,13 @@ import {
   ExifData,
   FlashMode,
   PictureFormat,
+  FaceDetectionResult,
+  DetectedFace,
 } from '@capgo/camera-preview';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-preview.service';
 import { GalleryService } from '../../services/gallery.service';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-camera-view',
@@ -50,6 +53,7 @@ import { GalleryService } from '../../services/gallery.service';
   standalone: true,
   imports: [
     FormsModule,
+    RouterLink,
     IonButton,
     IonItemDivider,
     IonCard,
@@ -125,6 +129,15 @@ export class CameraViewPage implements OnInit {
   protected showBoundary = model<boolean>(true);
 
   protected toBack = model<boolean>(false);
+
+  // Face detection settings
+  protected faceDetectionEnabled = model<boolean>(false);
+  protected faceDetectionPerformance = model<'fast' | 'accurate'>('fast');
+  protected detectLandmarks = model<boolean>(true);
+  protected trackFaces = model<boolean>(true);
+  protected maxFaces = model<number>(3);
+  protected detectedFaces = signal<DetectedFace[]>([]);
+  protected faceDetectionRunning = signal<boolean>(false);
 
   ngOnInit() {
     setTimeout(() => {
@@ -641,5 +654,104 @@ export class CameraViewPage implements OnInit {
 
   async getZoom() {
     console.log(await this.#cameraViewService.getZoom());
+  }
+
+  // Face Detection Methods
+  protected async toggleFaceDetection(): Promise<void> {
+    if (this.faceDetectionRunning()) {
+      await this.stopFaceDetection();
+    } else {
+      await this.startFaceDetection();
+    }
+  }
+
+  protected async startFaceDetection(): Promise<void> {
+    try {
+      // Add listener for face detection events
+      await this.#cameraViewService.addFaceDetectionListener((result) => {
+        this.detectedFaces.set(result.faces);
+        this.updateFaceDetectionResults(result);
+      });
+
+      // Start face detection with options
+      await this.#cameraViewService.startFaceDetection({
+        performanceMode: this.faceDetectionPerformance(),
+        trackingEnabled: this.trackFaces(),
+        detectLandmarks: this.detectLandmarks(),
+        detectClassifications: true,
+        maxFaces: this.maxFaces(),
+        minFaceSize: 0.15,
+      });
+
+      this.faceDetectionRunning.set(true);
+      const results = this.testResults() + '\n✓ Face detection started';
+      this.testResults.set(results);
+    } catch (error) {
+      const results = this.testResults() + `\n✗ Face detection failed: ${error}`;
+      this.testResults.set(results);
+    }
+  }
+
+  protected async stopFaceDetection(): Promise<void> {
+    try {
+      await this.#cameraViewService.stopFaceDetection();
+      await this.#cameraViewService.removeFaceDetectionListener();
+      this.faceDetectionRunning.set(false);
+      this.detectedFaces.set([]);
+      const results = this.testResults() + '\n✓ Face detection stopped';
+      this.testResults.set(results);
+    } catch (error) {
+      const results = this.testResults() + `\n✗ Stop face detection failed: ${error}`;
+      this.testResults.set(results);
+    }
+  }
+
+  protected async testFaceDetection(): Promise<void> {
+    let results = '=== Face Detection Test ===\n';
+    results += '\nThis test verifies real-time face detection capabilities\n';
+
+    try {
+      const isRunning = await this.#cameraViewService.isFaceDetectionRunning();
+      results += `\n✓ Face detection running: ${isRunning}`;
+      
+      if (!isRunning) {
+        results += '\n\nTo test face detection:';
+        results += '\n1. Enable "Face Detection" toggle';
+        results += '\n2. Point camera at faces';
+        results += '\n3. Check detected faces count below';
+        results += '\n4. View face positions and landmarks in real-time';
+      } else {
+        results += `\n✓ Detected faces: ${this.detectedFaces().length}`;
+        this.detectedFaces().forEach((face, index) => {
+          results += `\n\n  Face #${index + 1}:`;
+          if (face.trackingId) {
+            results += `\n    Tracking ID: ${face.trackingId}`;
+          }
+          results += `\n    Position: (${(face.bounds.x * 100).toFixed(1)}%, ${(face.bounds.y * 100).toFixed(1)}%)`;
+          results += `\n    Size: ${(face.bounds.width * 100).toFixed(1)}% × ${(face.bounds.height * 100).toFixed(1)}%`;
+          if (face.rollAngle !== undefined) {
+            results += `\n    Roll: ${face.rollAngle.toFixed(1)}°`;
+          }
+          if (face.yawAngle !== undefined) {
+            results += `\n    Yaw: ${face.yawAngle.toFixed(1)}°`;
+          }
+          if (face.smilingProbability !== undefined) {
+            results += `\n    Smiling: ${(face.smilingProbability * 100).toFixed(0)}%`;
+          }
+        });
+      }
+
+      this.testResults.set(results);
+    } catch (error) {
+      results += `\n✗ Test failed: ${error}`;
+      this.testResults.set(results);
+    }
+  }
+
+  private updateFaceDetectionResults(result: FaceDetectionResult): void {
+    // Update display with face detection info (optional logging)
+    if (result.faces.length > 0) {
+      console.log(`Detected ${result.faces.length} face(s)`, result.faces);
+    }
   }
 }

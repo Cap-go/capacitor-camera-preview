@@ -68,6 +68,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     @Override
     protected void handleOnPause() {
         super.handleOnPause();
+
+        // Pause face detection when app goes to background
+        if (faceDetectionManager != null) {
+            faceDetectionManager.onAppBackground();
+        }
+
         if (cameraXView != null && cameraXView.isRunning()) {
             // Store the current configuration before stopping
             lastSessionConfig = cameraXView.getSessionConfig();
@@ -78,6 +84,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
+
+        // Resume face detection when app comes to foreground
+        if (faceDetectionManager != null) {
+            faceDetectionManager.onAppForeground();
+        }
+
         if (lastSessionConfig != null) {
             // Recreate camera with last known configuration
             if (cameraXView == null) {
@@ -1975,5 +1987,99 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);
         }
+    }
+
+    // ========================================
+    // Face Detection Methods
+    // ========================================
+
+    private FaceDetectionManager faceDetectionManager;
+
+    @PluginMethod
+    public void startFaceDetection(final PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running. Start the camera preview first.");
+            return;
+        }
+
+        try {
+            // Get options from call
+            JSObject options = new JSObject();
+            if (call.getString("performanceMode") != null) {
+                options.put("performanceMode", call.getString("performanceMode"));
+            }
+            if (call.getBoolean("trackingEnabled") != null) {
+                options.put("trackingEnabled", call.getBoolean("trackingEnabled"));
+            }
+            if (call.getBoolean("detectLandmarks") != null) {
+                options.put("detectLandmarks", call.getBoolean("detectLandmarks"));
+            }
+            if (call.getBoolean("detectClassifications") != null) {
+                options.put("detectClassifications", call.getBoolean("detectClassifications"));
+            }
+            if (call.getInt("maxFaces") != null) {
+                options.put("maxFaces", call.getInt("maxFaces"));
+            }
+            if (call.getDouble("minFaceSize") != null) {
+                options.put("minFaceSize", call.getDouble("minFaceSize"));
+            }
+
+            // Create face detection manager if needed
+            if (faceDetectionManager == null) {
+                faceDetectionManager = new FaceDetectionManager();
+            }
+
+            // Start detection
+            faceDetectionManager.startDetection(
+                options,
+                new FaceDetectionManager.FaceDetectionListener() {
+                    @Override
+                    public void onFaceDetectionResult(org.json.JSONObject result) {
+                        // Convert org.json.JSONObject to JSObject
+                        try {
+                            JSObject jsResult = JSObject.fromJSONObject(result);
+                            notifyListeners("faceDetection", jsResult);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Failed to convert face detection result", e);
+                        }
+                    }
+
+                    @Override
+                    public void onFaceDetectionError(String error) {
+                        Log.e(TAG, "Face detection error: " + error);
+                    }
+                }
+            );
+
+            // Enable face detection in camera view
+            cameraXView.enableFaceDetection(faceDetectionManager);
+
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to start face detection: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void stopFaceDetection(final PluginCall call) {
+        try {
+            if (faceDetectionManager != null) {
+                faceDetectionManager.stopDetection();
+            }
+            if (cameraXView != null) {
+                cameraXView.disableFaceDetection();
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to stop face detection: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void isFaceDetectionRunning(final PluginCall call) {
+        boolean isDetecting = faceDetectionManager != null && faceDetectionManager.isRunning();
+        JSObject ret = new JSObject();
+        ret.put("isDetecting", isDetecting);
+        call.resolve(ret);
     }
 }

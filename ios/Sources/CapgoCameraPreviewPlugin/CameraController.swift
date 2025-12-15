@@ -110,6 +110,9 @@ class CameraController: NSObject {
     // Track whether an aspect ratio was explicitly requested
     var requestedAspectRatio: String?
 
+    // Face Detection
+    var faceDetectionManager: FaceDetectionManager?
+
     func calculateAspectRatioFrame(for aspectRatio: String, in bounds: CGRect) -> CGRect {
         guard let ratio = parseAspectRatio(aspectRatio) else {
             return bounds
@@ -436,19 +439,26 @@ extension CameraController {
     private func configureSessionPreset(for aspectRatio: String?) {
         guard let captureSession = self.captureSession else { return }
 
-        var targetPreset: AVCaptureSession.Preset = .photo
+        // For face detection, prioritize 720p for optimal performance
+        // Higher resolutions (1080p, 4K) slow down Vision framework without improving accuracy
+        var targetPreset: AVCaptureSession.Preset = .hd1280x720
+        
         if let aspectRatio = aspectRatio {
             switch aspectRatio {
             case "16:9":
-                // Start with 1080p for faster initialization, 4K only when explicitly needed
-                // This maintains capture quality while optimizing preview performance
-                if captureSession.canSetSessionPreset(.hd1920x1080) {
+                // Use 720p for face detection - best balance of quality and performance
+                if captureSession.canSetSessionPreset(.hd1280x720) {
+                    targetPreset = .hd1280x720
+                } else if captureSession.canSetSessionPreset(.hd1920x1080) {
                     targetPreset = .hd1920x1080
-                } else if captureSession.canSetSessionPreset(.hd4K3840x2160) {
-                    targetPreset = .hd4K3840x2160
+                } else if captureSession.canSetSessionPreset(.high) {
+                    targetPreset = .high
                 }
             case "4:3":
-                if captureSession.canSetSessionPreset(.photo) {
+                // For 4:3, use medium preset which is typically 480p-720p range
+                if captureSession.canSetSessionPreset(.medium) {
+                    targetPreset = .medium
+                } else if captureSession.canSetSessionPreset(.photo) {
                     targetPreset = .photo
                 } else if captureSession.canSetSessionPreset(.high) {
                     targetPreset = .high
@@ -456,8 +466,8 @@ extension CameraController {
                     targetPreset = captureSession.sessionPreset
                 }
             default:
-                if captureSession.canSetSessionPreset(.photo) {
-                    targetPreset = .photo
+                if captureSession.canSetSessionPreset(.hd1280x720) {
+                    targetPreset = .hd1280x720
                 } else if captureSession.canSetSessionPreset(.high) {
                     targetPreset = .high
                 } else {
@@ -469,6 +479,9 @@ extension CameraController {
         if captureSession.canSetSessionPreset(targetPreset) {
             captureSession.sessionPreset = targetPreset
         }
+        
+        // Configure frame rate for face detection (20-25 FPS)
+        configureFrameRateForFaceDetection()
     }
 
     /// Update the requested aspect ratio at runtime and reconfigure session/preview accordingly
@@ -503,28 +516,80 @@ extension CameraController {
         }
 
         // Update preview layer geometry on the main thread
-        DispatchQueue.main.async { [weak self] in
+        DispatchQueue.main.async { [weak self, aspectRatio] in
             guard let self = self, let previewLayer = self.previewLayer else { return }
-            if let superlayer = previewLayer.superlayer {
-                let bounds = superlayer.bounds
-                if let aspect = aspectRatio {
-                    let frame = self.calculateAspectRatioFrame(for: aspect, in: bounds)
+            
+            // Reconfigure preview layer frame based on aspect ratio
+            if let view = previewLayer.superlayer as? UIView {
+                if let aspectRatio = aspectRatio {
+                    let frame = self.calculateAspectRatioFrame(for: aspectRatio, in: view.bounds)
                     previewLayer.frame = frame
                     previewLayer.videoGravity = .resizeAspectFill
                 } else {
-                    previewLayer.frame = bounds
+                    previewLayer.frame = view.bounds
                     previewLayer.videoGravity = .resizeAspect
                 }
-
-                // Keep grid overlay in sync with preview
+                
+                // Keep grid overlay in sync
                 self.gridOverlayView?.frame = previewLayer.frame
             }
         }
     }
+    
+    /// Configure frame rate for optimal face detection performance (20-25 FPS)
+    private func configureFrameRateForFaceDetection() {
+        guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else { return }
+        
+        do {
+            try device.lockForConfiguration()
+            
+            // Find format that supports our target frame rate
+            var targetFormat: AVCaptureDevice.Format?
+            var targetFrameRateRange: AVFrameRateRange?
+            
+            for format in device.formats {
+                let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+                let width = dimensions.width
+                let height = dimensions.height
+                
+                // Look for 720p or similar resolution
+                if width >= 1280 && width <= 1920 && height >= 720 && height <= 1080 {
+                    for range in format.videoSupportedFrameRateRanges {
+                        // Find range that includes 20-25 FPS
+                        if range.minFrameRate <= 25 && range.maxFrameRate >= 20 {
+                            targetFormat = format
+                            targetFrameRateRange = range
+                            break
+                        }
+                    }
+                    if targetFormat != nil {
+                        break
+                    }
+                }
+            }
+            
+            // Apply the optimized format and frame rate
+            if let format = targetFormat {
+                device.activeFormat = format
+                
+                if let range = targetFrameRateRange {
+                    // Set to 25 FPS (balanced performance)
+                    let targetFPS = min(25.0, range.maxFrameRate)
+                    let frameDuration = CMTimeMake(value: 1, timescale: Int32(targetFPS))
+                    device.activeVideoMinFrameDuration = frameDuration
+                    device.activeVideoMaxFrameDuration = frameDuration
+                    print("[CameraController] Configured frame rate: \\(targetFPS) FPS")
+                }
+            }
+            
+            device.unlockForConfiguration()
+        } catch {
+            print("[CameraController] Failed to configure frame rate: \\(error)")
+        }
+    }
 
     private func setInitialZoom(level: Float?) {
-        let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera
-        guard let device = device else {
+        guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else {
             print("[CameraPreview] No device available for initial zoom")
             return
         }
@@ -2345,8 +2410,17 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
             firstFrameReadyCallback = nil
             // If no capture is in progress, we can return early
             if sampleBufferCaptureCompletionBlock == nil {
+                // Process face detection even if no capture is happening
+                if let faceDetectionManager = faceDetectionManager, faceDetectionManager.isRunning() {
+                    faceDetectionManager.processSampleBuffer(sampleBuffer)
+                }
                 return
             }
+        }
+
+        // Process face detection if active
+        if let faceDetectionManager = faceDetectionManager, faceDetectionManager.isRunning() {
+            faceDetectionManager.processSampleBuffer(sampleBuffer)
         }
 
         guard let completion = sampleBufferCaptureCompletionBlock else { return }

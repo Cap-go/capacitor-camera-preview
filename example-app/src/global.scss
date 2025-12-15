@@ -26,13 +26,41 @@
 @import "@ionic/angular/css/flex-utils.css";
 
 body.camera-running {
-  visibility: hidden;
   --background: transparent;
   --ion-background-color: transparent;
 }
 
 .camera-modal {
   visibility: visible;
+}
+
+// Force proper layering for face detection demo page
+body.face-detection-active {
+  background: transparent !important;
+  
+  ion-app {
+    background: transparent !important;
+  }
+  
+  // Ensure scroll container doesn't block camera
+  ion-content::part(scroll) {
+    background: transparent !important;
+  }
+  
+  ion-content::part(background) {
+    background: transparent !important;
+  }
+}
+
+app-face-detection-demo {
+  position: relative;
+  display: block;
+  height: 100%;
+  
+  // Make the page transparent so camera shows through
+  ion-content {
+    --background: transparent;
+  }
 }
 
 ion-modal {

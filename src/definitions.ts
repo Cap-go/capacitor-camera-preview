@@ -373,6 +373,320 @@ export interface SafeAreaInsets {
  */
 export type DeviceOrientation = 'portrait' | 'landscape-left' | 'landscape-right' | 'portrait-upside-down' | 'unknown';
 
+// ========================================
+// Face Detection Types & Interfaces
+// ========================================
+
+/**
+ * Options for configuring face detection behavior.
+ * @since 7.27.0
+ */
+export interface FaceDetectionOptions {
+  /**
+   * Performance mode for face detection.
+   * - 'fast': Faster detection with slightly lower accuracy (recommended for real-time filters)
+   * - 'accurate': Slower detection with higher accuracy
+   * @default 'fast'
+   * @platform android, ios
+   */
+  performanceMode?: 'fast' | 'accurate';
+
+  /**
+   * Enable face tracking across frames.
+   * When enabled, each face gets a unique tracking ID that persists across frames.
+   * @default true
+   * @platform android, ios
+   */
+  trackingEnabled?: boolean;
+
+  /**
+   * Detect facial landmarks (eyes, nose, mouth, etc.).
+   * @default true
+   * @platform android, ios
+   */
+  detectLandmarks?: boolean;
+
+  /**
+   * Maximum number of faces to detect.
+   * Lower values improve performance.
+   * @default 3
+   * @platform android, ios
+   */
+  maxFaces?: number;
+
+  /**
+   * Minimum face size as a ratio of the frame width (0.0 - 1.0).
+   * Smaller faces than this will not be detected.
+   * @default 0.15
+   * @platform android, ios
+   */
+  minFaceSize?: number;
+}
+
+/**
+ * Result from face detection containing all detected faces.
+ * @since 7.27.0
+ */
+export interface FaceDetectionResult {
+  /**
+   * Array of detected faces. Empty if no faces detected.
+   */
+  faces: DetectedFace[];
+
+  /**
+   * Width of the frame in pixels.
+   */
+  frameWidth: number;
+
+  /**
+   * Height of the frame in pixels.
+   */
+  frameHeight: number;
+
+  /**
+   * Timestamp when the frame was processed (milliseconds since epoch).
+   */
+  timestamp: number;
+}
+
+/**
+ * Represents a single detected face with all its properties.
+ * @since 7.27.0
+ */
+export interface DetectedFace {
+  /**
+   * Unique tracking ID for this face (persists across frames when tracking is enabled).
+   * Use this to associate face data across multiple frames for smooth filter animations.
+   * @platform android, ios
+   */
+  trackingId?: number;
+
+  /**
+   * Face bounding box with normalized coordinates (0.0 - 1.0).
+   * Coordinates are relative to the camera preview dimensions.
+   */
+  bounds: FaceBounds;
+
+  /**
+   * Face rotation angle around the Z-axis (head tilt left/right) in degrees.
+   * - Negative values: head tilted left
+   * - Positive values: head tilted right
+   * - Range: -180 to +180
+   * @platform android, ios
+   */
+  rollAngle?: number;
+
+  /**
+   * Face rotation angle around the Y-axis (head turn left/right) in degrees.
+   * - Negative values: head turned left
+   * - Positive values: head turned right
+   * - Range: -180 to +180
+   * @platform android, ios
+   */
+  yawAngle?: number;
+
+  /**
+   * Face rotation angle around the X-axis (head nod up/down) in degrees.
+   * - Negative values: head looking down
+   * - Positive values: head looking up
+   * - Range: -180 to +180
+   * @platform android (iOS returns this in landmarks data)
+   */
+  pitchAngle?: number;
+
+  /**
+   * Facial landmarks with normalized coordinates.
+   * Only available if detectLandmarks is enabled.
+   * @platform android, ios
+   */
+  landmarks?: FaceLandmarks;
+}
+
+/**
+ * Face bounding box with normalized coordinates (0.0 - 1.0).
+ * All coordinates are relative to the camera preview dimensions.
+ * @since 7.27.0
+ */
+export interface FaceBounds {
+  /**
+   * X coordinate of the top-left corner (normalized 0.0 - 1.0).
+   */
+  x: number;
+
+  /**
+   * Y coordinate of the top-left corner (normalized 0.0 - 1.0).
+   */
+  y: number;
+
+  /**
+   * Width of the bounding box (normalized 0.0 - 1.0).
+   */
+  width: number;
+
+  /**
+   * Height of the bounding box (normalized 0.0 - 1.0).
+   */
+  height: number;
+}
+
+/**
+ * Facial landmark points with normalized coordinates (0.0 - 1.0).
+ * All points are relative to the camera preview dimensions.
+ * @since 7.27.0
+ */
+export interface FaceLandmarks {
+  /**
+   * Left eye center position.
+   */
+  leftEye?: Point;
+
+  /**
+   * Right eye center position.
+   */
+  rightEye?: Point;
+
+  /**
+   * Nose base (bottom) position.
+   */
+  noseBase?: Point;
+
+  /**
+   * Left mouth corner position.
+   */
+  mouthLeft?: Point;
+
+  /**
+   * Right mouth corner position.
+   */
+  mouthRight?: Point;
+
+  /**
+   * Bottom center of the mouth.
+   */
+  mouthBottom?: Point;
+
+  /**
+   * Left ear position (may not always be detected).
+   * @platform android
+   */
+  leftEar?: Point;
+
+  /**
+   * Right ear position (may not always be detected).
+   * @platform android
+   */
+  rightEar?: Point;
+
+  /**
+   * Left cheek position.
+   * @platform android
+   */
+  leftCheek?: Point;
+
+  /**
+   * Right cheek position.
+   * @platform android
+   */
+  rightCheek?: Point;
+}
+
+/**
+ * A 2D point with normalized coordinates (0.0 - 1.0).
+ * @since 7.27.0
+ */
+export interface Point {
+  /**
+   * X coordinate (normalized 0.0 - 1.0, left to right).
+   */
+  x: number;
+
+  /**
+   * Y coordinate (normalized 0.0 - 1.0, top to bottom).
+   */
+  y: number;
+}
+
+/**
+ * Face alignment validation result with user guidance feedback.
+ * @since 7.27.0
+ */
+export interface FaceAlignmentFeedback {
+  /**
+   * Whether the face is properly aligned for capture.
+   */
+  isAligned: boolean;
+
+  /**
+   * Whether head roll (tilt) is within acceptable range.
+   */
+  isRollValid: boolean;
+
+  /**
+   * Whether head pitch (nod) is within acceptable range.
+   */
+  isPitchValid: boolean;
+
+  /**
+   * Whether head yaw (turn) is within acceptable range.
+   */
+  isYawValid: boolean;
+
+  /**
+   * Whether face size is appropriate (not too close or far).
+   */
+  isSizeValid: boolean;
+
+  /**
+   * Whether face is centered in frame.
+   */
+  isCenteringValid: boolean;
+
+  /**
+   * Primary feedback message for user guidance.
+   */
+  primaryFeedback: string;
+
+  /**
+   * All feedback messages (may include multiple issues).
+   */
+  allFeedback: string[];
+}
+
+/**
+ * Lighting quality assessment result.
+ * @since 7.27.0
+ */
+export interface LightingQualityFeedback {
+  /**
+   * Whether lighting is sufficient for good capture.
+   */
+  isGoodLighting: boolean;
+
+  /**
+   * Average brightness level (0.0 - 1.0).
+   */
+  brightnessLevel: number;
+
+  /**
+   * Whether image is too dark.
+   */
+  isTooDark: boolean;
+
+  /**
+   * Whether image is too bright (overexposed).
+   */
+  isTooBright: boolean;
+
+  /**
+   * Feedback message for user guidance.
+   */
+  feedback: string;
+}
+
+// ========================================
+// Main Plugin Interface
+// ========================================
+
 /**
  * The main interface for the CameraPreview plugin.
  */
@@ -719,6 +1033,36 @@ export interface CameraPreviewPlugin {
     eventName: 'orientationChange',
     listenerFunc: (data: { orientation: DeviceOrientation }) => void,
   ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for face detection events.
+   * This event is emitted continuously while face detection is active.
+   *
+   * @param {string} eventName - Must be 'faceDetection'
+   * @param {Function} listenerFunc - Callback function that receives face detection results
+   * @returns {Promise<PluginListenerHandle>} A promise that resolves with a handle to remove the listener
+   * @since 7.27.0
+   * @platform android, ios
+   *
+   * @example
+   * ```typescript
+   * const listener = await CameraPreview.addListener('faceDetection', (result) => {
+   *   if (result.faces.length > 0) {
+   *     const face = result.faces[0];
+   *     // Position your filter overlay using face.bounds
+   *     updateFilterPosition(face);
+   *   }
+   * });
+   *
+   * // Later, remove the listener
+   * await listener.remove();
+   * ```
+   */
+  addListener(
+    eventName: 'faceDetection',
+    listenerFunc: (result: FaceDetectionResult) => void,
+  ): Promise<PluginListenerHandle>;
+
   /**
    * Deletes a file at the given absolute path on the device.
    * Use this to quickly clean up temporary images created with `storeToFile`.
@@ -797,4 +1141,64 @@ export interface CameraPreviewPlugin {
    * @throws An error if the something went wrong
    */
   getPluginVersion(): Promise<{ version: string }>;
+
+  // ========================================
+  // Face Detection Methods
+  // ========================================
+
+  /**
+   * Starts real-time face detection on the camera preview.
+   * Face detection results will be emitted through the 'faceDetection' event listener.
+   *
+   * @param {FaceDetectionOptions} options - Configuration options for face detection
+   * @returns {Promise<void>} A promise that resolves when face detection has started
+   * @throws An error if the camera is not running or face detection failed to start
+   * @since 7.27.0
+   * @platform android, ios
+   *
+   * @example
+   * ```typescript
+   * // Start face detection with default settings
+   * await CameraPreview.startFaceDetection({
+   *   performanceMode: 'fast',
+   *   trackingEnabled: true,
+   *   detectLandmarks: true,
+   *   maxFaces: 3
+   * });
+   *
+   * // Listen for face detection results
+   * CameraPreview.addListener('faceDetection', (result) => {
+   *   console.log(`Detected ${result.faces.length} faces`);
+   *   result.faces.forEach(face => {
+   *     console.log('Face bounds:', face.bounds);
+   *     console.log('Landmarks:', face.landmarks);
+   *   });
+   * });
+   * ```
+   */
+  startFaceDetection(options?: FaceDetectionOptions): Promise<void>;
+
+  /**
+   * Stops real-time face detection.
+   * After calling this, no more 'faceDetection' events will be emitted.
+   *
+   * @returns {Promise<void>} A promise that resolves when face detection has stopped
+   * @since 7.27.0
+   * @platform android, ios
+   *
+   * @example
+   * ```typescript
+   * await CameraPreview.stopFaceDetection();
+   * ```
+   */
+  stopFaceDetection(): Promise<void>;
+
+  /**
+   * Checks if face detection is currently running.
+   *
+   * @returns {Promise<{ isDetecting: boolean }>} A promise that resolves with the face detection state
+   * @since 7.27.0
+   * @platform android, ios
+   */
+  isFaceDetectionRunning(): Promise<{ isDetecting: boolean }>;
 }

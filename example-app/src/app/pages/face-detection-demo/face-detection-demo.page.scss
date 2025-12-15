@@ -1,0 +1,291 @@
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+ion-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  --background: transparent;
+  // Enable GPU acceleration for header
+  will-change: transform;
+  transform: translateZ(0);
+  
+  ion-toolbar {
+    --background: rgba(0, 0, 0, 0.4);
+    --color: white;
+    backdrop-filter: blur(10px);
+  }
+  
+  ion-badge {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    
+    ion-icon {
+      font-size: 14px;
+    }
+  }
+}
+
+ion-content {
+  --background: transparent;
+  background: transparent;
+}
+
+.camera-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background: #000;
+}
+
+.face-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9000;
+  // Performance: Enable GPU acceleration and prevent layout shifts
+  will-change: contents;
+  transform: translateZ(0);
+  // Use contain for better rendering isolation
+  contain: layout style;
+  // Optimize for animations
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.face-box {
+  box-sizing: border-box;
+  // Optimize transitions - use transform only for GPU acceleration
+  transition: transform 0.05s linear, opacity 0.05s linear;
+  animation: pulse 2s infinite;
+  // Enable GPU acceleration and prevent layout reflow
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  // Prevent text selection during fast updates
+  user-select: none;
+  pointer-events: none;
+  // Use contain for better rendering performance
+  contain: layout style paint;
+}
+
+.face-id {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  background: rgba(0, 255, 0, 0.8);
+  color: #000;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.landmark {
+  box-sizing: border-box;
+  // Optimize transitions - faster and linear for real-time tracking
+  transition: transform 0.05s linear, opacity 0.05s linear;
+  pointer-events: none;
+  // Enable GPU acceleration and prevent layout reflow
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  user-select: none;
+  // Use contain for better rendering performance
+  contain: layout style paint;
+}
+
+// Control buttons
+.control-buttons {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(0);
+  display: flex;
+  gap: 8px;
+  z-index: 9500;
+  // Enable GPU acceleration
+  will-change: transform;
+  
+  ion-chip {
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    
+    ion-icon {
+      font-size: 18px;
+    }
+  }
+}
+
+// Captured image preview
+.capture-preview {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20000;
+  max-width: 90vw;
+  max-height: 80vh;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  animation: zoom-in 0.3s ease-out;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  
+  .close-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-size: 32px;
+    color: white;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+    cursor: pointer;
+    z-index: 1;
+  }
+}
+
+@keyframes zoom-in {
+  from {
+    transform: translate(-50%, -50%) scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Draggable bottom sheet */
+.stats-sheet {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0%; /* Default starting position, overridden by inline style */
+  width: min(560px, calc(100% - 24px));
+  max-height: calc(95vh - var(--ion-safe-area-top, 0px));
+  z-index: 100000; /* Above all UI including header */
+  background: rgba(20, 20, 20, 0.95);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  transition: top 0ms; /* Smooth dragging without transition delay */
+  will-change: top;
+  pointer-events: auto;
+  touch-action: none; /* allow preventDefault for smooth dragging on iOS */
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-handle {
+  width: 48px;
+  height: 5px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.5);
+  margin: 10px auto 6px auto;
+  cursor: grab;
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.sheet-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 16px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+.metric-group {
+  display: flex;
+  gap: 16px;
+  justify-content: space-around;
+}
+
+.metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  
+  span {
+    font-size: 11px;
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  
+  strong {
+    font-size: 16px;
+    font-weight: 600;
+  }
+}
+
+
+
+.faces-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px 14px;
+  min-height: 0; /* Allow flexbox to shrink */
+}
+
+.face-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  margin-bottom: 8px;
+}
+.face-index {
+  font-weight: 600;
+  color: #86f58a;
+}
+.angles {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.face-id-tag {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.empty {
+  text-align: center;
+  padding: 14px;
+  opacity: 0.8;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}

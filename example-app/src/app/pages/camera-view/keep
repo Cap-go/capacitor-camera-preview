@@ -1,0 +1,3 @@
+text keeper 
+
+impliment the face detection feature in example-app, add filter like snapchat where user can live select each filter and its applied live, then if everythings is okay, we can start working on ios by sync and build the app for ios, then if successfull open in xcode for testing in real device 
