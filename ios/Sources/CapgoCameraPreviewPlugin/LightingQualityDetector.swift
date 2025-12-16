@@ -41,7 +41,10 @@ public class LightingQualityDetector {
     /// Analyze lighting quality from camera frame
     ///
     /// - Parameter pixelBuffer: Camera frame pixel buffer
-    /// - Returns: Lighting quality result with feedback
+    /// Analyzes a camera frame's brightness and classifies the lighting quality.
+    /// - Parameters:
+    ///   - pixelBuffer: The CVPixelBuffer containing the camera frame to analyze.
+    /// - Returns: A `LightingResult` containing `brightnessLevel`, boolean flags (`isGoodLighting`, `isTooDark`, `isTooBright`), human-readable `feedback`, and a `recommendedExposureCompensation` based on the assessed lighting.
     public func analyzeLighting(_ pixelBuffer: CVPixelBuffer) -> LightingResult {
         // Calculate average brightness
         let brightness = calculateBrightness(pixelBuffer)
@@ -78,7 +81,11 @@ public class LightingQualityDetector {
     }
     
     /// Calculate average brightness from pixel buffer
-    /// Returns value from 0.0 (black) to 1.0 (white)
+    /// Compute normalized brightness from a video frame buffer.
+    /// 
+    /// Analyzes the provided `CVPixelBuffer` and returns an average scene brightness in the range 0.0–1.0. Supports YUV 4:2:0 (bi-planar full-range and video-range) and 32BGRA pixel formats; for unsupported formats or unavailable pixel data, returns a default value of 0.5.
+    /// - Parameter pixelBuffer: The frame buffer to analyze.
+    /// - Returns: A `Double` between `0.0` (dark) and `1.0` (bright) representing the averaged luminance.
     private func calculateBrightness(_ pixelBuffer: CVPixelBuffer) -> Double {
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
@@ -108,7 +115,12 @@ public class LightingQualityDetector {
         return brightness
     }
     
-    /// Calculate brightness from Y plane (luminance)
+    /// Computes average luminance from the Y (luma) plane of a CVPixelBuffer by sampling pixels on a coarse grid.
+    /// - Parameters:
+    ///   - pixelBuffer: The CVPixelBuffer containing a Y (luma) plane to sample.
+    ///   - width: The width, in pixels, of the plane to sample.
+    ///   - height: The height, in pixels, of the plane to sample.
+    /// - Returns: A normalized brightness value between 0.0 and 1.0; returns `0.5` if the Y plane is unavailable or no samples are taken.
     private func calculateBrightnessFromYPlane(_ pixelBuffer: CVPixelBuffer, width: Int, height: Int) -> Double {
         guard let yBaseAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else {
             return 0.5
@@ -137,7 +149,12 @@ public class LightingQualityDetector {
         return Double(sum) / Double(count) / 255.0
     }
     
-    /// Calculate brightness from BGRA pixel data
+    /// Computes the average perceived brightness from a BGRA-format pixel buffer.
+    /// - Parameters:
+    ///   - pixelBuffer: A `CVPixelBuffer` containing BGRA image data.
+    ///   - width: The buffer width in pixels.
+    ///   - height: The buffer height in pixels.
+    /// - Returns: A normalized brightness value between `0.0` and `1.0`. Returns `0.5` if the buffer base address is unavailable or no samples are collected.
     private func calculateBrightnessFromBGRA(_ pixelBuffer: CVPixelBuffer, width: Int, height: Int) -> Double {
         guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else {
             return 0.5

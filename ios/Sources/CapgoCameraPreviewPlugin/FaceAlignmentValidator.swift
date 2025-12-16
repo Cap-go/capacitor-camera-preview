@@ -69,7 +69,16 @@ public class FaceAlignmentValidator {
     ///   - pitchAngle: Head pitch angle in degrees (nod up/down)
     ///   - yawAngle: Head yaw angle in degrees (turn left/right)
     ///   - bounds: Face bounding box in normalized coordinates (0-1)
-    /// - Returns: Validation result with detailed feedback
+    /// Validate head pose angles and face bounding box against the validator's thresholds.
+    /// 
+    /// Checks roll, pitch, and yaw angles (in degrees) and face framing (size and centering) and returns per-dimension validity and feedback.
+    ///
+    /// - Parameters:
+    ///   - rollAngle: Roll (tilt) in degrees. Positive values indicate tilt to the right.
+    ///   - pitchAngle: Pitch (nodding) in degrees. Positive values indicate looking down.
+    ///   - yawAngle: Yaw (turn) in degrees. Positive values indicate turn to the right.
+    ///   - bounds: Normalized face bounding box (origin.x/y and width/height in 0...1) relative to the capture frame.
+    /// - Returns: An `AlignmentResult` containing boolean validity flags for roll, pitch, yaw, size, and centering, optional per-dimension feedback messages, and an overall `isValid` flag.
     public func validate(
         rollAngle: Double,
         pitchAngle: Double,

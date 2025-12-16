@@ -720,6 +720,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         webView.setBackgroundColor(android.graphics.Color.WHITE);
     }
 
+    /**
+     * Binds and configures CameraX use cases (Preview, ImageCapture and, when enabled, VideoCapture and ImageAnalysis)
+     * according to the current session configuration and starts the camera lifecycle.
+     *
+     * <p>On success this sets internal running state, applies configured zoom/flash/exposure defaults, updates preview
+     * scale/rotation and invokes the listener's onCameraStarted callback with the actual preview width, height and
+     * position (x, y). On failure the listener's onCameraStartError is invoked with an error message.</p>
+     */
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private void bindCameraUseCases() {
         if (cameraProvider == null) return;
@@ -3513,6 +3521,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Log.d(TAG, "Video recording stop requested");
     }
 
+    /**
+     * Handle completion of a video recording and notify the registered callback.
+     *
+     * Notifies the current video recording callback with the recorded file URI on success
+     * or an error message on failure, then clears recording-related state fields.
+     *
+     * @param finalizeEvent the finalize event containing the recording result and any error
+     */
     private void handleRecordingFinalized(VideoRecordEvent.Finalize finalizeEvent) {
         if (!finalizeEvent.hasError()) {
             Log.d(TAG, "Video recording completed successfully");
@@ -3535,7 +3551,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     // ========================================
     // Face Detection Methods
-    // ========================================
+    /**
+     * Enables face detection by attaching the provided FaceDetectionManager and binding an ImageAnalysis use case to deliver camera frames.
+     *
+     * If an ImageAnalysis use case does not already exist, one is created and an analyzer is set to forward frames to the manager when it is running. The camera is then rebound with the analysis use case active.
+     *
+     * @param manager the FaceDetectionManager that will receive camera frames for face detection and processing
+     */
 
     public void enableFaceDetection(FaceDetectionManager manager) {
         this.faceDetectionManager = manager;
@@ -3559,6 +3581,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         rebindCameraWithAnalysis();
     }
 
+    /**
+     * Disables face detection for this CameraXView.
+     *
+     * Clears the configured FaceDetectionManager and stops feeding frames to any analyzer, then rebinds
+     * camera use cases without the ImageAnalysis use case so face detection processing ceases.
+     */
     public void disableFaceDetection() {
         this.faceDetectionManager = null;
         if (imageAnalysis != null) {
@@ -3568,6 +3596,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         rebindCameraWithoutAnalysis();
     }
 
+    /**
+     * Rebinds the active camera use cases to include ImageAnalysis when present so face-detection frames are delivered.
+     *
+     * If the camera provider is not initialized or the view is not running, this method returns without action.
+     */
     private void rebindCameraWithAnalysis() {
         if (cameraProvider == null || !isRunning) {
             return;
@@ -3602,6 +3635,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    /**
+     * Rebinds the camera use cases to the lifecycle without the ImageAnalysis use case (disables face detection).
+     *
+     * If the camera provider is unavailable or the view is not running, this method returns without action.
+     * It unbinds all existing use cases, creates and binds a Preview plus any active ImageCapture and VideoCapture
+     * use cases, and logs success or failure.
+     */
     private void rebindCameraWithoutAnalysis() {
         if (cameraProvider == null || !isRunning) {
             return;

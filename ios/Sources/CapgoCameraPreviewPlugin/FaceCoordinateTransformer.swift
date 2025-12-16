@@ -51,7 +51,12 @@ public class FaceCoordinateTransformer {
     /// aspect ratio differences and video gravity.
     ///
     /// - Parameter frameBounds: Normalized bounding box in frame coordinates (0-1, bottom-left origin)
-    /// - Returns: Normalized bounds (x, y, width, height) in range 0-1 relative to preview (top-left origin)
+    /// Transforms a normalized bounding box from camera frame space into normalized preview space.
+    /// 
+    /// The returned rectangle is adjusted for device orientation, aspect-ratio differences between the camera frame and preview, and the configured `videoGravity` (handles letterboxing, pillarboxing, stretching, and fill behavior).
+    /// - Parameters:
+    ///   - frameBounds: A CGRect in normalized camera frame coordinates (0–1, bottom-left origin).
+    /// - Returns: A CGRect in normalized preview coordinates (0–1, top-left origin).
     public func transformBounds(_ frameBounds: CGRect) -> CGRect {
         // Step 1: Apply orientation transformation
         var rotatedBounds = applyOrientationTransform(to: frameBounds)
@@ -124,7 +129,10 @@ public class FaceCoordinateTransformer {
     /// Transform a point from normalized frame coordinates to normalized preview coordinates
     ///
     /// - Parameter framePoint: Normalized point in frame coordinates (0-1)
-    /// - Returns: Normalized point in range 0-1 relative to preview
+    /// Converts a normalized point from camera frame coordinates into preview coordinates.
+    /// The input is interpreted in normalized frame space (0–1, origin at bottom-left); the result is in normalized preview space (0–1, origin at top-left), accounting for the transformer's orientation, aspect ratio, and videoGravity settings.
+    /// - Parameter framePoint: A point in normalized camera frame coordinates (x, y in 0–1, origin bottom-left).
+    /// - Returns: The point transformed into normalized preview coordinates (x, y in 0–1, origin top-left).
     public func transformPoint(_ framePoint: CGPoint) -> CGPoint {
         // Use the same transformation as bounds but for a single point
         let pointAsRect = CGRect(origin: framePoint, size: .zero)
@@ -138,7 +146,12 @@ public class FaceCoordinateTransformer {
     /// This method rotates them based on device orientation.
     ///
     /// - Parameter rect: Normalized rect with top-left origin
-    /// - Returns: Normalized rect adjusted for orientation with top-left origin
+    /// Rotate a normalized rectangle to account for the current capture orientation.
+    /// 
+    /// Supports portrait, portraitUpsideDown, landscapeLeft, and landscapeRight orientations.
+    /// - Parameters:
+    ///   - rect: A normalized rectangle (origin and size in the 0–1 range) expressed in frame coordinates using a top-left origin.
+    /// - Returns: The input rectangle transformed for the current `orientation`, with origin and size remaining in normalized top-left coordinate space.
     private func applyOrientationTransform(to rect: CGRect) -> CGRect {
         var x = rect.origin.x
         var y = rect.origin.y
@@ -188,7 +201,9 @@ public class FaceCoordinateTransformer {
     /// Convert from normalized coordinates to pixel/point coordinates
     ///
     /// - Parameter normalized: Normalized rect (0-1)
-    /// - Returns: Rect in preview layer pixel/point coordinates
+    /// Convert a normalized CGRect (0–1) in preview coordinate space to a CGRect in preview pixel/point coordinates.
+    /// - Parameter normalized: A rectangle with origin and size expressed as fractions of the preview dimensions (0 to 1), where origin is relative to the preview's coordinate space.
+    /// - Returns: A CGRect in preview coordinates with origin and size scaled by `previewWidth` and `previewHeight`.
     public func denormalizeToPreview(_ normalized: CGRect) -> CGRect {
         return CGRect(
             x: normalized.origin.x * previewWidth,

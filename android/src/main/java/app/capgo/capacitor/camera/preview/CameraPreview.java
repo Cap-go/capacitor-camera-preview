@@ -65,6 +65,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     private final String pluginVersion = "";
 
+    /**
+     * Handle the plugin's pause lifecycle by pausing face detection and stopping the camera preview.
+     *
+     * Pauses the FaceDetectionManager if present, saves the current CameraSessionConfiguration to
+     * `lastSessionConfig`, and stops the running CameraXView session so the camera is released while
+     * the app is in the background.
+     */
     @Override
     protected void handleOnPause() {
         super.handleOnPause();
@@ -81,6 +88,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    /**
+     * Restarts the camera session and resumes face detection when the plugin returns to the foreground.
+     *
+     * If a previous session configuration exists, recreates the CameraXView if needed, restores its listener, and starts the session. Also notifies the face detection manager that the app has moved to the foreground.
+     */
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
@@ -1978,6 +1990,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return result;
     }
 
+    /**
+     * Provide the plugin's version string.
+     *
+     * Resolves the call with a JS object containing the "version" property.
+     */
     @PluginMethod
     public void getPluginVersion(final PluginCall call) {
         try {
@@ -1995,6 +2012,17 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     private FaceDetectionManager faceDetectionManager;
 
+    /**
+     * Starts face detection for the running camera preview using options supplied by the plugin call.
+     *
+     * Reads optional parameters from the call (performanceMode, trackingEnabled, detectLandmarks,
+     * detectClassifications, maxFaces, minFaceSize), ensures a FaceDetectionManager exists, begins
+     * detection with a listener that emits "faceDetection" events, enables face detection on the
+     * active CameraXView, and resolves the call when detection is started. If the camera preview is
+     * not running the call is rejected; any startup failure rejects the call with an error message.
+     *
+     * @param call the PluginCall containing optional face detection configuration
+     */
     @PluginMethod
     public void startFaceDetection(final PluginCall call) {
         if (cameraXView == null || !cameraXView.isRunning()) {
@@ -2060,6 +2088,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    /**
+     * Stops face detection if active and disables face detection on the camera preview.
+     *
+     * Resolves the provided PluginCall on success; rejects the call with an error message if stopping fails.
+     *
+     * @param call the PluginCall used to report success or failure
+     */
     @PluginMethod
     public void stopFaceDetection(final PluginCall call) {
         try {
@@ -2075,6 +2110,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    /**
+     * Reports whether face detection is currently active.
+     *
+     * @return a JSObject containing `isDetecting`: `true` if face detection is running, `false` otherwise.
+     */
     @PluginMethod
     public void isFaceDetectionRunning(final PluginCall call) {
         boolean isDetecting = faceDetectionManager != null && faceDetectionManager.isRunning();

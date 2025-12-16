@@ -63,10 +63,29 @@ public class FaceDetectionManager {
      * <p>Interface for communicating face detection results.</p>
      */
     public interface FaceDetectionListener {
-        void onFaceDetectionResult(JSONObject result);
-        void onFaceDetectionError(String error);
+        /**
+ * Receives a face detection result delivered as a JSON object.
+ *
+ * The JSON contains the detection payload (for example: a `faces` array with per-face objects,
+ * `frameWidth`, `frameHeight`, and a `timestamp`), encoded according to the manager's result schema.
+ *
+ * @param result the detection result JSON object
+ */
+void onFaceDetectionResult(JSONObject result);
+        /**
+ * Delivers an error notification when face detection or result processing fails.
+ *
+ * @param error a description of the error that occurred during face detection or result processing
+ */
+void onFaceDetectionError(String error);
     }
 
+    /**
+     * Creates a FaceDetectionManager and prepares it for use.
+     *
+     * Initializes internal state and a single-thread executor for sequential frame processing;
+     * the ML Kit face detector instance is created when startDetection(...) is called.
+     */
     public FaceDetectionManager() {
         // Detector will be created when detection starts
         // Use single thread executor for sequential processing
@@ -74,10 +93,10 @@ public class FaceDetectionManager {
     }
 
     /**
-     * <p>Start face detection with the given options.</p>
+     * Initializes and starts the face detection pipeline using the provided configuration and result listener.
      *
-     * @param options JSON object containing detection options (performance mode, tracking, landmarks, etc).
-     * @param listener Callback interface for detection results and errors.
+     * @param options JSON object specifying detection options such as "performanceMode" ("accurate" or "fast"), "tracking" (boolean), "landmarks" (boolean), "maxFaces", "minFaceSize", and frame-skipping or motion settings.
+     * @param listener Callback interface that receives detection results as a JSONObject or error messages.
      */
     public void startDetection(JSONObject options, FaceDetectionListener listener) {
         this.listener = listener;
@@ -108,8 +127,10 @@ public class FaceDetectionManager {
     }
 
     /**
-     * <p>Stop face detection and release resources.</p>
-     * <p>Waits briefly for in-flight tasks to complete and closes the detector.</p>
+     * Stops face detection, cancels pending processing, and releases detector resources.
+     *
+     * <p>Sets the internal cancellation flag and stops accepting new frames, waits up to 500 ms
+     * for in-flight detection tasks to complete, then closes and clears the ML Kit face detector.</p>
      */
     public void stopDetection() {
         isDetecting = false;
@@ -145,10 +166,16 @@ public class FaceDetectionManager {
     }
 
     /**
-     * <p>Process an image frame for face detection.</p>
-     * <p>Applies frame skipping, motion detection, and power/thermal management.</p>
+     * Processes a single camera frame for face detection, applying skipping, throttling,
+     * motion checks, power/thermal safeguards, and concurrency limits before submitting
+     * the frame to the ML Kit face detector.
      *
-     * @param imageProxy The camera frame to process.
+     * <p>If the frame is accepted for processing it is converted to an InputImage and
+     * processed asynchronously; the configured FaceDetectionListener will receive results
+     * or errors. The ImageProxy is closed on all code paths.</p>
+     *
+     * @param imageProxy the camera frame to evaluate and (if accepted) process; this method
+     *                   closes the provided ImageProxy before returning or after asynchronous processing.
      */
     public void processImageProxy(@NonNull ImageProxy imageProxy) {
         if (!isDetecting || faceDetector == null || isCancelled.get()) {
@@ -232,9 +259,20 @@ public class FaceDetectionManager {
     }
 
     /**
-     * <p>Parse face detection options from JSON and update internal config.</p>
+     * Parse detection configuration from the provided JSON and update the manager's internal settings.
      *
-     * @param options JSON object with detection options.
+     * Supported option keys and their defaults:
+     * <ul>
+     *   <li><b>performanceMode</b> — "fast" or "accurate" (default: "fast")</li>
+     *   <li><b>trackingEnabled</b> — boolean, enable face tracking (default: true)</li>
+     *   <li><b>detectLandmarks</b> — boolean, include facial landmarks (default: true)</li>
+     *   <li><b>maxFaces</b> — integer, maximum faces to return per frame (default: 3)</li>
+     *   <li><b>minFaceSize</b> — number, minimum face size as fraction of frame (default: 0.15)</li>
+     *   <li><b>frameSkipCount</b> — integer, number of frames to skip between processed frames (default: 2)</li>
+     *   <li><b>motionDetectionEnabled</b> — boolean, enable motion-based frame skipping (default: true)</li>
+     * </ul>
+     *
+     * @param options JSON object containing detection options; missing keys use the defaults above
      */
     private void parseOptions(JSONObject options) {
         try {
@@ -259,11 +297,15 @@ public class FaceDetectionManager {
     }
 
     /**
-     * <p>Handle successful face detection and notify listener with results.</p>
+     * Builds a JSON result from detected faces and delivers it to the registered listener.
      *
-     * @param faces List of detected faces.
-     * @param frameWidth Width of the processed frame.
-     * @param frameHeight Height of the processed frame.
+     * The produced JSON contains an array of face objects (each produced by convertFaceToJson),
+     * the frame width and height, and a timestamp. The list of faces is limited to the
+     * configured maximum number of faces.
+     *
+     * @param faces       the detected faces to include in the result; may be truncated to the configured maxFaces
+     * @param frameWidth  the width of the processed frame used for normalizing face coordinates
+     * @param frameHeight the height of the processed frame used for normalizing face coordinates
      */
     private void handleDetectionSuccess(List<Face> faces, int frameWidth, int frameHeight) {
         try {
@@ -339,13 +381,17 @@ public class FaceDetectionManager {
     }
 
     /**
-     * <p>Extract facial landmarks from a Face object as normalized coordinates.</p>
+     * Build a JSONObject containing available facial landmarks with coordinates normalized to the frame.
      *
-     * @param face Detected face.
-     * @param frameWidth Frame width for normalization.
-     * @param frameHeight Frame height for normalization.
-     * @return JSONObject with landmark names and positions.
-     * @throws JSONException if JSON construction fails.
+     * The returned object includes entries for available landmarks (e.g., "leftEye", "rightEye", "noseBase",
+     * "mouthLeft", "mouthRight", "mouthBottom", "leftEar", "rightEar", "leftCheek", "rightCheek"), each mapping
+     * to an object with `x` and `y` values in the range 0.0–1.0 relative to the provided frame dimensions.
+     *
+     * @param face the detected Face containing landmarks
+     * @param frameWidth the width of the frame used to normalize landmark x coordinates
+     * @param frameHeight the height of the frame used to normalize landmark y coordinates
+     * @return a JSONObject mapping landmark names to their normalized coordinate objects
+     * @throws JSONException if constructing the JSON objects fails
      */
     private JSONObject extractLandmarks(Face face, int frameWidth, int frameHeight) throws JSONException {
         JSONObject landmarks = new JSONObject();
@@ -387,12 +433,14 @@ public class FaceDetectionManager {
     }
 
     /**
-     * Detect if there's significant motion between frames.
-     * Simple implementation using image plane changes and timestamps.
-     *
-     * @param currentImage Current camera frame.
-     * @return true if significant motion is detected, false otherwise.
-     */
+         * Determine whether the current frame contains significant motion compared to the last processed frame.
+         *
+         * If there is no previously processed frame, this method reports motion to ensure the first frame is processed.
+         * If the comparison cannot be performed, the method conservatively reports motion.
+         *
+         * @param currentImage the current camera frame to evaluate
+         * @return `true` if motion is detected or cannot be safely determined, `false` if no significant motion is detected
+         */
     private boolean hasSignificantMotion(ImageProxy currentImage) {
         if (lastProcessedImage == null) {
             lastProcessedImage = currentImage;
@@ -430,7 +478,9 @@ public class FaceDetectionManager {
     }
 
     /**
-     * Pause detection when app goes to background.
+     * Signals the manager to pause face detection when the application moves to the background.
+     *
+     * Sets internal state so incoming frames are ignored until onAppForeground() is invoked.
      */
     public void onAppBackground() {
         isAppInBackground = true;
@@ -438,8 +488,10 @@ public class FaceDetectionManager {
     }
 
     /**
-     * Resume detection when app comes to foreground.
-     * Resets frame counter.
+     * Resume face detection after the app returns to the foreground.
+     *
+     * Resets the internal frame-skip counter so frame skipping restarts immediately and clears the
+     * background pause state to allow incoming frames to be processed.
      */
     public void onAppForeground() {
         isAppInBackground = false;
@@ -456,7 +508,7 @@ public class FaceDetectionManager {
     }
 
     /**
-     * Disable thermal throttling.
+     * Disables thermal throttling, allowing face-detection processing to run without thermal throttling restrictions.
      */
     public void disableThermalThrottling() {
         isThermalThrottling.set(false);
@@ -464,9 +516,9 @@ public class FaceDetectionManager {
     }
 
     /**
-     * Check if thermal throttling is active.
+     * Indicates whether thermal throttling is active.
      *
-     * @return true if thermal throttling is enabled, false otherwise.
+     * @return `true` if thermal throttling is enabled, `false` otherwise.
      */
     public boolean isThermalThrottlingActive() {
         return isThermalThrottling.get();
