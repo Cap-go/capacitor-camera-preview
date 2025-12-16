@@ -45,7 +45,17 @@ public class FaceAlignmentValidator {
     }
 
     /**
-     * Create validator with custom thresholds
+     * Constructs a FaceAlignmentValidator using the provided threshold and bound values.
+     *
+     * @param maxRollDegrees maximum allowed absolute roll angle in degrees before roll is considered misaligned
+     * @param maxPitchDegrees maximum allowed absolute pitch angle in degrees before pitch is considered misaligned
+     * @param maxYawDegrees maximum allowed absolute yaw angle in degrees before yaw is considered misaligned
+     * @param minFaceSize minimum allowed face size (fraction of frame width/height) before the face is considered too small
+     * @param maxFaceSize maximum allowed face size (fraction of frame width/height) before the face is considered too large
+     * @param minCenterX minimum allowed normalized X coordinate of the face center
+     * @param maxCenterX maximum allowed normalized X coordinate of the face center
+     * @param minCenterY minimum allowed normalized Y coordinate of the face center
+     * @param maxCenterY maximum allowed normalized Y coordinate of the face center
      */
     public FaceAlignmentValidator(
         double maxRollDegrees,
@@ -70,16 +80,17 @@ public class FaceAlignmentValidator {
     }
 
     /**
-     * Validate face alignment
+     * Validate face alignment and produce per-aspect validity flags and feedback.
      *
-     * @param rollAngle Head roll angle in degrees (tilt left/right)
-     * @param pitchAngle Head pitch angle in degrees (nod up/down)
-     * @param yawAngle Head yaw angle in degrees (turn left/right)
-     * @param boundsX Face bounding box X (normalized 0-1)
-     * @param boundsY Face bounding box Y (normalized 0-1)
-     * @param boundsWidth Face bounding box width (normalized 0-1)
-     * @param boundsHeight Face bounding box height (normalized 0-1)
-     * @return Validation result with detailed feedback
+     * @param rollAngle   Head roll angle in degrees; positive values indicate tilt to the right.
+     * @param pitchAngle  Head pitch angle in degrees; positive values indicate looking down.
+     * @param yawAngle    Head yaw angle in degrees; positive values indicate turning to the right.
+     * @param boundsX     Face bounding box X coordinate normalized to [0,1] relative to the frame.
+     * @param boundsY     Face bounding box Y coordinate normalized to [0,1] relative to the frame.
+     * @param boundsWidth Face bounding box width normalized to [0,1] relative to the frame.
+     * @param boundsHeight Face bounding box height normalized to [0,1] relative to the frame.
+     * @return AlignmentResult containing overall validity, individual validation flags (roll, pitch, yaw, size, centering),
+     *         and optional human-readable feedback messages for any failing checks.
      */
     public AlignmentResult validate(
         float rollAngle,
@@ -176,7 +187,10 @@ public class FaceAlignmentValidator {
         public String centeringFeedback = null;
 
         /**
-         * Get primary feedback message (first issue found)
+         * Selects the most important face-alignment feedback message.
+         *
+         * @return the first non-null specific feedback in this order: roll, pitch, yaw, size, centering;
+         *         if no specific feedback is present, returns "Face aligned perfectly".
          */
         public String getPrimaryFeedback() {
             if (rollFeedback != null) return rollFeedback;
@@ -188,7 +202,9 @@ public class FaceAlignmentValidator {
         }
 
         /**
-         * Get all feedback messages
+         * Collects all non-null per-aspect feedback messages in priority order.
+         *
+         * @return an array containing all non-null feedback messages in priority order: roll, pitch, yaw, size, centering
          */
         public String[] getAllFeedback() {
             java.util.ArrayList<String> feedback = new java.util.ArrayList<>();

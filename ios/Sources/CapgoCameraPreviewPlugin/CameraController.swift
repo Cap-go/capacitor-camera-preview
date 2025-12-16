@@ -113,6 +113,11 @@ class CameraController: NSObject {
     // Face Detection
     var faceDetectionManager: FaceDetectionManager?
 
+    /// Computes a centered rectangle that fits the requested aspect ratio inside the given bounds.
+    /// - Parameters:
+    ///   - aspectRatio: An aspect ratio string in the form `"W:H"` (for example, `"16:9"` or `"4:3"`). If parsing fails the full `bounds` are used.
+    ///   - bounds: The container rectangle to fit the aspect-ratio-aligned frame into.
+    /// - Returns: A `CGRect` sized to the requested aspect ratio and centered within `bounds`.
     func calculateAspectRatioFrame(for aspectRatio: String, in bounds: CGRect) -> CGRect {
         guard let ratio = parseAspectRatio(aspectRatio) else {
             return bounds
@@ -436,6 +441,9 @@ extension CameraController {
         }
     }
 
+    /// Selects and applies an AVCaptureSession preset appropriate for the optional requested aspect ratio and then configures the device frame rate for face detection.
+    /// - Parameters:
+    ///   - aspectRatio: Optional aspect ratio string (e.g., `"16:9"` or `"4:3"`) used to choose a matching session preset; if `nil` a sensible default preset is chosen.
     private func configureSessionPreset(for aspectRatio: String?) {
         guard let captureSession = self.captureSession else { return }
 
@@ -484,7 +492,10 @@ extension CameraController {
         configureFrameRateForFaceDetection()
     }
 
-    /// Update the requested aspect ratio at runtime and reconfigure session/preview accordingly
+    /// Updates the camera session and preview to match a new aspect ratio.
+    /// 
+    /// Reconfigures the capture session preset for the requested aspect ratio, preserves and restores the current camera zoom across the reconfiguration, and updates the preview layer and grid overlay geometry on the main thread.
+    /// - Parameter aspectRatio: An optional aspect ratio string (e.g., `"16:9"`, `"4:3"`). Pass `nil` to use the full view bounds.
     func updateAspectRatio(_ aspectRatio: String?) {
         // Update internal state
         self.requestedAspectRatio = aspectRatio
@@ -536,7 +547,9 @@ extension CameraController {
         }
     }
     
-    /// Configure frame rate for optimal face detection performance (20-25 FPS)
+    /// Configure the active camera device to use a format and frame rate optimized for face detection.
+    /// 
+    /// Selects a camera format near 720p that supports a 20–25 FPS range and applies it to the currently active camera (rear when using the rear camera position, otherwise front). If a matching format and frame-rate range are found, the function sets the device's active format and fixes both the minimum and maximum frame duration to the chosen FPS (capped by the format's maximum). If no suitable format is found or no current device exists, the device configuration is left unchanged. This function does not throw.
     private func configureFrameRateForFaceDetection() {
         guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else { return }
         
@@ -588,6 +601,8 @@ extension CameraController {
         }
     }
 
+    /// Applies an initial zoom to the active camera by converting a UI-level zoom to the device's native video zoom factor and storing it on the controller.
+    /// - Parameter level: The desired UI zoom level (e.g., `1.0` for 1×). If `nil`, defaults to `1.0`. The value is mapped to the device's native zoom using the display zoom multiplier when available. If no camera is available or the computed native zoom falls outside the device's supported range, the function does nothing.
     private func setInitialZoom(level: Float?) {
         guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else {
             print("[CameraPreview] No device available for initial zoom")
@@ -2402,6 +2417,12 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
 }
 
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    /// Handles incoming video sample buffers from the capture output.
+    /// - Parameters:
+    ///   - output: The AVCaptureOutput that produced the sample buffer.
+    ///   - sampleBuffer: The CMSampleBuffer containing the video frame.
+    ///   - connection: The AVCaptureConnection from which the sample buffer was received.
+    /// - Discussion: Invokes the `firstFrameReadyCallback` the first time a frame arrives, forwards each frame to `faceDetectionManager` when it is running, converts the sample buffer to a UIImage (normalized to `.up`) and delivers it to the stored `sampleBufferCaptureCompletionBlock` (or an error if conversion fails). The completion block is cleared after invocation.
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         // Check if we're waiting for the first frame
         if !hasReceivedFirstFrame, let firstFrameCallback = firstFrameReadyCallback {

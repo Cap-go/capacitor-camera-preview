@@ -21,13 +21,13 @@ public class FaceCoordinateTransformer {
     private final int rotation; // 0, 90, 180, 270
 
     /**
-     * Creates a coordinate transformer
+     * Create a transformer that maps coordinates from camera frame space to normalized preview space (0–1), accounting for rotation and aspect-ratio differences.
      *
-     * @param frameWidth Width of camera frame in pixels
-     * @param frameHeight Height of camera frame in pixels
-     * @param previewWidth Width of preview view in pixels
-     * @param previewHeight Height of preview view in pixels
-     * @param rotation Rotation in degrees (0, 90, 180, 270)
+     * @param frameWidth width of the camera frame in pixels
+     * @param frameHeight height of the camera frame in pixels
+     * @param previewWidth width of the preview view in pixels
+     * @param previewHeight height of the preview view in pixels
+     * @param rotation rotation in degrees; one of 0, 90, 180, or 270
      */
     public FaceCoordinateTransformer(int frameWidth, int frameHeight, int previewWidth, int previewHeight, int rotation) {
         this.frameWidth = frameWidth;
@@ -50,11 +50,12 @@ public class FaceCoordinateTransformer {
     }
 
     /**
-     * Transform a bounding box from frame coordinates to normalized preview coordinates (0-1)
-     *
-     * @param frameBounds Bounding box in frame pixel coordinates
-     * @return Normalized bounds (x, y, width, height) in range 0-1 relative to preview
-     */
+         * Transforms a bounding box from camera frame pixel coordinates into normalized preview coordinates (0–1),
+         * accounting for rotation and aspect-ratio differences (letterboxing/pillarboxing).
+         *
+         * @param frameBounds Bounding box in camera frame pixel coordinates
+         * @return Normalized bounds (x, y, width, height) in the range 0–1 relative to the preview
+         */
     @NonNull
     public NormalizedRect transformBounds(@NonNull Rect frameBounds) {
         // Step 1: Normalize to frame (0-1)
@@ -130,10 +131,11 @@ public class FaceCoordinateTransformer {
     }
 
     /**
-     * Transform a point from frame coordinates to normalized preview coordinates (0-1)
+     * Convert a point from camera frame pixel coordinates into normalized preview coordinates (0–1),
+     * accounting for rotation and aspect-ratio adjustments.
      *
-     * @param framePoint Point in frame pixel coordinates
-     * @return Normalized point (x, y) in range 0-1 relative to preview
+     * @param framePoint the point in frame pixel coordinates
+     * @return the normalized point with `x` and `y` in the range 0 to 1 relative to the preview
      */
     @NonNull
     public NormalizedPoint transformPoint(@NonNull PointF framePoint) {
@@ -153,6 +155,14 @@ public class FaceCoordinateTransformer {
         public final double width;
         public final double height;
 
+        /**
+         * Create a NormalizedRect using normalized preview-space coordinates.
+         *
+         * @param x      the horizontal coordinate of the rectangle's top-left corner in the preview, where 0.0 is left and 1.0 is right
+         * @param y      the vertical coordinate of the rectangle's top-left corner in the preview, where 0.0 is top and 1.0 is bottom
+         * @param width  the rectangle's width as a fraction of the preview width (0.0–1.0 for fully normalized sizes)
+         * @param height the rectangle's height as a fraction of the preview height (0.0–1.0 for fully normalized sizes)
+         */
         public NormalizedRect(double x, double y, double width, double height) {
             this.x = x;
             this.y = y;
@@ -169,6 +179,12 @@ public class FaceCoordinateTransformer {
         public final double x;
         public final double y;
 
+        /**
+         * Creates a NormalizedPoint representing a point in normalized preview coordinates.
+         *
+         * @param x the horizontal coordinate in preview space, where 0.0 is the left edge and 1.0 is the right edge
+         * @param y the vertical coordinate in preview space, where 0.0 is the top edge and 1.0 is the bottom edge
+         */
         public NormalizedPoint(double x, double y) {
             this.x = x;
             this.y = y;

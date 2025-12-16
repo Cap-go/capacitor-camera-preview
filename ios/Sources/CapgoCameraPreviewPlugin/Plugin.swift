@@ -538,6 +538,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         call.resolve(["gridMode": self.gridMode])
     }
 
+    /// Restores the camera preview UI and resumes face-detection when the app becomes active.
+    /// 
+    /// Only applied when the plugin is initialized: makes the web view transparent and notifies the face-detection manager to resume foreground processing.
     @objc func appDidBecomeActive() {
         if self.isInitialized {
             DispatchQueue.main.async {
@@ -548,6 +551,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
+    /// Prepare the camera preview and resume face detection when the app enters the foreground.
+    /// 
+    /// If the plugin is initialized, makes the web view transparent so the camera preview is visible
+    /// and notifies the face detection manager that the app has entered the foreground.
     @objc func appWillEnterForeground() {
         if self.isInitialized {
             DispatchQueue.main.async {
@@ -558,6 +565,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
+    /// Pauses face detection when the app is about to become inactive.
+    /// 
+    /// If the plugin has been initialized, tells the face detection manager to transition to background/pause state.
     @objc func appWillResignActive() {
         if self.isInitialized {
             // Pause face detection when app goes to background
@@ -832,6 +842,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
+    /// Finalizes camera startup by attaching and configuring the preview view, registering observers and overlays, and resolving the plugin call when the first camera frame is available.
+    /// 
+    /// This configures the preview layering (respecting `toBack`), makes the web view transparent, updates video orientation, displays the preview layer, adds the grid overlay if enabled, registers rotation and app-state observers, marks the plugin as initialized, and arranges to resolve the provided `CAPPluginCall` once the camera's first frame is ready. If the first frame has already been received, the call is resolved immediately.
+    /// - Parameter call: The plugin call to resolve. The call is resolved with a JSObject containing `width`, `height`, `x`, and `y` describing the preview view's bounds.
     private func completeStartCamera(call: CAPPluginCall) {
         // Create and configure the preview view first
         self.updateCameraFrame()
@@ -2342,11 +2356,25 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         call.resolve(["orientation": self.currentOrientationString()])
     }
 
+    /// Provide the plugin's semantic version to the JavaScript caller.
+    /// - Returns: A dictionary with key `"version"` containing the plugin version string.
     @objc func getPluginVersion(_ call: CAPPluginCall) {
         call.resolve(["version": self.pluginVersion])
     }
 
-    // MARK: - Face Detection
+    /// Starts face detection using the currently running camera preview.
+    /// 
+    /// Parses detection options from the plugin call, initializes a FaceDetectionManager if needed,
+    /// assigns this plugin as its delegate, and starts detection with the parsed options. If the camera
+    /// preview is not running the call is rejected.
+    /// - Parameters:
+    ///   - call: The CAPPluginCall containing optional face detection settings:
+    ///     - `performanceMode` (String): "fast" or "accurate". Default: `"fast"`.
+    ///     - `trackingEnabled` (Bool): Enable face tracking across frames. Default: `true`.
+    ///     - `detectLandmarks` (Bool): Request facial landmark detection. Default: `true`.
+    ///     - `detectClassifications` (Bool): Request face classification (e.g., expressions). Default: `false`.
+    ///     - `maxFaces` (Int): Maximum number of faces to detect. Default: `3`.
+    ///     - `minFaceSize` (Double): Minimum face size relative to image (0.0–1.0). Default: `0.15`.
 
     @objc func startFaceDetection(_ call: CAPPluginCall) {
         // Ensure camera is running
@@ -2384,11 +2412,15 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         call.resolve()
     }
 
+    /// Stops any active face detection session and resolves the provided plugin call.
+    /// - Parameter call: The CAPPluginCall to resolve after stopping face detection.
     @objc func stopFaceDetection(_ call: CAPPluginCall) {
         cameraController.faceDetectionManager?.stop()
         call.resolve()
     }
 
+    /// Reports whether face detection is currently running.
+    /// - Returns: `isDetecting`: `true` if face detection is running, `false` otherwise.
     @objc func isFaceDetectionRunning(_ call: CAPPluginCall) {
         let isDetecting = cameraController.faceDetectionManager?.isRunning() ?? false
         call.resolve(["isDetecting": isDetecting])
@@ -2398,6 +2430,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 // MARK: - Face Detection Delegate
 
 extension CameraPreview: FaceDetectionDelegate {
+    /// Broadcasts the provided face detection result to JavaScript listeners as the `faceDetection` event.
+    /// - Parameter result: The face detection payload (detections, landmarks, scores, etc.) to be encoded and delivered to the JS layer.
     func faceDetectionDidUpdate(result: FaceDetectionResult) {
         // Convert result to JSON dictionary
         do {
@@ -2412,6 +2446,8 @@ extension CameraPreview: FaceDetectionDelegate {
         }
     }
 
+    /// Handles a face detection failure.
+    /// - Parameter error: The error describing why face detection failed; its `localizedDescription` is logged.
     func faceDetectionDidFail(error: Error) {
         print("[FaceDetection] Detection failed: \(error.localizedDescription)")
     }

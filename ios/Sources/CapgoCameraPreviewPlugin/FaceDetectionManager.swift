@@ -71,7 +71,8 @@ class FaceDetectionManager: NSObject {
     
     /// Start face detection with the given options.
     ///
-    /// - Parameter options: FaceDetectionOptions struct with detection configuration (performance mode, tracking, landmarks, etc).
+    /// Begins face detection using the provided configuration.
+    /// - Parameter options: Configuration that controls detection behavior (performance mode, tracking, landmarks, max faces, min face size). Marks the manager as active and clears any prior cancellation state.
     func start(options: FaceDetectionOptions) {
         self.detectionOptions = options
         self.isCancelled = false
@@ -80,7 +81,9 @@ class FaceDetectionManager: NSObject {
     }
     
     /// Stop face detection and release resources.
-    /// Waits briefly for in-flight requests to complete and resets tracking state.
+    /// Stops face detection, cancels any ongoing work, and resets tracking state.
+    /// 
+    /// Sets the manager to not detecting and marks cancellation; waits up to 0.5 seconds for in-flight requests to finish, then clears the face tracking map and resets the next tracking identifier. Logs the number of requests still processing after the wait.
     func stop() {
         self.isDetecting = false
         self.isCancelled = true
@@ -99,7 +102,8 @@ class FaceDetectionManager: NSObject {
     
     /// Check if face detection is currently active.
     ///
-    /// - Returns: true if detection is active, false otherwise.
+    /// Reports whether the face detection manager is currently active.
+    /// - Returns: `true` if detection is active, `false` otherwise.
     func isRunning() -> Bool {
         return isDetecting
     }
@@ -107,7 +111,10 @@ class FaceDetectionManager: NSObject {
     /// Process a camera frame for face detection.
     /// Applies frame skipping, motion detection, and power/thermal management.
     ///
-    /// - Parameter sampleBuffer: The camera frame to process.
+    /// Processes an incoming video sample buffer and enqueues a Vision face detection request when processing criteria are met.
+    /// 
+    /// The method applies runtime checks (detection state, app background, thermal throttling), power controls (frame skipping, motion-based skipping) and rate limiting before extracting the pixel buffer and scheduling asynchronous face detection on the internal detection queue. It updates in-flight processing counters and frame dimensions used for coordinate normalization. If face detection fails while not cancelled, the delegate is notified on the main thread.
+    /// - Parameter sampleBuffer: A CMSampleBuffer containing the video frame to analyze for faces.
     func processSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
         guard isDetecting, !isCancelled else { return }
         
@@ -181,7 +188,10 @@ class FaceDetectionManager: NSObject {
     
     /// Create a Vision face detection request configured for real-time performance.
     ///
-    /// - Returns: Configured VNDetectFaceLandmarksRequest.
+    /// Creates a VNDetectFaceLandmarksRequest configured for real-time detection and result handling.
+    /// 
+    /// The request's completion handler forwards any error to the delegate via `faceDetectionDidFail(error:)` and passes successful face observations to `handleDetectionResults(_:)`. The request is tuned for minimal latency and, when available, to prefer GPU acceleration.
+    /// - Returns: A configured `VNDetectFaceLandmarksRequest` whose completion handler handles errors and delivers `VNFaceObservation` results.
     private func createFaceDetectionRequest() -> VNDetectFaceLandmarksRequest {
         let request = VNDetectFaceLandmarksRequest { [weak self] request, error in
             guard let self = self else { return }
@@ -211,7 +221,11 @@ class FaceDetectionManager: NSObject {
     
     /// Handle Vision face detection results and notify delegate.
     ///
-    /// - Parameter observations: Array of VNFaceObservation results.
+    /// Processes Vision face observations, converts them to `DetectedFace` results, and delivers a `FaceDetectionResult` to the delegate on the main thread.
+    /// - Parameters:
+    ///   - observations: Array of `VNFaceObservation` produced by a Vision request. The observations are limited to `detectionOptions.maxFaces` and filtered by `detectionOptions.minFaceSize` before conversion.
+    ///
+    /// This method exits immediately if detection has been cancelled. Results are processed on `resultQueue` to avoid races; the final `FaceDetectionResult` includes the current frame dimensions and a millisecond timestamp and is dispatched to the delegate on the main thread.
     private func handleDetectionResults(_ observations: [VNFaceObservation]) {
         // Check cancellation before processing results
         guard !isCancelled else { return }
@@ -254,7 +268,9 @@ class FaceDetectionManager: NSObject {
     /// Convert a VNFaceObservation to a DetectedFace data model.
     ///
     /// - Parameter observation: VNFaceObservation from Vision.
-    /// - Returns: DetectedFace struct with normalized coordinates and angles.
+    /// Converts a `VNFaceObservation` into the module's `DetectedFace` model.
+    /// - Parameter observation: The Vision face observation to convert.
+    /// - Returns: A `DetectedFace` containing a top-left-origin `bounds`, optional `trackingId` (when tracking is enabled), face rotation angles in degrees (`rollAngle`, `yawAngle`, `pitchAngle`), and optional `landmarks` if landmark detection is enabled. The `pitchAngle` uses `observation.pitch` when available; otherwise it is estimated from landmarks.
     private func convertToDetectedFace(_ observation: VNFaceObservation) -> DetectedFace {
         // Get or create tracking ID
         let trackingId = detectionOptions.trackingEnabled ? getTrackingId(for: observation) : nil
@@ -302,9 +318,17 @@ class FaceDetectionManager: NSObject {
     /// - Parameters:
     ///   - faceLandmarks: VNFaceLandmarks2D object.
     ///   - boundingBox: Bounding box for normalization.
-    /// - Returns: FaceLandmarks struct with optional points.
+    /// Converts a VNFaceLandmarks2D into a FaceLandmarks structure with points expressed in normalized image coordinates (origin at the top-left).
+    /// - Parameters:
+    ///   - faceLandmarks: Vision landmarks for a detected face.
+    ///   - boundingBox: The face bounding box (normalized coordinates with origin at bottom-left in Vision) used to map landmark points into image space.
+    /// - Returns: A FaceLandmarks object where each point, if present, is normalized to image coordinates (x and y between 0 and 1) with (0,0) at the top-left.
     private func extractLandmarks(_ faceLandmarks: VNFaceLandmarks2D, boundingBox: CGRect) -> FaceLandmarks {
         // Helper to convert landmark point to normalized coordinates
+        /// Converts a Vision landmark point (relative to a face bounding box) into normalized image coordinates with a top-left origin.
+        /// - Parameters:
+        ///   - point: A CGPoint where x and y are relative to the face bounding box (normalized 0–1) as provided by Vision landmarks.
+        /// - Returns: A `Point` whose `x` and `y` are normalized image coordinates (0–1) with the origin at the top-left of the image.
         func normalizePoint(_ point: CGPoint) -> Point {
             // Vision landmarks are relative to bounding box
             let x = boundingBox.origin.x + point.x * boundingBox.width
@@ -313,7 +337,10 @@ class FaceDetectionManager: NSObject {
             return Point(x: x, y: y)
         }
         
-        // Helper to get first point from landmark region
+        /// Returns the first landmark point from a Vision landmark region converted to image-space normalized coordinates.
+        /// - Parameters:
+        ///   - region: A `VNFaceLandmarkRegion2D` containing normalized landmark points, or `nil`.
+        /// - Returns: The first point converted to `Point`, or `nil` if `region` is `nil` or contains no points.
         func getPoint(from region: VNFaceLandmarkRegion2D?) -> Point? {
             guard let region = region, region.pointCount > 0 else { return nil }
             return normalizePoint(region.normalizedPoints[0])
@@ -336,7 +363,9 @@ class FaceDetectionManager: NSObject {
     /// Get or assign a tracking ID for a face observation.
     ///
     /// - Parameter observation: VNFaceObservation to track.
-    /// - Returns: Integer tracking ID.
+    /// Provide a persistent tracking identifier for a Vision face observation, creating and storing a new ID if the observation is unseen.
+    /// - Parameter observation: The `VNFaceObservation` whose `uuid` is used as the tracking key.
+    /// - Returns: A unique integer tracking ID associated with the observation.
     private func getTrackingId(for observation: VNFaceObservation) -> Int {
         let uuid = observation.uuid
         if let existingId = faceTrackingMap[uuid] {
@@ -352,7 +381,9 @@ class FaceDetectionManager: NSObject {
     /// Convert radians to degrees.
     ///
     /// - Parameter radians: Value in radians.
-    /// - Returns: Value in degrees.
+    /// Converts an angle in radians to degrees.
+    /// - Parameter radians: Angle in radians.
+    /// - Returns: Angle converted to degrees.
     private func radiansToDegrees(_ radians: Double) -> Double {
         return radians * 180.0 / .pi
     }
@@ -360,7 +391,9 @@ class FaceDetectionManager: NSObject {
     /// Estimate pitch angle from facial landmarks when observation.pitch is unavailable (iOS < 15).
     ///
     /// - Parameter observation: VNFaceObservation with landmarks.
-    /// - Returns: Estimated pitch angle in radians.
+    /// Estimates the head pitch (rotation around the X-axis) using facial landmarks when Vision's `observation.pitch` is unavailable.
+    /// - Parameter observation: A `VNFaceObservation` that contains facial landmarks used for the estimate.
+    /// - Returns: The estimated pitch in radians; positive values indicate the face is tilted upward, negative values indicate the face is tilted downward. Returns `0.0` if required landmarks are unavailable.
     private func estimatePitchFromLandmarks(_ observation: VNFaceObservation) -> Double {
         guard let landmarks = observation.landmarks else { return 0.0 }
         
@@ -390,7 +423,8 @@ class FaceDetectionManager: NSObject {
         return 0.0
     }
     
-    /// Safely decrement the processing counter for in-flight requests.
+    /// Decrements the in-flight processing counter in a thread-safe manner.
+    /// - Remark: Ensures the counter never becomes negative.
     private func decrementProcessingCount() {
         processingCountLock.lock()
         processingCount = max(0, processingCount - 1)
@@ -403,7 +437,10 @@ class FaceDetectionManager: NSObject {
     /// Simple implementation using timestamp comparison.
     ///
     /// - Parameter currentBuffer: Current camera frame buffer.
-    /// - Returns: true if significant motion is detected, false otherwise.
+    /// Determines whether the provided sample buffer indicates significant motion compared to the last processed buffer.
+    /// - Parameters:
+    ///   - currentBuffer: The current CMSampleBuffer to compare against the last processed buffer.
+    /// - Returns: `true` if motion is detected or if there is no previous buffer (first frame); `false` if the buffers appear identical based on timestamp comparison (threshold 0.001 seconds).
     private func hasSignificantMotion(_ currentBuffer: CMSampleBuffer) -> Bool {
         defer { lastProcessedBuffer = currentBuffer }
         
@@ -425,14 +462,17 @@ class FaceDetectionManager: NSObject {
     
     // MARK: - App Lifecycle Management
     
-    /// Pause detection when app goes to background.
+    /// Marks the manager as backgrounded to pause further frame processing.
+    /// Sets the internal `isAppInBackground` flag to `true`, preventing new frames from being processed and logging that detection is paused.
     func onAppBackground() {
         isAppInBackground = true
         print("[FaceDetection] Paused (app backgrounded)")
     }
     
     /// Resume detection when app comes to foreground.
-    /// Resets frame counter.
+    /// Marks the manager as active when the app returns to the foreground and resets frame counting.
+    /// 
+    /// Sets the internal `isAppInBackground` flag to `false` and resets `currentFrameCount` to zero to allow immediate processing of incoming frames.
     func onAppForeground() {
         isAppInBackground = false
         currentFrameCount = 0 // Reset frame counter
@@ -441,13 +481,15 @@ class FaceDetectionManager: NSObject {
     
     // MARK: - Thermal Management
     
-    /// Enable thermal throttling to reduce processing load.
+    /// Enables thermal throttling for the face detection manager.
+    /// 
+    /// Sets the internal thermal throttling state so the manager reduces or pauses processing to limit thermal load.
     func enableThermalThrottling() {
         isThermalThrottling = true
         print("[FaceDetection] Thermal throttling enabled")
     }
     
-    /// Disable thermal throttling.
+    /// Disables thermal throttling for face detection, allowing normal processing to resume.
     func disableThermalThrottling() {
         isThermalThrottling = false
         print("[FaceDetection] Thermal throttling disabled")
@@ -455,7 +497,8 @@ class FaceDetectionManager: NSObject {
     
     /// Check if thermal throttling is active.
     ///
-    /// - Returns: true if thermal throttling is enabled, false otherwise.
+    /// Indicates whether thermal throttling is currently active.
+    /// - Returns: `true` if thermal throttling is active, `false` otherwise.
     func isThermalThrottlingActive() -> Bool {
         return isThermalThrottling
     }
@@ -464,7 +507,10 @@ class FaceDetectionManager: NSObject {
     ///
     /// - Parameters:
     ///   - frameSkip: Number of frames to skip between detections.
-    ///   - motionDetection: Enable or disable motion detection.
+    /// Configures power-management settings for frame skipping and motion-based detection.
+    /// - Parameters:
+    ///   - frameSkip: Number of frames to skip between processing; values less than 0 are clamped to 0.
+    ///   - motionDetection: When `true`, enables motion-based skipping to avoid processing static frames.
     func configurePowerManagement(frameSkip: Int = 2, motionDetection: Bool = true) {
         self.frameSkipCount = max(0, frameSkip)
         self.motionDetectionEnabled = motionDetection
