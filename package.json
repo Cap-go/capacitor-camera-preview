@@ -10,6 +10,7 @@
   "bugs": {
     "url": "https://github.com/Cap-go/capacitor-camera-preview/issues"
   },
+  "homepage": "https://capgo.app/docs/plugins/camera-preview/",
   "author": "Martin Donadieu <martin@capgo.app>",
   "keywords": [
     "capacitor",
