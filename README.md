@@ -350,6 +350,7 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setFocus(...)`](#setfocus)
 * [`addListener('screenResize', ...)`](#addlistenerscreenresize-)
 * [`addListener('orientationChange', ...)`](#addlistenerorientationchange-)
+* [`addListener('faceDetection', ...)`](#addlistenerfacedetection-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -360,6 +361,9 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`getExposureCompensation()`](#getexposurecompensation)
 * [`setExposureCompensation(...)`](#setexposurecompensation)
 * [`getPluginVersion()`](#getpluginversion)
+* [`startFaceDetection(...)`](#startfacedetection)
+* [`stopFaceDetection()`](#stopfacedetection)
+* [`isFaceDetectionRunning()`](#isfacedetectionrunning)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 * [Enums](#enums)
@@ -912,6 +916,27 @@ Adds a listener for orientation change events.
 --------------------
 
 
+### addListener('faceDetection', ...)
+
+```typescript
+addListener(eventName: 'faceDetection', listenerFunc: (result: FaceDetectionResult) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for face detection events.
+This event is emitted continuously while face detection is active.
+
+| Param              | Type                                                                                     | Description                                              |
+| ------------------ | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **`eventName`**    | <code>'faceDetection'</code>                                                             | - Must be 'faceDetection'                                |
+| **`listenerFunc`** | <code>(result: <a href="#facedetectionresult">FaceDetectionResult</a>) =&gt; void</code> | - Callback function that receives face detection results |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 7.27.0
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -1060,6 +1085,53 @@ getPluginVersion() => Promise<{ version: string; }>
 Get the native Capacitor plugin version
 
 **Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
+
+--------------------
+
+
+### startFaceDetection(...)
+
+```typescript
+startFaceDetection(options?: FaceDetectionOptions | undefined) => Promise<void>
+```
+
+Starts real-time face detection on the camera preview.
+Face detection results will be emitted through the 'faceDetection' event listener.
+
+| Param         | Type                                                                  | Description                                |
+| ------------- | --------------------------------------------------------------------- | ------------------------------------------ |
+| **`options`** | <code><a href="#facedetectionoptions">FaceDetectionOptions</a></code> | - Configuration options for face detection |
+
+**Since:** 7.27.0
+
+--------------------
+
+
+### stopFaceDetection()
+
+```typescript
+stopFaceDetection() => Promise<void>
+```
+
+Stops real-time face detection.
+After calling this, no more 'faceDetection' events will be emitted.
+
+**Since:** 7.27.0
+
+--------------------
+
+
+### isFaceDetectionRunning()
+
+```typescript
+isFaceDetectionRunning() => Promise<{ isDetecting: boolean; }>
+```
+
+Checks if face detection is currently running.
+
+**Returns:** <code>Promise&lt;{ isDetecting: boolean; }&gt;</code>
+
+**Since:** 7.27.0
 
 --------------------
 
@@ -1227,6 +1299,74 @@ Represents the detailed information of the currently active lens.
 | **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
 
 
+#### FaceDetectionResult
+
+Result from face detection containing all detected faces.
+
+| Prop              | Type                        | Description                                                        |
+| ----------------- | --------------------------- | ------------------------------------------------------------------ |
+| **`faces`**       | <code>DetectedFace[]</code> | Array of detected faces. Empty if no faces detected.               |
+| **`frameWidth`**  | <code>number</code>         | Width of the frame in pixels.                                      |
+| **`frameHeight`** | <code>number</code>         | Height of the frame in pixels.                                     |
+| **`timestamp`**   | <code>number</code>         | Timestamp when the frame was processed (milliseconds since epoch). |
+
+
+#### DetectedFace
+
+Represents a single detected face with all its properties.
+
+| Prop             | Type                                                    | Description                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`trackingId`** | <code>number</code>                                     | Unique tracking ID for this face (persists across frames when tracking is enabled). Use this to associate face data across multiple frames for smooth filter animations. |
+| **`bounds`**     | <code><a href="#facebounds">FaceBounds</a></code>       | Face bounding box with normalized coordinates (0.0 - 1.0). Coordinates are relative to the camera preview dimensions.                                                    |
+| **`rollAngle`**  | <code>number</code>                                     | Face rotation angle around the Z-axis (head tilt left/right) in degrees. - Negative values: head tilted left - Positive values: head tilted right - Range: -180 to +180  |
+| **`yawAngle`**   | <code>number</code>                                     | Face rotation angle around the Y-axis (head turn left/right) in degrees. - Negative values: head turned left - Positive values: head turned right - Range: -180 to +180  |
+| **`pitchAngle`** | <code>number</code>                                     | Face rotation angle around the X-axis (head nod up/down) in degrees. - Negative values: head looking down - Positive values: head looking up - Range: -180 to +180       |
+| **`landmarks`**  | <code><a href="#facelandmarks">FaceLandmarks</a></code> | Facial landmarks with normalized coordinates. Only available if detectLandmarks is enabled.                                                                              |
+
+
+#### FaceBounds
+
+Face bounding box with normalized coordinates (0.0 - 1.0).
+All coordinates are relative to the camera preview dimensions.
+
+| Prop         | Type                | Description                                                 |
+| ------------ | ------------------- | ----------------------------------------------------------- |
+| **`x`**      | <code>number</code> | X coordinate of the top-left corner (normalized 0.0 - 1.0). |
+| **`y`**      | <code>number</code> | Y coordinate of the top-left corner (normalized 0.0 - 1.0). |
+| **`width`**  | <code>number</code> | Width of the bounding box (normalized 0.0 - 1.0).           |
+| **`height`** | <code>number</code> | Height of the bounding box (normalized 0.0 - 1.0).          |
+
+
+#### FaceLandmarks
+
+Facial landmark points with normalized coordinates (0.0 - 1.0).
+All points are relative to the camera preview dimensions.
+
+| Prop              | Type                                    | Description                                      |
+| ----------------- | --------------------------------------- | ------------------------------------------------ |
+| **`leftEye`**     | <code><a href="#point">Point</a></code> | Left eye center position.                        |
+| **`rightEye`**    | <code><a href="#point">Point</a></code> | Right eye center position.                       |
+| **`noseBase`**    | <code><a href="#point">Point</a></code> | Nose base (bottom) position.                     |
+| **`mouthLeft`**   | <code><a href="#point">Point</a></code> | Left mouth corner position.                      |
+| **`mouthRight`**  | <code><a href="#point">Point</a></code> | Right mouth corner position.                     |
+| **`mouthBottom`** | <code><a href="#point">Point</a></code> | Bottom center of the mouth.                      |
+| **`leftEar`**     | <code><a href="#point">Point</a></code> | Left ear position (may not always be detected).  |
+| **`rightEar`**    | <code><a href="#point">Point</a></code> | Right ear position (may not always be detected). |
+| **`leftCheek`**   | <code><a href="#point">Point</a></code> | Left cheek position.                             |
+| **`rightCheek`**  | <code><a href="#point">Point</a></code> | Right cheek position.                            |
+
+
+#### Point
+
+A 2D point with normalized coordinates (0.0 - 1.0).
+
+| Prop    | Type                | Description                                         |
+| ------- | ------------------- | --------------------------------------------------- |
+| **`x`** | <code>number</code> | X coordinate (normalized 0.0 - 1.0, left to right). |
+| **`y`** | <code>number</code> | Y coordinate (normalized 0.0 - 1.0, top to bottom). |
+
+
 #### SafeAreaInsets
 
 Represents safe area insets for devices.
@@ -1237,6 +1377,19 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 | ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **`orientation`** | <code>number</code> | Current device orientation (1 = portrait, 2 = landscape, 0 = unknown).                                                                                                                                                                           |
 | **`top`**         | <code>number</code> | Orientation-aware notch/camera cutout inset (excluding status bar). In portrait mode: returns top inset (notch at top). In landscape mode: returns left inset (notch at side). Android: Value in dp, iOS: Value in pixels (status bar excluded). |
+
+
+#### FaceDetectionOptions
+
+Options for configuring face detection behavior.
+
+| Prop                  | Type                              | Description                                                                                                                                                                          | Default             |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| **`performanceMode`** | <code>'fast' \| 'accurate'</code> | Performance mode for face detection. - 'fast': Faster detection with slightly lower accuracy (recommended for real-time filters) - 'accurate': Slower detection with higher accuracy | <code>'fast'</code> |
+| **`trackingEnabled`** | <code>boolean</code>              | Enable face tracking across frames. When enabled, each face gets a unique tracking ID that persists across frames.                                                                   | <code>true</code>   |
+| **`detectLandmarks`** | <code>boolean</code>              | Detect facial landmarks (eyes, nose, mouth, etc.).                                                                                                                                   | <code>true</code>   |
+| **`maxFaces`**        | <code>number</code>               | Maximum number of faces to detect. Lower values improve performance.                                                                                                                 | <code>3</code>      |
+| **`minFaceSize`**     | <code>number</code>               | Minimum face size as a ratio of the frame width (0.0 - 1.0). Smaller faces than this will not be detected.                                                                           | <code>0.15</code>   |
 
 
 ### Type Aliases

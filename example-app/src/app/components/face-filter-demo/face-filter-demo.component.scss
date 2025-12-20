@@ -1,0 +1,142 @@
+.camera-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.face-overlays {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Face filter (sunglasses) */
+.face-filter {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease-out;
+}
+
+.sunglasses-filter {
+  .sunglasses {
+    font-size: 3em;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  }
+}
+
+/* Face bounding box (debug visualization) */
+.face-bounds {
+  position: absolute;
+  border: 2px solid rgba(0, 255, 0, 0.6);
+  border-radius: 8px;
+  box-sizing: border-box;
+  transition: all 0.1s ease-out;
+}
+
+/* Landmarks */
+.landmark {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 0, 0, 0.8);
+  border: 1px solid white;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.landmark.left-eye,
+.landmark.right-eye {
+  background-color: rgba(0, 150, 255, 0.9);
+}
+
+.landmark.nose {
+  background-color: rgba(255, 200, 0, 0.9);
+}
+
+/* Control panel */
+.controls-panel {
+  position: absolute;
+  bottom: 20px;
+  left: 10px;
+  right: 10px;
+  z-index: 100;
+  pointer-events: auto;
+
+  ion-card {
+    margin: 0;
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+
+  ion-label {
+    font-size: 14px;
+
+    strong {
+      color: var(--ion-color-primary);
+    }
+  }
+}
+
+.controls {
+  margin: 16px 0;
+
+  ion-button {
+    margin-bottom: 12px;
+  }
+
+  ion-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 0;
+  }
+}
+
+.face-info {
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  font-size: 13px;
+
+  h3 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 4px 0;
+
+    strong {
+      margin-right: 8px;
+    }
+  }
+}
+
+/* Responsive adjustments */
+@media (min-width: 768px) {
+  .controls-panel {
+    max-width: 400px;
+    left: auto;
+    right: 20px;
+  }
+}

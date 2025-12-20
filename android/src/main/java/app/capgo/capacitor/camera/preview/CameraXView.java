@@ -146,6 +146,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
+    // Face Detection
+    private FaceDetectionManager faceDetectionManager;
+    private androidx.camera.core.ImageAnalysis imageAnalysis;
     // Capture/stop coordination
     private final Object captureLock = new Object();
     private volatile boolean isCapturingPhoto = false;
@@ -732,7 +735,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 currentCameraSelector = buildCameraSelector();
 
                 ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
-                    ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+                    // For face detection, use 720p (1280x720) as optimal balance
+                    // Higher resolutions slow down ML Kit processing without improving accuracy
+                    new ResolutionStrategy(
+                        new Size(1280, 720), // Target 720p
+                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                    )
                 );
 
                 if (sessionConfig.getAspectRatio() != null) {
@@ -754,7 +762,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     ? previewView.getDisplay().getRotation()
                     : android.view.Surface.ROTATION_0;
 
-                Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
+                // Configure preview with optimized frame rate for face detection (20-25 FPS)
+                Preview preview = new Preview.Builder()
+                    .setResolutionSelector(resolutionSelector)
+                    .setTargetRotation(rotation)
+                    .setTargetFrameRate(new Range<>(20, 25)) // 20-25 FPS for balanced performance
+                    .build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
                 imageCapture = new ImageCapture.Builder()
                     .setResolutionSelector(resolutionSelector)
@@ -3518,5 +3531,105 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentRecording = null;
         currentVideoFile = null;
         currentVideoCallback = null;
+    }
+
+    // ========================================
+    // Face Detection Methods
+    // ========================================
+
+    public void enableFaceDetection(FaceDetectionManager manager) {
+        this.faceDetectionManager = manager;
+
+        // Create ImageAnalysis use case if not exists
+        if (imageAnalysis == null) {
+            imageAnalysis = new androidx.camera.core.ImageAnalysis.Builder()
+                .setBackpressureStrategy(androidx.camera.core.ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+
+            imageAnalysis.setAnalyzer(cameraExecutor, (imageProxy) -> {
+                if (faceDetectionManager != null && faceDetectionManager.isRunning()) {
+                    faceDetectionManager.processImageProxy(imageProxy);
+                } else {
+                    imageProxy.close();
+                }
+            });
+        }
+
+        // Rebind camera with ImageAnalysis
+        rebindCameraWithAnalysis();
+    }
+
+    public void disableFaceDetection() {
+        this.faceDetectionManager = null;
+        if (imageAnalysis != null) {
+            imageAnalysis.clearAnalyzer();
+        }
+        // Rebind camera without ImageAnalysis
+        rebindCameraWithoutAnalysis();
+    }
+
+    private void rebindCameraWithAnalysis() {
+        if (cameraProvider == null || !isRunning) {
+            return;
+        }
+
+        try {
+            // Unbind all
+            cameraProvider.unbindAll();
+
+            // Rebuild preview
+            Preview preview = new Preview.Builder().build();
+            preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+            // Bind with ImageAnalysis
+            List<androidx.camera.core.UseCase> useCases = new ArrayList<>();
+            useCases.add(preview);
+            if (imageCapture != null) {
+                useCases.add(imageCapture);
+            }
+            if (videoCapture != null && sessionConfig.isVideoModeEnabled()) {
+                useCases.add(videoCapture);
+            }
+            if (imageAnalysis != null) {
+                useCases.add(imageAnalysis);
+            }
+
+            camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, useCases.toArray(new androidx.camera.core.UseCase[0]));
+
+            Log.d(TAG, "Camera rebound with face detection enabled");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to rebind camera with analysis", e);
+        }
+    }
+
+    private void rebindCameraWithoutAnalysis() {
+        if (cameraProvider == null || !isRunning) {
+            return;
+        }
+
+        try {
+            // Unbind all
+            cameraProvider.unbindAll();
+
+            // Rebuild preview
+            Preview preview = new Preview.Builder().build();
+            preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+            // Bind without ImageAnalysis
+            List<androidx.camera.core.UseCase> useCases = new ArrayList<>();
+            useCases.add(preview);
+            if (imageCapture != null) {
+                useCases.add(imageCapture);
+            }
+            if (videoCapture != null && sessionConfig.isVideoModeEnabled()) {
+                useCases.add(videoCapture);
+            }
+
+            camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, useCases.toArray(new androidx.camera.core.UseCase[0]));
+
+            Log.d(TAG, "Camera rebound with face detection disabled");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to rebind camera without analysis", e);
+        }
     }
 }

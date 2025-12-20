@@ -1,0 +1,116 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Face Filter Demo</ion-title>
+    <ion-button slot="end" (click)="close()">
+      <ion-icon name="close"></ion-icon>
+    </ion-button>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Camera preview background -->
+  <div class="camera-container">
+    
+    <!-- Face overlay containers -->
+    <div class="face-overlays">
+      @for (face of detectedFaces(); track face.trackingId || $index) {
+        <!-- Sunglasses filter -->
+        <div 
+          class="face-filter sunglasses-filter"
+          [style.transform]="getFaceTransform(face)"
+          [style.width]="getFaceSize(face).width"
+          [style.height]="getFaceSize(face).height">
+          <div class="sunglasses">😎</div>
+        </div>
+
+        <!-- Face bounding box (debug) -->
+        <div 
+          class="face-bounds"
+          [style.transform]="getFaceTransform(face)"
+          [style.width]="getFaceSize(face).width"
+          [style.height]="getFaceSize(face).height">
+          
+          <!-- Landmarks visualization -->
+          @if (showLandmarks() && face.landmarks) {
+            @if (face.landmarks.leftEye) {
+              <div 
+                class="landmark left-eye"
+                [style.left]="getLandmarkPosition(face.landmarks.leftEye.x, face.landmarks.leftEye.y).left"
+                [style.top]="getLandmarkPosition(face.landmarks.leftEye.x, face.landmarks.leftEye.y).top">
+              </div>
+            }
+            @if (face.landmarks.rightEye) {
+              <div 
+                class="landmark right-eye"
+                [style.left]="getLandmarkPosition(face.landmarks.rightEye.x, face.landmarks.rightEye.y).left"
+                [style.top]="getLandmarkPosition(face.landmarks.rightEye.x, face.landmarks.rightEye.y).top">
+              </div>
+            }
+            @if (face.landmarks.noseBase) {
+              <div 
+                class="landmark nose"
+                [style.left]="getLandmarkPosition(face.landmarks.noseBase.x, face.landmarks.noseBase.y).left"
+                [style.top]="getLandmarkPosition(face.landmarks.noseBase.x, face.landmarks.noseBase.y).top">
+              </div>
+            }
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Control panel -->
+    <div class="controls-panel">
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>Face Detection</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <div class="status">
+            <ion-label>
+              Status: 
+              <strong>{{ isFaceDetectionActive() ? 'Active' : 'Inactive' }}</strong>
+            </ion-label>
+            <ion-label>
+              Faces: <strong>{{ faceCount() }}</strong>
+            </ion-label>
+          </div>
+
+          <div class="controls">
+            <ion-button 
+              (click)="toggleFaceDetection()"
+              [color]="isFaceDetectionActive() ? 'danger' : 'primary'"
+              expand="block">
+              <ion-icon 
+                [name]="isFaceDetectionActive() ? 'stop-circle' : 'play-circle'"
+                slot="start">
+              </ion-icon>
+              {{ isFaceDetectionActive() ? 'Stop Detection' : 'Start Detection' }}
+            </ion-button>
+
+            <ion-toggle [(ngModel)]="showLandmarks">
+              <ion-label>Show Landmarks</ion-label>
+            </ion-toggle>
+          </div>
+
+          @if (detectedFaces().length > 0) {
+            <div class="face-info">
+              <h3>First Face Details:</h3>
+              @if (detectedFaces()[0]; as face) {
+                <p><strong>Tracking ID:</strong> {{ face.trackingId }}</p>
+                @if (face.rollAngle !== undefined) {
+                  <p><strong>Head Tilt:</strong> {{ face.rollAngle?.toFixed(1) }}°</p>
+                }
+                @if (face.yawAngle !== undefined) {
+                  <p><strong>Head Turn:</strong> {{ face.yawAngle?.toFixed(1) }}°</p>
+                }
+                @if (face.smilingProbability !== undefined) {
+                  <p><strong>Smile:</strong> {{ (face.smilingProbability * 100).toFixed(0) }}%</p>
+                }
+              }
+            </div>
+          }
+        </ion-card-content>
+      </ion-card>
+    </div>
+  </div>
+</ion-content>

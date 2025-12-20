@@ -28,6 +28,13 @@ export const routes: Routes = [
     ],
   },
   {
+    path: 'face-detection-demo',
+    loadComponent: () =>
+      import('./pages/face-detection-demo/face-detection-demo.page').then(
+        (m) => m.FaceDetectionDemoPage,
+      ),
+  },
+  {
     path: '**',
     redirectTo: '/camera',
   },

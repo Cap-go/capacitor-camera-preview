@@ -77,7 +77,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "getExposureCompensationRange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureCompensation", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setExposureCompensation", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise),
+        // Face Detection methods
+        CAPPluginMethod(name: "startFaceDetection", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopFaceDetection", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isFaceDetectionRunning", returnType: CAPPluginReturnPromise)
     ]
     // Camera state tracking
     private var isInitializing: Bool = false
@@ -539,6 +543,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             DispatchQueue.main.async {
                 self.makeWebViewTransparent()
             }
+            // Resume face detection when app becomes active
+            self.cameraController.faceDetectionManager?.onAppForeground()
         }
     }
 
@@ -547,6 +553,15 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             DispatchQueue.main.async {
                 self.makeWebViewTransparent()
             }
+            // Resume face detection when app enters foreground
+            self.cameraController.faceDetectionManager?.onAppForeground()
+        }
+    }
+
+    @objc func appWillResignActive() {
+        if self.isInitialized {
+            // Pause face detection when app goes to background
+            self.cameraController.faceDetectionManager?.onAppBackground()
         }
     }
 
@@ -821,10 +836,20 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Create and configure the preview view first
         self.updateCameraFrame()
 
-        // Add preview view to hierarchy first
-        self.webView?.addSubview(self.previewView)
-        if self.toBack == true {
-            self.webView?.sendSubviewToBack(self.previewView)
+        // Add preview view to hierarchy respecting toBack layering
+        if let webView = self.webView {
+            if self.toBack == true {
+                // Ensure webview is transparent and place preview at the very back
+                webView.isOpaque = false
+                webView.backgroundColor = .clear
+                self.previewView.isUserInteractionEnabled = false
+                self.previewView.layer.zPosition = -1000
+                webView.insertSubview(self.previewView, at: 0)
+            } else {
+                // Place preview above web content when not toBack
+                self.previewView.layer.zPosition = 1000
+                webView.addSubview(self.previewView)
+            }
         }
 
         // Make webview transparent
@@ -851,6 +876,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
         NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appWillResignActive), name: UIApplication.willResignActiveNotification, object: nil)
 
         self.isInitializing = false
         self.isInitialized = true
@@ -2323,4 +2349,73 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         call.resolve(["version": self.pluginVersion])
     }
 
+    // MARK: - Face Detection
+
+    @objc func startFaceDetection(_ call: CAPPluginCall) {
+        // Ensure camera is running
+        guard cameraController.captureSession?.isRunning == true else {
+            call.reject("Camera is not running. Start the camera preview first.")
+            return
+        }
+
+        // Parse options
+        let performanceMode = call.getString("performanceMode") ?? "fast"
+        let trackingEnabled = call.getBool("trackingEnabled") ?? true
+        let detectLandmarks = call.getBool("detectLandmarks") ?? true
+        let detectClassifications = call.getBool("detectClassifications") ?? false
+        let maxFaces = call.getInt("maxFaces") ?? 3
+        let minFaceSize = call.getDouble("minFaceSize") ?? 0.15
+
+        let options = FaceDetectionOptions(
+            performanceMode: performanceMode,
+            trackingEnabled: trackingEnabled,
+            detectLandmarks: detectLandmarks,
+            detectClassifications: detectClassifications,
+            maxFaces: maxFaces,
+            minFaceSize: minFaceSize
+        )
+
+        // Create face detection manager if it doesn't exist
+        if cameraController.faceDetectionManager == nil {
+            cameraController.faceDetectionManager = FaceDetectionManager(options: options)
+            cameraController.faceDetectionManager?.delegate = self
+        }
+
+        // Start face detection
+        cameraController.faceDetectionManager?.start(options: options)
+
+        call.resolve()
+    }
+
+    @objc func stopFaceDetection(_ call: CAPPluginCall) {
+        cameraController.faceDetectionManager?.stop()
+        call.resolve()
+    }
+
+    @objc func isFaceDetectionRunning(_ call: CAPPluginCall) {
+        let isDetecting = cameraController.faceDetectionManager?.isRunning() ?? false
+        call.resolve(["isDetecting": isDetecting])
+    }
+}
+
+// MARK: - Face Detection Delegate
+
+extension CameraPreview: FaceDetectionDelegate {
+    func faceDetectionDidUpdate(result: FaceDetectionResult) {
+        // Convert result to JSON dictionary
+        do {
+            let encoder = JSONEncoder()
+            let data = try encoder.encode(result)
+            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                // Notify JS layer
+                notifyListeners("faceDetection", data: json)
+            }
+        } catch {
+            print("[FaceDetection] Failed to encode result: \(error)")
+        }
+    }
+
+    func faceDetectionDidFail(error: Error) {
+        print("[FaceDetection] Detection failed: \(error.localizedDescription)")
+    }
 }

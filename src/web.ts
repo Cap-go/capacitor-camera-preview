@@ -1250,4 +1250,33 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   async getPluginVersion(): Promise<{ version: string }> {
     return { version: 'web' };
   }
+
+  /**
+   * Start face detection (not supported on web platform).
+   *
+   * @param _options Face detection options (ignored).
+   * @throws Error indicating face detection is not supported.
+   */
+  async startFaceDetection(_config?: any): Promise<void> {
+    void _config;
+    throw new Error('Face detection is not supported on the web platform');
+  }
+
+  /**
+   * Stop face detection (not supported on web platform).
+   *
+   * @throws Error indicating face detection is not supported.
+   */
+  async stopFaceDetection(): Promise<void> {
+    throw new Error('Face detection is not supported on the web platform');
+  }
+
+  /**
+   * Check if face detection is running (always false on web platform).
+   *
+   * @returns Object with isDetecting: false
+   */
+  async isFaceDetectionRunning(): Promise<{ isDetecting: boolean }> {
+    return { isDetecting: false };
+  }
 }
