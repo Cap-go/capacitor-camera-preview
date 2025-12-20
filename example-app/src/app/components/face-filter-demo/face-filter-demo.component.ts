@@ -44,8 +44,17 @@ export class FaceFilterDemoComponent implements OnInit, OnDestroy {
   protected detectedFaces = signal<DetectedFace[]>([]);
   protected isFaceDetectionActive = signal(false);
   protected faceCount = signal(0);
-  protected showLandmarks = signal(true);
+  protected showLandmarksSignal = signal(true);
   private faceDetectionListener: any;
+  
+  // Plain boolean property for ngModel binding
+  get showLandmarks(): boolean {
+    return this.showLandmarksSignal();
+  }
+  
+  set showLandmarks(value: boolean) {
+    this.showLandmarksSignal.set(value);
+  }
 
   constructor(private modalController: ModalController) {}
 

@@ -31,7 +31,7 @@
           [style.height]="getFaceSize(face).height">
           
           <!-- Landmarks visualization -->
-          @if (showLandmarks() && face.landmarks) {
+          @if (showLandmarksSignal() && face.landmarks) {
             @if (face.landmarks.leftEye) {
               <div 
                 class="landmark left-eye"
