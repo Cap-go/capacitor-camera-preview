@@ -495,6 +495,33 @@ export interface DetectedFace {
   pitchAngle?: number;
 
   /**
+   * Probability that the person is smiling (0.0 - 1.0).
+   * Only available if detectClassifications is enabled.
+   * - 0.0: not smiling
+   * - 1.0: definitely smiling
+   * @platform android, ios
+   */
+  smilingProbability?: number;
+
+  /**
+   * Probability that the left eye is open (0.0 - 1.0).
+   * Only available if detectClassifications is enabled.
+   * - 0.0: eye closed
+   * - 1.0: eye open
+   * @platform android, ios
+   */
+  leftEyeOpenProbability?: number;
+
+  /**
+   * Probability that the right eye is open (0.0 - 1.0).
+   * Only available if detectClassifications is enabled.
+   * - 0.0: eye closed
+   * - 1.0: eye open
+   * @platform android, ios
+   */
+  rightEyeOpenProbability?: number;
+
+  /**
    * Facial landmarks with normalized coordinates.
    * Only available if detectLandmarks is enabled.
    * @platform android, ios
