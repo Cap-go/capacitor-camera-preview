@@ -88,12 +88,20 @@ class FaceDetectionManager: NSObject {
         // Wait briefly for in-flight requests to complete
         let maxWaitTime = 0.5 // 500ms max wait
         let startTime = CACurrentMediaTime()
-        while processingCount > 0 && (CACurrentMediaTime() - startTime) < maxWaitTime {
+        processingCountLock.lock()
+        var count = processingCount
+        processingCountLock.unlock()
+        while count > 0 && (CACurrentMediaTime() - startTime) < maxWaitTime {
             Thread.sleep(forTimeInterval: 0.01)
+            processingCountLock.lock()
+            count = processingCount
+            processingCountLock.unlock()
         }
         
-        self.faceTrackingMap.removeAll()
-        self.nextTrackingId = 1
+        resultQueue.sync {
+            self.faceTrackingMap.removeAll()
+            self.nextTrackingId = 1
+        }
         print("[FaceDetection] Stopped (\(processingCount) requests still processing)")
     }
     
