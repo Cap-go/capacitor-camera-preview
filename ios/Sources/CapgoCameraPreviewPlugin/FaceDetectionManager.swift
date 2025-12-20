@@ -98,7 +98,9 @@ class FaceDetectionManager: NSObject {
             processingCountLock.unlock()
         }
         
-        resultQueue.sync {
+        // Use async to avoid potential deadlock if stop() is called from main thread
+        // while resultQueue has work that dispatches back to main
+        resultQueue.async {
             self.faceTrackingMap.removeAll()
             self.nextTrackingId = 1
         }
