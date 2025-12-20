@@ -687,7 +687,7 @@ export class CameraViewPage implements OnInit {
       const results = this.testResults() + '\n✓ Face detection started';
       this.testResults.set(results);
     } catch (error) {
-      const results = this.testResults() + `\n✗ Face detection failed: ${error}`;
+      const results = this.testResults() + `\n✗ Face detection failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }
@@ -701,7 +701,7 @@ export class CameraViewPage implements OnInit {
       const results = this.testResults() + '\n✓ Face detection stopped';
       this.testResults.set(results);
     } catch (error) {
-      const results = this.testResults() + `\n✗ Stop face detection failed: ${error}`;
+      const results = this.testResults() + `\n✗ Stop face detection failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }

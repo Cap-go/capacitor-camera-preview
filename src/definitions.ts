@@ -407,6 +407,14 @@ export interface FaceDetectionOptions {
   detectLandmarks?: boolean;
 
   /**
+   * Enable face classification probabilities (smiling, eyes open, etc.).
+   * When enabled, detection results include smilingProbability, leftEyeOpenProbability, and rightEyeOpenProbability.
+   * @default false
+   * @platform android, ios
+   */
+  detectClassifications?: boolean;
+
+  /**
    * Maximum number of faces to detect.
    * Lower values improve performance.
    * @default 3
