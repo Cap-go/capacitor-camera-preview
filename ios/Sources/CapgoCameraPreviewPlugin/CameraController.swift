@@ -2006,6 +2006,10 @@ extension CameraController {
 
         self.captureSession = nil
         self.currentCameraPosition = nil
+        
+        // Stop and release face detection manager
+        self.faceDetectionManager?.stop()
+        self.faceDetectionManager = nil
 
         // Reset output preparation status
         self.outputsPrepared = false
