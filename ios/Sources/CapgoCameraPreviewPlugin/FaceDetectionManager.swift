@@ -164,12 +164,8 @@ class FaceDetectionManager: NSObject {
                 return
             }
             
-            // Store frame dimensions for coordinate normalization
-            self.currentFrameWidth = frameWidth
-            self.currentFrameHeight = frameHeight
-            
-            // Create face detection request
-            let request = self.createFaceDetectionRequest()
+            // Create face detection request with captured frame dimensions
+            let request = self.createFaceDetectionRequest(frameWidth: frameWidth, frameHeight: frameHeight)
             
             // Process the frame
             do {
@@ -191,18 +187,24 @@ class FaceDetectionManager: NSObject {
     
     /// Create a Vision face detection request configured for real-time performance.
     ///
+    /// - Parameters:
+    ///   - frameWidth: Width of the frame for coordinate normalization.
+    ///   - frameHeight: Height of the frame for coordinate normalization.
     /// - Returns: Configured VNDetectFaceLandmarksRequest.
-    private func createFaceDetectionRequest() -> VNDetectFaceLandmarksRequest {
+    private func createFaceDetectionRequest(frameWidth: CGFloat, frameHeight: CGFloat) -> VNDetectFaceLandmarksRequest {
         let request = VNDetectFaceLandmarksRequest { [weak self] request, error in
             guard let self = self else { return }
             
             if let error = error {
-                print("[FaceDetection] Detection error: \(error)")
-                self.delegate?.faceDetectionDidFail(error: error)
+                print("[FaceDetection] Detection error: \\(error)")
+                // Dispatch delegate callback to main thread
+                DispatchQueue.main.async {
+                    self.delegate?.faceDetectionDidFail(error: error)
+                }
                 return
             }
             
-            self.handleDetectionResults(request.results as? [VNFaceObservation] ?? [])
+            self.handleDetectionResults(request.results as? [VNFaceObservation] ?? [], frameWidth: frameWidth, frameHeight: frameHeight)
         }
         
         // Configure request for optimal real-time performance
@@ -221,8 +223,11 @@ class FaceDetectionManager: NSObject {
     
     /// Handle Vision face detection results and notify delegate.
     ///
-    /// - Parameter observations: Array of VNFaceObservation results.
-    private func handleDetectionResults(_ observations: [VNFaceObservation]) {
+    /// - Parameters:
+    ///   - observations: Array of VNFaceObservation results.
+    ///   - frameWidth: Width of the frame for coordinate normalization.
+    ///   - frameHeight: Height of the frame for coordinate normalization.
+    private func handleDetectionResults(_ observations: [VNFaceObservation], frameWidth: CGFloat, frameHeight: CGFloat) {
         // Check cancellation before processing results
         guard !isCancelled else { return }
         
@@ -247,8 +252,8 @@ class FaceDetectionManager: NSObject {
             // Create result
             let result = FaceDetectionResult(
                 faces: detectedFaces,
-                frameWidth: Int(self.currentFrameWidth),
-                frameHeight: Int(self.currentFrameHeight),
+                frameWidth: Int(frameWidth),
+                frameHeight: Int(frameHeight),
                 timestamp: Int64(Date().timeIntervalSince1970 * 1000)
             )
             
@@ -329,13 +334,19 @@ class FaceDetectionManager: NSObject {
             return normalizePoint(region.normalizedPoints[0])
         }
         
+        // Helper to get point at specific index from landmark region
+        func getPointAt(index: Int, from region: VNFaceLandmarkRegion2D?) -> Point? {
+            guard let region = region, region.pointCount > index else { return nil }
+            return normalizePoint(region.normalizedPoints[index])
+        }
+        
         return FaceLandmarks(
             leftEye: getPoint(from: faceLandmarks.leftEye),
             rightEye: getPoint(from: faceLandmarks.rightEye),
             noseBase: getPoint(from: faceLandmarks.nose),
-            mouthLeft: getPoint(from: faceLandmarks.outerLips), // Approximate
-            mouthRight: getPoint(from: faceLandmarks.outerLips), // Approximate
-            mouthBottom: getPoint(from: faceLandmarks.outerLips), // Approximate
+            mouthLeft: getPointAt(index: 0, from: faceLandmarks.outerLips), // Left corner
+            mouthRight: getPointAt(index: 6, from: faceLandmarks.outerLips), // Right corner
+            mouthBottom: getPointAt(index: 9, from: faceLandmarks.outerLips), // Bottom center
             leftEar: nil, // Not reliably detected by Vision
             rightEar: nil,
             leftCheek: nil, // Not available in Vision
