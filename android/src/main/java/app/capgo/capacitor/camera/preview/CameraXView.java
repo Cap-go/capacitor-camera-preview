@@ -3568,6 +3568,44 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         rebindCameraWithoutAnalysis();
     }
 
+    /**
+     * Helper method to create a Preview with the same configuration as bindCameraUseCases().
+     * This ensures consistent preview behavior when rebinding camera with/without face detection.
+     */
+    private Preview createConfiguredPreview() {
+        ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
+            // For face detection, use 720p (1280x720) as optimal balance
+            new ResolutionStrategy(
+                new Size(1280, 720), // Target 720p
+                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+            )
+        );
+
+        if (sessionConfig.getAspectRatio() != null) {
+            int aspectRatio;
+            if ("16:9".equals(sessionConfig.getAspectRatio())) {
+                aspectRatio = AspectRatio.RATIO_16_9;
+            } else {
+                // "4:3"
+                aspectRatio = AspectRatio.RATIO_4_3;
+            }
+            resolutionSelectorBuilder.setAspectRatioStrategy(new AspectRatioStrategy(aspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO));
+        }
+
+        ResolutionSelector resolutionSelector = resolutionSelectorBuilder.build();
+
+        int rotation = previewView != null && previewView.getDisplay() != null
+            ? previewView.getDisplay().getRotation()
+            : android.view.Surface.ROTATION_0;
+
+        // Configure preview with optimized frame rate for face detection (20-25 FPS)
+        return new Preview.Builder()
+            .setResolutionSelector(resolutionSelector)
+            .setTargetRotation(rotation)
+            .setTargetFrameRate(new Range<>(20, 25)) // 20-25 FPS for balanced performance
+            .build();
+    }
+
     private void rebindCameraWithAnalysis() {
         if (cameraProvider == null || !isRunning) {
             return;
@@ -3577,8 +3615,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             // Unbind all
             cameraProvider.unbindAll();
 
-            // Rebuild preview
-            Preview preview = new Preview.Builder().build();
+            // Rebuild preview with proper configuration
+            Preview preview = createConfiguredPreview();
             preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
             // Bind with ImageAnalysis
@@ -3611,8 +3649,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             // Unbind all
             cameraProvider.unbindAll();
 
-            // Rebuild preview
-            Preview preview = new Preview.Builder().build();
+            // Rebuild preview with proper configuration
+            Preview preview = createConfiguredPreview();
             preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
             // Bind without ImageAnalysis
