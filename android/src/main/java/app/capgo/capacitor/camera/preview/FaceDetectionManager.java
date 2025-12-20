@@ -208,13 +208,21 @@ public class FaceDetectionManager {
         // Increment processing counter
         processingCount.incrementAndGet();
 
+        // Check if image is available
+        @androidx.camera.core.ExperimentalGetImage
+        android.media.Image mediaImage = imageProxy.getImage();
+        if (mediaImage == null) {
+            imageProxy.close();
+            processingCount.decrementAndGet();
+            return;
+        }
+
         // Convert ImageProxy to InputImage
         @androidx.camera.core.ExperimentalGetImage
-        InputImage inputImage = InputImage.fromMediaImage(imageProxy.getImage(), imageProxy.getImageInfo().getRotationDegrees());
+        InputImage inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
 
         final int frameWidth = imageProxy.getWidth();
         final int frameHeight = imageProxy.getHeight();
-
         // Process the image asynchronously
         faceDetector
             .process(inputImage)
