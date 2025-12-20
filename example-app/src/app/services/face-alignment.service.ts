@@ -81,8 +81,8 @@ export class FaceAlignmentService {
     if (Math.abs(pitchAngle) > this.config.maxPitchDegrees) {
       result.isPitchValid = false;
       const feedback = pitchAngle > 0 
-        ? 'Look down less' 
-        : 'Look up less';
+        ? 'Tilt head down slightly' 
+        : 'Tilt head up slightly';
       result.allFeedback.push(feedback);
     } else {
       result.isPitchValid = true;

@@ -522,13 +522,13 @@ extension CameraController {
             guard let self = self, let previewLayer = self.previewLayer else { return }
             
             // Reconfigure preview layer frame based on aspect ratio
-            if let view = previewLayer.superlayer as? UIView {
+            if let containerBounds = previewLayer.superlayer?.bounds {
                 if let aspectRatio = aspectRatio {
-                    let frame = self.calculateAspectRatioFrame(for: aspectRatio, in: view.bounds)
+                    let frame = self.calculateAspectRatioFrame(for: aspectRatio, in: containerBounds)
                     previewLayer.frame = frame
                     previewLayer.videoGravity = .resizeAspectFill
                 } else {
-                    previewLayer.frame = view.bounds
+                    previewLayer.frame = containerBounds
                     previewLayer.videoGravity = .resizeAspect
                 }
                 

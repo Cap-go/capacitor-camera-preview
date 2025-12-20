@@ -438,7 +438,7 @@ export class CameraViewPage implements OnInit {
         this.testResults() + `\n✓ Horizontal FOV: ${JSON.stringify(fov)}`;
       this.testResults.set(results);
     } catch (error) {
-      const results = this.testResults() + `\n✗ FOV test failed: ${error}`;
+      const results = this.testResults() + `\n✗ FOV test failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }
@@ -452,7 +452,7 @@ export class CameraViewPage implements OnInit {
       this.testResults.set(results);
     } catch (error) {
       const results =
-        this.testResults() + `\n✗ Picture sizes test failed: ${error}`;
+        this.testResults() + `\n✗ Picture sizes test failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }
@@ -465,7 +465,7 @@ export class CameraViewPage implements OnInit {
       this.testResults.set(results);
     } catch (error) {
       const results =
-        this.testResults() + `\n✗ Flash modes test failed: ${error}`;
+        this.testResults() + `\n✗ Flash modes test failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }
@@ -478,7 +478,7 @@ export class CameraViewPage implements OnInit {
         `\n✓ Zoom: min=${zoom.min}, max=${zoom.max}, current=${zoom.current}`;
       this.testResults.set(results);
     } catch (error) {
-      const results = this.testResults() + `\n✗ Zoom test failed: ${error}`;
+      const results = this.testResults() + `\n✗ Zoom test failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }
@@ -735,15 +735,12 @@ export class CameraViewPage implements OnInit {
           if (face.yawAngle !== undefined) {
             results += `\n    Yaw: ${face.yawAngle.toFixed(1)}°`;
           }
-          if (face.smilingProbability !== undefined) {
-            results += `\n    Smiling: ${(face.smilingProbability * 100).toFixed(0)}%`;
-          }
         });
       }
 
       this.testResults.set(results);
     } catch (error) {
-      results += `\n✗ Test failed: ${error}`;
+      results += `\n✗ Test failed: ${String(error)}`;
       this.testResults.set(results);
     }
   }

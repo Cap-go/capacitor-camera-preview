@@ -52,10 +52,6 @@ class FaceDetectionManager: NSObject {
     /// Thermal throttling state
     private var isThermalThrottling: Bool = false
     
-    /// Frame dimensions for coordinate normalization
-    private var currentFrameWidth: CGFloat = 0
-    private var currentFrameHeight: CGFloat = 0
-    
     /// Dictionary to track face IDs across frames
     private var faceTrackingMap: [UUID: Int] = [:]
     private var nextTrackingId: Int = 1
