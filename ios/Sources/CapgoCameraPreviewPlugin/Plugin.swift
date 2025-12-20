@@ -2381,6 +2381,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             cameraController.faceDetectionManager?.delegate = self
         }
 
+        // Configure frame rate for face detection before starting
+        cameraController.configureFrameRateForFaceDetection()
+
         // Start face detection
         cameraController.faceDetectionManager?.start(options: options)
 
@@ -2389,6 +2392,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     @objc func stopFaceDetection(_ call: CAPPluginCall) {
         cameraController.faceDetectionManager?.stop()
+        
+        // Restore original frame rate after stopping face detection
+        cameraController.restoreOriginalFrameRate()
+        
         call.resolve()
     }
 

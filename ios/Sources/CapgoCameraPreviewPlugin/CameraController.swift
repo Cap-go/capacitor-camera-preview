@@ -112,6 +112,11 @@ class CameraController: NSObject {
 
     // Face Detection
     var faceDetectionManager: FaceDetectionManager?
+    
+    // Frame rate state for restoration after face detection
+    private var savedActiveFormat: AVCaptureDevice.Format?
+    private var savedMinFrameDuration: CMTime?
+    private var savedMaxFrameDuration: CMTime?
 
     func calculateAspectRatioFrame(for aspectRatio: String, in bounds: CGRect) -> CGRect {
         guard let ratio = parseAspectRatio(aspectRatio) else {
@@ -479,9 +484,6 @@ extension CameraController {
         if captureSession.canSetSessionPreset(targetPreset) {
             captureSession.sessionPreset = targetPreset
         }
-        
-        // Configure frame rate for face detection (20-25 FPS)
-        configureFrameRateForFaceDetection()
     }
 
     /// Update the requested aspect ratio at runtime and reconfigure session/preview accordingly
@@ -537,11 +539,20 @@ extension CameraController {
     }
     
     /// Configure frame rate for optimal face detection performance (20-25 FPS)
-    private func configureFrameRateForFaceDetection() {
+    /// Saves the original frame rate settings before modifying them
+    func configureFrameRateForFaceDetection() {
         guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else { return }
         
         do {
             try device.lockForConfiguration()
+            
+            // Save original settings if not already saved
+            if savedActiveFormat == nil {
+                savedActiveFormat = device.activeFormat
+                savedMinFrameDuration = device.activeVideoMinFrameDuration
+                savedMaxFrameDuration = device.activeVideoMaxFrameDuration
+                print("[CameraController] Saved original frame rate settings")
+            }
             
             // Find format that supports our target frame rate
             var targetFormat: AVCaptureDevice.Format?
@@ -585,6 +596,37 @@ extension CameraController {
             device.unlockForConfiguration()
         } catch {
             print("[CameraController] Failed to configure frame rate: \\(error)")
+        }
+    }
+    
+    /// Restore the original frame rate settings saved before face detection was enabled
+    func restoreOriginalFrameRate() {
+        guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else { return }
+        guard let format = savedActiveFormat,
+              let minDuration = savedMinFrameDuration,
+              let maxDuration = savedMaxFrameDuration else {
+            print("[CameraController] No saved frame rate settings to restore")
+            return
+        }
+        
+        do {
+            try device.lockForConfiguration()
+            
+            // Restore original format and frame durations
+            device.activeFormat = format
+            device.activeVideoMinFrameDuration = minDuration
+            device.activeVideoMaxFrameDuration = maxDuration
+            
+            // Clear saved state
+            savedActiveFormat = nil
+            savedMinFrameDuration = nil
+            savedMaxFrameDuration = nil
+            
+            print("[CameraController] Restored original frame rate settings")
+            
+            device.unlockForConfiguration()
+        } catch {
+            print("[CameraController] Failed to restore frame rate: \\(error)")
         }
     }
 
