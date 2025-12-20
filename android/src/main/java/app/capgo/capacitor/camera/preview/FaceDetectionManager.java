@@ -46,6 +46,7 @@ public class FaceDetectionManager {
     private int performanceMode = FaceDetectorOptions.PERFORMANCE_MODE_FAST;
     private boolean trackingEnabled = true;
     private boolean detectLandmarks = true;
+    private boolean detectClassifications = false;
     private int maxFaces = 3;
     private float minFaceSize = 0.15f;
 
@@ -98,6 +99,10 @@ public class FaceDetectionManager {
 
         if (detectLandmarks) {
             optionsBuilder.setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL);
+        }
+
+        if (detectClassifications) {
+            optionsBuilder.setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL);
         }
 
         // Create detector
@@ -170,7 +175,8 @@ public class FaceDetectionManager {
 
         // Frame skipping for power saving (process every Nth frame)
         currentFrameCount++;
-        if (currentFrameCount % (frameSkipCount + 1) != 0) {
+        int clampedFrameSkip = Math.max(0, frameSkipCount);
+        if (currentFrameCount % (clampedFrameSkip + 1) != 0) {
             imageProxy.close();
             return;
         }
@@ -247,6 +253,7 @@ public class FaceDetectionManager {
             // Other options
             trackingEnabled = options.optBoolean("trackingEnabled", true);
             detectLandmarks = options.optBoolean("detectLandmarks", true);
+            detectClassifications = options.optBoolean("detectClassifications", false);
             maxFaces = options.optInt("maxFaces", 3);
             minFaceSize = (float) options.optDouble("minFaceSize", 0.15);
 
@@ -332,6 +339,22 @@ public class FaceDetectionManager {
             JSONObject landmarksObj = extractLandmarks(face, frameWidth, frameHeight);
             if (landmarksObj.length() > 0) {
                 faceObj.put("landmarks", landmarksObj);
+            }
+        }
+
+        // Classification probabilities (smiling, eye open states)
+        if (detectClassifications) {
+            Float smilingProb = face.getSmilingProbability();
+            if (smilingProb != null) {
+                faceObj.put("smilingProbability", smilingProb);
+            }
+            Float leftEyeOpenProb = face.getLeftEyeOpenProbability();
+            if (leftEyeOpenProb != null) {
+                faceObj.put("leftEyeOpenProbability", leftEyeOpenProb);
+            }
+            Float rightEyeOpenProb = face.getRightEyeOpenProbability();
+            if (rightEyeOpenProb != null) {
+                faceObj.put("rightEyeOpenProbability", rightEyeOpenProb);
             }
         }
 
