@@ -18,7 +18,7 @@
         "@capacitor/core": "7.4.4",
         "@capacitor/haptics": "7.0.3",
         "@capacitor/ios": "^7.4.0",
-        "@capacitor/keyboard": "7.0.3",
+        "@capacitor/keyboard": "7.0.4",
         "@capacitor/status-bar": "^7.0.1",
         "@capgo/camera-preview": "file:..",
         "@capgo/home-indicator": "^7.1.3",
@@ -311,7 +311,7 @@
 
     "@capacitor/ios": ["@capacitor/ios@7.4.4", "", { "peerDependencies": { "@capacitor/core": "^7.4.0" } }, "sha512-Xp3bGWlSQAwsZGngRMWTdoD2agdMV12Whnm+/xsYPxfQSj+Tksbr7r/8Mso7VWkpnTKO4iMlx762g3PjW+wi4w=="],
 
-    "@capacitor/keyboard": ["@capacitor/keyboard@7.0.3", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-BIBKjmky5rOYNhvYhNeDi0MMvjwYZ6YF9JoCYcGKvKY+XLJKtezsEL78XfOlgWZBkbfR8uq3tzktY6PqgoYLKA=="],
+    "@capacitor/keyboard": ["@capacitor/keyboard@7.0.4", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-kKHsuDOC0q9iC1XANhQBK35S+hFKx4EfY9I+SEMPR6RuUAIuXQXYaA3+D0LkdRdHIf3OrlTDznPvXQ5Dg2WrCA=="],
 
     "@capacitor/status-bar": ["@capacitor/status-bar@7.0.3", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-JyRpVnKwHij9hgPWolF6PK+HT3e2HSPjN11/h2OmKxq8GAdPGARFLv+97eZl0pvuvm0Kka/LpiLb5whXISBg7Q=="],
 
