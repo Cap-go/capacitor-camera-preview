@@ -14,7 +14,10 @@ import {
   PermissionRequestOptions,
   getBase64FromFilePath,
   deleteFile,
+  FaceDetectionOptions,
+  FaceDetectionResult,
 } from '@capgo/camera-preview';
+import { PluginListenerHandle } from '@capacitor/core';
 import { Capacitor } from '@capacitor/core';
 import { BehaviorSubject } from 'rxjs';
 
@@ -364,5 +367,68 @@ export class CapacitorCameraViewService {
 
   async setExposureCompensation(value: number): Promise<void> {
     await this.#cameraView.setExposureCompensation({ value });
+  }
+
+  // ===== Face Detection =====
+  private faceDetectionListener?: PluginListenerHandle;
+
+  /**
+   * Start face detection with specified options.
+   *
+   * @param {FaceDetectionOptions} options - Face detection configuration options (performance mode, tracking, landmarks, etc).
+   * @returns {Promise<void>} Resolves when detection is started.
+   */
+  async startFaceDetection(options: FaceDetectionOptions): Promise<void> {
+    await this.#cameraView.startFaceDetection(options);
+  }
+
+  /**
+   * Stop face detection if running.
+   *
+   * @returns {Promise<void>} Resolves when detection is stopped.
+   */
+  async stopFaceDetection(): Promise<void> {
+    await this.#cameraView.stopFaceDetection();
+  }
+
+  /**
+   * Check if face detection is currently running.
+   *
+   * @returns {Promise<boolean>} True if face detection is active, false otherwise.
+   */
+  async isFaceDetectionRunning(): Promise<boolean> {
+    const result = await this.#cameraView.isFaceDetectionRunning();
+    return result.isDetecting;
+  }
+
+  /**
+   * Add a listener for face detection events.
+   *
+   * @param {(result: FaceDetectionResult) => void} callback - Function to call when faces are detected.
+   * @returns {Promise<void>} Resolves when listener is registered.
+   */
+  async addFaceDetectionListener(
+    callback: (result: FaceDetectionResult) => void,
+  ): Promise<void> {
+    this.faceDetectionListener = await this.#cameraView.addListener(
+      'faceDetection',
+      (result: FaceDetectionResult) => {
+        this.ngZone.run(() => {
+          callback(result);
+        });
+      },
+    );
+  }
+
+  /**
+   * Remove the face detection listener if present.
+   *
+   * @returns {Promise<void>} Resolves when listener is removed.
+   */
+  async removeFaceDetectionListener(): Promise<void> {
+    if (this.faceDetectionListener) {
+      await this.faceDetectionListener.remove();
+      this.faceDetectionListener = undefined;
+    }
   }
 }

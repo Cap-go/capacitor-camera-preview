@@ -589,6 +589,110 @@
         </ion-item>
       </ion-list>
 
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>Face Detection 🎭</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-list lines="full">
+            <ion-item>
+              <ion-checkbox
+                [(ngModel)]="faceDetectionEnabled"
+                color="primary"
+                justify="space-between"
+                (ionChange)="toggleFaceDetection()"
+              >
+                Enable Face Detection
+              </ion-checkbox>
+            </ion-item>
+
+            @if (faceDetectionEnabled()) {
+            <ion-item>
+              <ion-select
+                [(ngModel)]="faceDetectionPerformance"
+                label="Performance Mode"
+                label-placement="floating"
+              >
+                <ion-select-option value="fast">Fast (Real-time)</ion-select-option>
+                <ion-select-option value="accurate">Accurate (High quality)</ion-select-option>
+              </ion-select>
+            </ion-item>
+
+            <ion-item>
+              <ion-checkbox
+                [(ngModel)]="detectLandmarks"
+                color="primary"
+                justify="space-between"
+              >
+                Detect Facial Landmarks
+              </ion-checkbox>
+            </ion-item>
+
+            <ion-item>
+              <ion-checkbox
+                [(ngModel)]="trackFaces"
+                color="primary"
+                justify="space-between"
+              >
+                Track Faces (Tracking IDs)
+              </ion-checkbox>
+            </ion-item>
+
+            <ion-item>
+              <ion-range
+                [(ngModel)]="maxFaces"
+                min="1"
+                max="10"
+                step="1"
+                [label]="'Max Faces to Detect (' + maxFaces() + ')'"
+                labelPlacement="stacked"
+              >
+                <ion-icon size="small" slot="start" name="person-outline"></ion-icon>
+                <ion-icon slot="end" name="people"></ion-icon>
+              </ion-range>
+            </ion-item>
+
+            @if (faceDetectionRunning()) {
+            <ion-item lines="none">
+              <ion-label color="success">
+                <ion-icon name="checkmark-circle" color="success"></ion-icon>
+                Face Detection Active - {{ detectedFaces().length }} face(s) detected
+              </ion-label>
+            </ion-item>
+            }
+            }
+          </ion-list>
+
+          <ion-grid>
+            <ion-row>
+              <ion-col>
+                <ion-button
+                  (click)="testFaceDetection()"
+                  fill="outline"
+                  size="small"
+                  expand="block"
+                >
+                  <ion-icon name="analytics" slot="start"></ion-icon>
+                  Test Detection
+                </ion-button>
+              </ion-col>
+              <ion-col>
+                <ion-button
+                  routerLink="/face-detection-demo"
+                  fill="solid"
+                  size="small"
+                  expand="block"
+                  color="secondary"
+                >
+                  <ion-icon name="camera" slot="start"></ion-icon>
+                  Live Demo
+                </ion-button>
+              </ion-col>
+            </ion-row>
+          </ion-grid>
+        </ion-card-content>
+      </ion-card>
+
       <ion-button (click)="startCamera()" expand="block" size="large">
         <ion-icon name="camera-outline" slot="start" />
         Start Camera with Current Settings

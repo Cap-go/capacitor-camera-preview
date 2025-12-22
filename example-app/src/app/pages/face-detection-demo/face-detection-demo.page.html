@@ -1,0 +1,115 @@
+<ion-header class="ion-no-border">
+  <ion-toolbar color="transparent">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/" color="light"></ion-back-button>
+    </ion-buttons>
+    <ion-title color="light">Face Detection Demo</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-no-padding">
+  <!-- Camera container - lowest layer -->
+  <div class="camera-container"></div>
+  
+  <!-- Face guidance overlay - shows alignment guide and feedback -->
+  @if (showGuidanceOverlay() && faceDetectionActive()) {
+    <app-face-guidance-overlay [guidance]="guidanceState()"></app-face-guidance-overlay>
+  }
+  
+  <!-- Face detection debug overlay - shows bounding boxes and landmarks -->
+  @if (showDebugOverlay()) {
+    <div class="face-overlay">
+      @for (face of detectedFaces(); track face.trackingId || $index) {
+        <!-- Face bounding box -->
+        <div class="face-box" [style]="getFaceBoxStyle(face)">
+          @if (face.trackingId) {
+            <div class="face-id">ID: {{ face.trackingId }}</div>
+          }
+        </div>
+
+        <!-- Facial landmarks -->
+        @if (showLandmarks() && face.landmarks) {
+          @if (face.landmarks.leftEye) {
+            <div class="landmark" [style]="getLandmarkStyle(face.landmarks.leftEye.x, face.landmarks.leftEye.y)"></div>
+          }
+          @if (face.landmarks.rightEye) {
+            <div class="landmark" [style]="getLandmarkStyle(face.landmarks.rightEye.x, face.landmarks.rightEye.y)"></div>
+          }
+          @if (face.landmarks.noseBase) {
+            <div class="landmark" [style]="getLandmarkStyle(face.landmarks.noseBase.x, face.landmarks.noseBase.y)"></div>
+          }
+          @if (face.landmarks.mouthLeft) {
+            <div class="landmark" [style]="getLandmarkStyle(face.landmarks.mouthLeft.x, face.landmarks.mouthLeft.y)"></div>
+          }
+          @if (face.landmarks.mouthRight) {
+            <div class="landmark" [style]="getLandmarkStyle(face.landmarks.mouthRight.x, face.landmarks.mouthRight.y)"></div>
+          }
+        }
+      }
+    </div>
+  }
+ 
+  
+  <!-- Control buttons -->
+  <div class="control-buttons">
+    <ion-chip (click)="toggleGuidanceOverlay()" [color]="showGuidanceOverlay() ? 'primary' : 'medium'">
+      <ion-icon name="flash"></ion-icon>
+      Guidance
+    </ion-chip>
+    <ion-chip (click)="toggleDebugOverlay()" [color]="showDebugOverlay() ? 'primary' : 'medium'">
+      <ion-icon name="flash-off"></ion-icon>
+      Debug
+    </ion-chip>
+    <ion-chip (click)="toggleLandmarks()" [color]="showLandmarks() ? 'primary' : 'medium'">
+      <ion-icon name="camera"></ion-icon>
+      Landmarks
+    </ion-chip>
+  </div>
+
+  
+  <!-- Draggable stats sheet - enhanced with optimization metrics -->
+  <div
+    class="stats-sheet"
+    [style]="getSheetStyle()"
+    (touchstart)="onSheetTouchStart($event)"
+    (touchmove)="onSheetTouchMove($event)"
+    (touchend)="onSheetTouchEnd()"
+    (pointerdown)="onSheetPointerDown($event)"
+    (pointermove)="onSheetPointerMove($event)"
+    (pointerup)="onSheetPointerUp()"
+  >
+    <div class="sheet-handle"></div>
+    
+    <!-- Performance metrics header -->
+    <div class="sheet-header">
+      <div class="metric-group">
+        <div class="metric"><span>Faces</span><strong>{{ detectedFaces().length }}</strong></div>
+        <div class="metric"><span>FPS</span><strong>{{ fps() }}</strong></div>
+      </div>
+      <div class="metric-group">
+        <div class="metric"><span>Resolution</span><strong>{{ frameWidth() }}×{{ frameHeight() }}</strong></div>
+        <div class="metric"><span>Processed</span><strong>{{ processedFrames() }}</strong></div>
+      </div>
+    </div>
+    
+    <!-- Face details list -->
+    <div class="faces-list">
+      @for (face of detectedFaces(); track face.trackingId || $index; let i = $index) {
+        <div class="face-item">
+          <div class="face-index">#{{ i + 1 }}</div>
+          <div class="face-info">
+            <div class="angles">
+              @if (face.rollAngle !== undefined) { <span>↻ {{ face.rollAngle.toFixed(0) }}°</span> }
+              @if (face.yawAngle !== undefined) { <span>↔ {{ face.yawAngle.toFixed(0) }}°</span> }
+              @if (face.pitchAngle !== undefined) { <span>↕ {{ face.pitchAngle.toFixed(0) }}°</span> }
+            </div>
+          </div>
+          @if (face.trackingId) { <div class="face-id-tag">ID {{ face.trackingId }}</div> }
+        </div>
+      }
+      @if (!detectedFaces().length) {
+        <div class="empty">Point the camera at a face to see stats</div>
+      }
+    </div>
+  </div>
+</ion-content>

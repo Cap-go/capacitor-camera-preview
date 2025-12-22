@@ -1,4 +1,4 @@
-require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+require_relative '../../node_modules/.bun/@capacitor+ios@7.4.4+1d43a6a1837411c8/node_modules/@capacitor/ios/scripts/pods_helpers'
 
 platform :ios, '14.0'
 use_frameworks!
@@ -9,9 +9,14 @@ use_frameworks!
 install! 'cocoapods', :disable_input_output_paths => true
 
 def capacitor_pods
-  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-  pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
-  pod 'CapgoCameraPreview', :path => '../../..'
+  pod 'Capacitor', :path => '../../node_modules/.bun/@capacitor+ios@7.4.4+1d43a6a1837411c8/node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../node_modules/.bun/@capacitor+ios@7.4.4+1d43a6a1837411c8/node_modules/@capacitor/ios'
+  pod 'CapacitorApp', :path => '../../node_modules/.bun/@capacitor+app@7.1.0+1d43a6a1837411c8/node_modules/@capacitor/app'
+  pod 'CapacitorHaptics', :path => '../../node_modules/.bun/@capacitor+haptics@7.0.2+1d43a6a1837411c8/node_modules/@capacitor/haptics'
+  pod 'CapacitorKeyboard', :path => '../../node_modules/.bun/@capacitor+keyboard@7.0.3+1d43a6a1837411c8/node_modules/@capacitor/keyboard'
+  pod 'CapacitorStatusBar', :path => '../../node_modules/.bun/@capacitor+status-bar@7.0.3+1d43a6a1837411c8/node_modules/@capacitor/status-bar'
+  pod 'CapgoCameraPreview', :path => '../../node_modules/.bun/@capgo+camera-preview@file+../node_modules/@capgo/camera-preview'
+  pod 'CapgoHomeIndicator', :path => '../../node_modules/.bun/@capgo+home-indicator@7.1.3+1d43a6a1837411c8/node_modules/@capgo/home-indicator'
 end
 
 target 'App' do
