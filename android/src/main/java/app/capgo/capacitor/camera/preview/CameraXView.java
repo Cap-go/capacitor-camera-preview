@@ -140,6 +140,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final Context context;
     private final WebView webView;
     // WebView's default background is white; we store this to restore on error or cleanup
+    // Note: WebView doesn't provide a way to query its current background color, so we assume
+    // the default white background. This is consistent across Android versions.
     private int originalWebViewBackground = android.graphics.Color.WHITE;
     private final LifecycleRegistry lifecycleRegistry;
     private final Executor mainExecutor;
@@ -428,8 +430,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         CameraSessionConfiguration config = sessionConfig;
         boolean shouldRestore = config != null && config.isToBack();
         if (shouldRestore) {
+            // Capture background color before posting to UI thread
+            final int backgroundColorToRestore = originalWebViewBackground;
             webView.post(() -> {
-                webView.setBackgroundColor(originalWebViewBackground);
+                // Additional safety check in case webView context changed
+                if (webView != null) {
+                    webView.setBackgroundColor(backgroundColorToRestore);
+                }
             });
         }
     }
