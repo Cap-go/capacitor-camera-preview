@@ -1494,6 +1494,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return ret;
     }
 
+    private boolean isToBackMode() {
+        if (cameraXView != null) {
+            CameraSessionConfiguration config = cameraXView.getSessionConfig();
+            if (config != null) {
+                return config.isToBack();
+            }
+        }
+        return false;
+    }
+
     @Override
     public void onCameraStarted(int width, int height, int x, int y) {
         PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
@@ -1628,14 +1638,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             
             // Transition window background to transparent now that camera is ready
             // This prevents flickering during camera initialization
-            boolean toBack = false;
-            if (cameraXView != null) {
-                CameraSessionConfiguration config = cameraXView.getSessionConfig();
-                if (config != null) {
-                    toBack = config.isToBack();
-                }
-            }
-            if (toBack) {
+            if (isToBackMode()) {
                 getBridge().getActivity().runOnUiThread(() -> {
                     try {
                         getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));

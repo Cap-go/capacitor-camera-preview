@@ -139,6 +139,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private CameraXViewListener listener;
     private final Context context;
     private final WebView webView;
+    // WebView's default background is white; we store this to restore on error or cleanup
+    private int originalWebViewBackground = android.graphics.Color.WHITE;
     private final LifecycleRegistry lifecycleRegistry;
     private final Executor mainExecutor;
     private ExecutorService cameraExecutor;
@@ -424,7 +426,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private void restoreWebViewBackground() {
         if (sessionConfig != null && sessionConfig.isToBack()) {
             webView.post(() -> {
-                webView.setBackgroundColor(android.graphics.Color.WHITE);
+                webView.setBackgroundColor(originalWebViewBackground);
             });
         }
     }
@@ -725,7 +727,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (focusIndicatorView != null) {
             focusIndicatorView = null;
         }
-        webView.setBackgroundColor(android.graphics.Color.WHITE);
+        webView.setBackgroundColor(originalWebViewBackground);
     }
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
