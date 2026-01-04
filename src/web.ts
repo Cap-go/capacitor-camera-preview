@@ -1153,6 +1153,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     video.style.top = `${options.y}px`;
     video.width = options.width;
     video.height = options.height;
+    video.style.width = `${options.width}px`;
+    video.style.height = `${options.height}px`;
 
     const offsetX = options.width / 8;
     const offsetY = options.height / 8;
