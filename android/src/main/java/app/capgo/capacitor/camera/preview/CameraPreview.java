@@ -1628,15 +1628,21 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             
             // Transition window background to transparent now that camera is ready
             // This prevents flickering during camera initialization
-            boolean toBack = cameraXView != null && cameraXView.getSessionConfig() != null && cameraXView.getSessionConfig().isToBack();
+            boolean toBack = false;
+            if (cameraXView != null) {
+                CameraSessionConfiguration config = cameraXView.getSessionConfig();
+                if (config != null) {
+                    toBack = config.isToBack();
+                }
+            }
             if (toBack) {
-                try {
-                    getBridge().getActivity().runOnUiThread(() -> {
-                        try {
-                            getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                        } catch (Exception ignored) {}
-                    });
-                } catch (Exception ignored) {}
+                getBridge().getActivity().runOnUiThread(() -> {
+                    try {
+                        getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to set window background to transparent", e);
+                    }
+                });
             }
 
             call.resolve(result);
@@ -1682,14 +1688,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         
         // Restore original window background on error to prevent black screen
         if (originalWindowBackground != null) {
-            try {
-                getBridge().getActivity().runOnUiThread(() -> {
-                    try {
-                        getBridge().getActivity().getWindow().setBackgroundDrawable(originalWindowBackground);
-                        originalWindowBackground = null;
-                    } catch (Exception ignored) {}
-                });
-            } catch (Exception ignored) {}
+            getBridge().getActivity().runOnUiThread(() -> {
+                try {
+                    getBridge().getActivity().getWindow().setBackgroundDrawable(originalWindowBackground);
+                    originalWindowBackground = null;
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to restore window background on error", e);
+                }
+            });
         }
     }
 

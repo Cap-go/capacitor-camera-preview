@@ -421,6 +421,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         });
     }
 
+    private void restoreWebViewBackground() {
+        if (sessionConfig != null && sessionConfig.isToBack()) {
+            webView.post(() -> {
+                webView.setBackgroundColor(android.graphics.Color.WHITE);
+            });
+        }
+    }
+
     private void setupCamera() {
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(context);
         cameraProviderFuture.addListener(
@@ -431,11 +439,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     bindCameraUseCases();
                 } catch (Exception e) {
                     // Restore webView background on error
-                    if (sessionConfig != null && sessionConfig.isToBack()) {
-                        webView.post(() -> {
-                            webView.setBackgroundColor(android.graphics.Color.WHITE);
-                        });
-                    }
+                    restoreWebViewBackground();
                     if (listener != null) {
                         listener.onCameraStartError("Error initializing camera: " + e.getMessage());
                     }
@@ -946,11 +950,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 }
             } catch (Exception e) {
                 // Restore webView background on error
-                if (sessionConfig.isToBack()) {
-                    webView.post(() -> {
-                        webView.setBackgroundColor(android.graphics.Color.WHITE);
-                    });
-                }
+                restoreWebViewBackground();
                 if (listener != null) listener.onCameraStartError("Error binding camera: " + e.getMessage());
             }
         });
