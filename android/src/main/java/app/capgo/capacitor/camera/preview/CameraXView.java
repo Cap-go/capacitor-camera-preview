@@ -424,7 +424,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private void restoreWebViewBackground() {
-        if (sessionConfig != null && sessionConfig.isToBack()) {
+        // Check toBack mode once and store to avoid race conditions
+        boolean shouldRestore = sessionConfig != null && sessionConfig.isToBack();
+        if (shouldRestore) {
             webView.post(() -> {
                 webView.setBackgroundColor(originalWebViewBackground);
             });
