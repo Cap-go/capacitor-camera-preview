@@ -948,7 +948,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                         // Update grid overlay bounds after camera is started
                         updateGridOverlayBounds();
-                        
+
                         // Now transition to transparent background after camera is ready
                         // This prevents flickering during camera initialization
                         if (sessionConfig.isToBack()) {
