@@ -936,7 +936,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         if (originalWindowBackground == null) {
                             originalWindowBackground = getBridge().getActivity().getWindow().getDecorView().getBackground();
                         }
-                        getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                        // Set to solid black first to prevent flickering during transition
+                        // This provides a stable base before camera preview is ready
+                        getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
                     } catch (Exception ignored) {}
                 }
                 DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
@@ -1623,6 +1625,19 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     logicalHeight +
                     ")"
             );
+            
+            // Transition window background to transparent now that camera is ready
+            // This prevents flickering during camera initialization
+            boolean toBack = cameraXView != null && cameraXView.getSessionConfig() != null && cameraXView.getSessionConfig().isToBack();
+            if (toBack) {
+                try {
+                    getBridge().getActivity().runOnUiThread(() -> {
+                        try {
+                            getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                        } catch (Exception ignored) {}
+                    });
+                } catch (Exception ignored) {}
+            }
 
             call.resolve(result);
             bridge.releaseCall(call);

@@ -444,7 +444,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             removePreviewView();
         }
         if (sessionConfig.isToBack()) {
-            webView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            // Set to black initially to prevent flickering, will be transparent after camera starts
+            webView.setBackgroundColor(android.graphics.Color.BLACK);
         }
 
         // Create a container to hold both the preview and grid overlay
@@ -925,6 +926,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                         // Update grid overlay bounds after camera is started
                         updateGridOverlayBounds();
+                        
+                        // Now transition to transparent background after camera is ready
+                        // This prevents flickering during camera initialization
+                        if (sessionConfig.isToBack()) {
+                            webView.post(() -> {
+                                webView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                            });
+                        }
 
                         listener.onCameraStarted(actualWidth, actualHeight, actualX, actualY);
                     });
