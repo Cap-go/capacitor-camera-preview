@@ -1690,17 +1690,19 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         
         // Restore original window background on error to prevent black screen
-        // Capture the background reference to avoid race conditions
-        final Drawable backgroundToRestore = originalWindowBackground;
-        if (backgroundToRestore != null) {
-            originalWindowBackground = null; // Clear immediately to prevent double-restoration
-            getBridge().getActivity().runOnUiThread(() -> {
-                try {
-                    getBridge().getActivity().getWindow().setBackgroundDrawable(backgroundToRestore);
-                } catch (Exception e) {
-                    Log.w(TAG, "Failed to restore window background on error", e);
-                }
-            });
+        // Use synchronized block to prevent race conditions with multiple error calls
+        synchronized (this) {
+            final Drawable backgroundToRestore = originalWindowBackground;
+            if (backgroundToRestore != null) {
+                originalWindowBackground = null; // Clear immediately to prevent double-restoration
+                getBridge().getActivity().runOnUiThread(() -> {
+                    try {
+                        getBridge().getActivity().getWindow().setBackgroundDrawable(backgroundToRestore);
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to restore window background on error", e);
+                    }
+                });
+            }
         }
     }
 
