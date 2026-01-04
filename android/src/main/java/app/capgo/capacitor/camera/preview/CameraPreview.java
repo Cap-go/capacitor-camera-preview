@@ -1679,6 +1679,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             bridge.releaseCall(call);
             cameraStartCallbackId = null;
         }
+        
+        // Restore original window background on error to prevent black screen
+        if (originalWindowBackground != null) {
+            try {
+                getBridge().getActivity().runOnUiThread(() -> {
+                    try {
+                        getBridge().getActivity().getWindow().setBackgroundDrawable(originalWindowBackground);
+                        originalWindowBackground = null;
+                    } catch (Exception ignored) {}
+                });
+            } catch (Exception ignored) {}
+        }
     }
 
     @PluginMethod
