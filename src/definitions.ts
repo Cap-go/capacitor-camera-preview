@@ -374,6 +374,162 @@ export interface SafeAreaInsets {
 export type DeviceOrientation = 'portrait' | 'landscape-left' | 'landscape-right' | 'portrait-upside-down' | 'unknown';
 
 /**
+ * A point in 2D space with normalized coordinates (0-1).
+ */
+export interface Point {
+  /** The x coordinate, normalized 0-1. */
+  x: number;
+  /** The y coordinate, normalized 0-1. */
+  y: number;
+}
+
+/**
+ * The bounding box of a detected face with normalized coordinates.
+ */
+export interface FaceBounds {
+  /** Top-left x coordinate (normalized 0-1). */
+  x: number;
+  /** Top-left y coordinate (normalized 0-1). */
+  y: number;
+  /** Width of the face bounds (normalized 0-1). */
+  width: number;
+  /** Height of the face bounds (normalized 0-1). */
+  height: number;
+}
+
+/**
+ * Face orientation angles in degrees.
+ */
+export interface FaceAngles {
+  /** Head rotation around Z-axis (-180 to 180 degrees). */
+  roll: number;
+  /** Head rotation around Y-axis (-180 to 180 degrees). */
+  yaw: number;
+  /** Head rotation around X-axis (-180 to 180 degrees). */
+  pitch: number;
+}
+
+/**
+ * Facial landmarks for precise filter positioning.
+ */
+export interface FaceLandmarks {
+  /** Left eye position. */
+  leftEye?: Point;
+  /** Right eye position. */
+  rightEye?: Point;
+  /** Nose base position. */
+  nose?: Point;
+  /** Mouth center position. */
+  mouth?: Point;
+  /** Left ear position. */
+  leftEar?: Point;
+  /** Right ear position. */
+  rightEar?: Point;
+  /** Left cheek position. */
+  leftCheek?: Point;
+  /** Right cheek position. */
+  rightCheek?: Point;
+  /** Left mouth corner position. */
+  leftMouth?: Point;
+  /** Right mouth corner position. */
+  rightMouth?: Point;
+  /** Bottom mouth position. */
+  bottomMouth?: Point;
+}
+
+/**
+ * A single detected face with all its properties.
+ */
+export interface DetectedFace {
+  /** Unique tracking ID for this face across frames. */
+  trackingId: number;
+  /** The bounding box of the face. */
+  bounds: FaceBounds;
+  /** Face orientation angles (if available). */
+  angles?: FaceAngles;
+  /** Facial landmarks (if enabled and available). */
+  landmarks?: FaceLandmarks;
+  /** Probability that the person is smiling (0-1, if available). */
+  smilingProbability?: number;
+  /** Probability that the left eye is open (0-1, if available). */
+  leftEyeOpenProbability?: number;
+  /** Probability that the right eye is open (0-1, if available). */
+  rightEyeOpenProbability?: number;
+}
+
+/**
+ * Face detection event data emitted in real-time.
+ */
+export interface FaceDetectionEvent {
+  /** Array of detected faces. */
+  faces: DetectedFace[];
+  /** Timestamp when faces were detected (milliseconds). */
+  timestamp: number;
+  /** Width of the camera frame in pixels. */
+  frameWidth: number;
+  /** Height of the camera frame in pixels. */
+  frameHeight: number;
+}
+
+/**
+ * Options for configuring face detection.
+ */
+export interface FaceDetectionOptions {
+  /**
+   * Enable detailed landmark detection for precise filter positioning.
+   * @default false
+   */
+  enableLandmarks?: boolean;
+  /**
+   * Enable face contours for advanced filters (Android only).
+   * @default false
+   * @platform android
+   */
+  enableContours?: boolean;
+  /**
+   * Enable classification features (smile, eye open probabilities).
+   * @default false
+   */
+  enableClassification?: boolean;
+  /**
+   * Enable face tracking IDs for consistent identification across frames.
+   * @default true
+   */
+  enableTracking?: boolean;
+  /**
+   * Performance mode: 'fast' for real-time, 'accurate' for higher precision.
+   * @default 'fast'
+   */
+  performanceMode?: 'fast' | 'accurate';
+  /**
+   * Minimum face size as a proportion of image (0-1).
+   * @default 0.1
+   */
+  minFaceSize?: number;
+  /**
+   * Process every N frames (1 = every frame, 2 = every other frame, etc.).
+   * @default 1
+   */
+  detectionInterval?: number;
+}
+
+/**
+ * Face detection capabilities for the current device.
+ */
+export interface FaceDetectionCapabilities {
+  /** Whether face detection is supported on this platform. */
+  supported: boolean;
+  /** Whether landmark detection is available. */
+  landmarks: boolean;
+  /** Whether contour detection is available. */
+  contours: boolean;
+  /** Whether classification (smile, eyes) is available. */
+  classification: boolean;
+  /** Whether face tracking is available. */
+  tracking: boolean;
+}
+
+/**
  * The main interface for the CameraPreview plugin.
  */
 export interface CameraPreviewPlugin {
@@ -719,6 +875,22 @@ export interface CameraPreviewPlugin {
     eventName: 'orientationChange',
     listenerFunc: (data: { orientation: DeviceOrientation }) => void,
   ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for face detection events.
+   * Called continuously with detected face data when face detection is enabled.
+   *
+   * @param {string} eventName - The event name to listen for ('onFacesDetected').
+   * @param {Function} listenerFunc - The function to call when faces are detected.
+   * @returns {Promise<PluginListenerHandle>} A promise that resolves with a handle to the listener.
+   * @since 8.1.0
+   * @platform android, ios
+   */
+  addListener(
+    eventName: 'onFacesDetected',
+    listenerFunc: (event: FaceDetectionEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
   /**
    * Deletes a file at the given absolute path on the device.
    * Use this to quickly clean up temporary images created with `storeToFile`.
@@ -797,4 +969,42 @@ export interface CameraPreviewPlugin {
    * @throws An error if the something went wrong
    */
   getPluginVersion(): Promise<{ version: string }>;
+
+  /**
+   * Enables real-time face detection on the camera preview.
+   * Emits 'onFacesDetected' events with detected face data.
+   *
+   * @param {FaceDetectionOptions} options - Configuration for face detection.
+   * @returns {Promise<void>} A promise that resolves when face detection is enabled.
+   * @since 8.1.0
+   * @platform android, ios
+   */
+  enableFaceDetection(options?: FaceDetectionOptions): Promise<void>;
+
+  /**
+   * Disables face detection on the camera preview.
+   *
+   * @returns {Promise<void>} A promise that resolves when face detection is disabled.
+   * @since 8.1.0
+   * @platform android, ios
+   */
+  disableFaceDetection(): Promise<void>;
+
+  /**
+   * Checks if face detection is currently enabled.
+   *
+   * @returns {Promise<{ enabled: boolean }>} A promise that resolves with the face detection status.
+   * @since 8.1.0
+   * @platform android, ios
+   */
+  isFaceDetectionEnabled(): Promise<{ enabled: boolean }>;
+
+  /**
+   * Gets the face detection capabilities for the current device.
+   *
+   * @returns {Promise<FaceDetectionCapabilities>} A promise that resolves with the capabilities.
+   * @since 8.1.0
+   * @platform android, ios, web
+   */
+  getFaceDetectionCapabilities(): Promise<FaceDetectionCapabilities>;
 }

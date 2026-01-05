@@ -12,6 +12,9 @@ import {
   ExposureMode,
   CameraPermissionStatus,
   PermissionRequestOptions,
+  FaceDetectionOptions,
+  FaceDetectionCapabilities,
+  FaceDetectionEvent,
   getBase64FromFilePath,
   deleteFile,
 } from '@capgo/camera-preview';
@@ -364,5 +367,44 @@ export class CapacitorCameraViewService {
 
   async setExposureCompensation(value: number): Promise<void> {
     await this.#cameraView.setExposureCompensation({ value });
+  }
+
+  // ===== Face Detection Controls =====
+  /**
+   * Enable face detection on the camera preview
+   * @param options Configuration options for face detection
+   */
+  async enableFaceDetection(options?: FaceDetectionOptions): Promise<void> {
+    return this.#cameraView.enableFaceDetection(options);
+  }
+
+  /**
+   * Disable face detection on the camera preview
+   */
+  async disableFaceDetection(): Promise<void> {
+    return this.#cameraView.disableFaceDetection();
+  }
+
+  /**
+   * Check if face detection is currently enabled
+   */
+  async isFaceDetectionEnabled(): Promise<boolean> {
+    const { enabled } = await this.#cameraView.isFaceDetectionEnabled();
+    return enabled;
+  }
+
+  /**
+   * Get face detection capabilities for the current device
+   */
+  async getFaceDetectionCapabilities(): Promise<FaceDetectionCapabilities> {
+    return this.#cameraView.getFaceDetectionCapabilities();
+  }
+
+  /**
+   * Listen to face detection events
+   * @param callback Callback function to be called when faces are detected
+   */
+  async onFacesDetected(callback: (event: FaceDetectionEvent) => void): Promise<any> {
+    return this.#cameraView.addListener('onFacesDetected', callback);
   }
 }

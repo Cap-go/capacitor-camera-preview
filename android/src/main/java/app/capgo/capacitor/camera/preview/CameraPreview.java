@@ -47,6 +47,7 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import java.util.List;
 import java.util.Objects;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 @CapacitorPlugin(
@@ -1975,5 +1976,98 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         } catch (final Exception e) {
             call.reject("Could not get plugin version", e);
         }
+    }
+
+    @PluginMethod
+    public void enableFaceDetection(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+
+        try {
+            // Get options from call
+            JSObject options = call.getObject("options");
+            JSONObject jsonOptions = options != null ? new JSONObject(options.toString()) : new JSONObject();
+
+            cameraXView.enableFaceDetection(jsonOptions);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to enable face detection: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void disableFaceDetection(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+
+        try {
+            cameraXView.disableFaceDetection();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to disable face detection: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void isFaceDetectionEnabled(PluginCall call) {
+        JSObject ret = new JSObject();
+        if (cameraXView != null) {
+            ret.put("enabled", cameraXView.isFaceDetectionEnabled());
+        } else {
+            ret.put("enabled", false);
+        }
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getFaceDetectionCapabilities(PluginCall call) {
+        if (cameraXView != null) {
+            JSONObject capabilities = cameraXView.getFaceDetectionCapabilities();
+            JSObject ret = new JSObject();
+            try {
+                ret.put("supported", capabilities.getBoolean("supported"));
+                ret.put("landmarks", capabilities.getBoolean("landmarks"));
+                ret.put("contours", capabilities.getBoolean("contours"));
+                ret.put("classification", capabilities.getBoolean("classification"));
+                ret.put("tracking", capabilities.getBoolean("tracking"));
+            } catch (Exception e) {
+                call.reject("Failed to get capabilities: " + e.getMessage());
+                return;
+            }
+            call.resolve(ret);
+        } else {
+            JSObject ret = new JSObject();
+            ret.put("supported", true);
+            ret.put("landmarks", true);
+            ret.put("contours", true);
+            ret.put("classification", true);
+            ret.put("tracking", true);
+            call.resolve(ret);
+        }
+    }
+
+    @Override
+    public void onFacesDetected(JSONArray faces, int frameWidth, int frameHeight, long timestamp) {
+        try {
+            JSObject data = new JSObject();
+            data.put("faces", new JSArray(faces.toString()));
+            data.put("frameWidth", frameWidth);
+            data.put("frameHeight", frameHeight);
+            data.put("timestamp", timestamp);
+            notifyListeners("onFacesDetected", data);
+        } catch (Exception e) {
+            Log.e(TAG, "Error notifying face detection listeners", e);
+        }
+    }
+
+    @Override
+    public void onFaceDetectionError(String message) {
+        JSObject data = new JSObject();
+        data.put("error", message);
+        notifyListeners("onFaceDetectionError", data);
     }
 }

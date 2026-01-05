@@ -1,0 +1,202 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Face Detection Demo</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Canvas for drawing face overlays -->
+  <canvas #canvas class="face-canvas"></canvas>
+
+  <!-- Control Panel -->
+  <div class="control-panel">
+    <!-- Main Controls -->
+    <ion-card class="control-card">
+      <ion-card-header>
+        <ion-card-title>Face Detection</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-button
+          expand="block"
+          [color]="isDetecting() ? 'danger' : 'success'"
+          (click)="toggleDetection()"
+          size="large"
+        >
+          <ion-icon [icon]="isDetecting() ? stop : play" slot="start"></ion-icon>
+          {{ isDetecting() ? 'Stop Detection' : 'Start Detection' }}
+        </ion-button>
+
+        @if (isDetecting()) {
+        <div class="detection-status">
+          <ion-text color="success">
+            <h3>Detecting...</h3>
+          </ion-text>
+          <div class="face-info">
+            <p><strong>Faces Detected:</strong> {{ faceCount() }}</p>
+            <p><strong>Frame Size:</strong> {{ frameWidth() }} x {{ frameHeight() }}</p>
+            <p><strong>Timestamp:</strong> {{ (timestamp() / 1000).toFixed(2) }}s</p>
+          </div>
+        </div>
+        }
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Capabilities -->
+    <ion-card class="control-card">
+      <ion-card-header>
+        <ion-card-title>Detection Capabilities</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-list lines="none" class="capability-list">
+          <ion-item>
+            <ion-label>Face Detection</ion-label>
+            <ion-text
+              [color]="capabilities().supported ? 'success' : 'danger'"
+              slot="end"
+            >
+              {{ capabilities().supported ? '✓' : '✗' }}
+            </ion-text>
+          </ion-item>
+          <ion-item>
+            <ion-label>Landmarks</ion-label>
+            <ion-text
+              [color]="capabilities().landmarks ? 'success' : 'warning'"
+              slot="end"
+            >
+              {{ capabilities().landmarks ? '✓' : '✗' }}
+            </ion-text>
+          </ion-item>
+          <ion-item>
+            <ion-label>Classification</ion-label>
+            <ion-text
+              [color]="capabilities().classification ? 'success' : 'warning'"
+              slot="end"
+            >
+              {{ capabilities().classification ? '✓' : '✗' }}
+            </ion-text>
+          </ion-item>
+          <ion-item>
+            <ion-label>Tracking</ion-label>
+            <ion-text
+              [color]="capabilities().tracking ? 'success' : 'warning'"
+              slot="end"
+            >
+              {{ capabilities().tracking ? '✓' : '✗' }}
+            </ion-text>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Detection Options -->
+    <ion-card class="control-card">
+      <ion-card-header>
+        <ion-card-title>Detection Options</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-list lines="full">
+          <ion-item>
+            <ion-label>Enable Landmarks</ion-label>
+            <ion-toggle
+              [(ngModel)]="enableLandmarks"
+              slot="end"
+              [disabled]="isDetecting()"
+            ></ion-toggle>
+          </ion-item>
+          <ion-item>
+            <ion-label>Enable Classification</ion-label>
+            <ion-toggle
+              [(ngModel)]="enableClassification"
+              slot="end"
+              [disabled]="isDetecting()"
+            ></ion-toggle>
+          </ion-item>
+
+          <ion-item>
+            <ion-label>Performance Mode</ion-label>
+            <ion-text slot="end">{{ performanceMode() }}</ion-text>
+          </ion-item>
+
+          <ion-item>
+            <ion-label>Detection Interval</ion-label>
+            <ion-text slot="end">{{ detectionInterval() }}</ion-text>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Detected Faces Details -->
+    @if (detectedFaces().length > 0) {
+    <ion-card class="control-card">
+      <ion-card-header>
+        <ion-card-title>Face Details</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        @for (face of detectedFaces(); track face.trackingId) {
+        <div class="face-detail">
+          <h4>Face ID: {{ face.trackingId }}</h4>
+          <p>
+            <strong>Position:</strong>
+            {{ (face.bounds.x * 100).toFixed(1) }}%,
+            {{ (face.bounds.y * 100).toFixed(1) }}%
+          </p>
+          <p>
+            <strong>Size:</strong>
+            {{ (face.bounds.width * 100).toFixed(1) }}% x
+            {{ (face.bounds.height * 100).toFixed(1) }}%
+          </p>
+
+          @if (face.angles) {
+          <div class="angles">
+            <p><strong>Angles:</strong></p>
+            <p style="margin-left: 10px">
+              Yaw: {{ face.angles.yaw.toFixed(1) }}°
+            </p>
+            <p style="margin-left: 10px">
+              Pitch: {{ face.angles.pitch.toFixed(1) }}°
+            </p>
+            <p style="margin-left: 10px">
+              Roll: {{ face.angles.roll.toFixed(1) }}°
+            </p>
+          </div>
+          }
+
+          @if (face.smilingProbability !== undefined) {
+          <p>
+            <strong>Smiling:</strong>
+            {{ (face.smilingProbability * 100).toFixed(0) }}%
+          </p>
+          } @if (face.leftEyeOpenProbability !== undefined) {
+          <p>
+            <strong>Left Eye Open:</strong>
+            {{ (face.leftEyeOpenProbability * 100).toFixed(0) }}%
+          </p>
+          } @if (face.rightEyeOpenProbability !== undefined) {
+          <p>
+            <strong>Right Eye Open:</strong>
+            {{ (face.rightEyeOpenProbability * 100).toFixed(0) }}%
+          </p>
+          }
+
+          @if (face.landmarks) {
+          <div class="landmarks">
+            <p><strong>Landmarks:</strong></p>
+            @if (face.landmarks.leftEye) {
+            <p style="margin-left: 10px">Left Eye ✓</p>
+            } @if (face.landmarks.rightEye) {
+            <p style="margin-left: 10px">Right Eye ✓</p>
+            } @if (face.landmarks.nose) {
+            <p style="margin-left: 10px">Nose ✓</p>
+            } @if (face.landmarks.mouth) {
+            <p style="margin-left: 10px">Mouth ✓</p>
+            }
+          </div>
+          }
+        </div>
+        <ion-item-divider></ion-item-divider>
+        }
+      </ion-card-content>
+    </ion-card>
+    }
+  </div>
+</ion-content>

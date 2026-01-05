@@ -46,6 +46,7 @@ import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ExposureState;
 import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.FocusMeteringResult;
+import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
@@ -97,6 +98,8 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 public class CameraXView implements LifecycleOwner, LifecycleObserver {
@@ -112,6 +115,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         void onCameraStarted(int width, int height, int x, int y);
         void onCameraStartError(String message);
         void onCameraStopped(CameraXView source);
+        void onFacesDetected(JSONArray faces, int frameWidth, int frameHeight, long timestamp);
+        void onFaceDetectionError(String message);
     }
 
     public interface VideoRecordingCallback {
@@ -121,6 +126,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private ProcessCameraProvider cameraProvider;
     private Camera camera;
+    private Preview currentPreview;
     private ImageCapture imageCapture;
     private ImageCapture sampleImageCapture;
     private VideoCapture<Recorder> videoCapture;
@@ -146,6 +152,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
+
+    // Face detection
+    private ImageAnalysis faceDetectionAnalysis;
+    private FaceDetectionAnalyzer faceDetectionAnalyzer;
+    private boolean isFaceDetectionEnabled = false;
+    private com.google.mlkit.vision.face.FaceDetectorOptions faceDetectorOptions;
+
     // Capture/stop coordination
     private final Object captureLock = new Object();
     private volatile boolean isCapturingPhoto = false;
@@ -754,7 +767,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     ? previewView.getDisplay().getRotation()
                     : android.view.Surface.ROTATION_0;
 
-                Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
+                currentPreview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
                 imageCapture = new ImageCapture.Builder()
                     .setResolutionSelector(resolutionSelector)
@@ -779,13 +792,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 // Re-set the surface provider after unbinding to ensure the preview
                 // is connected and video frames are captured correctly
-                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+                currentPreview.setSurfaceProvider(previewView.getSurfaceProvider());
 
                 // Bind with or without video capture based on enableVideoMode
                 if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
-                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture, videoCapture);
+                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, currentPreview, imageCapture, videoCapture);
                 } else {
-                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture);
+                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, currentPreview, imageCapture);
                 }
 
                 resetExposureCompensationToDefault();
@@ -822,7 +835,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 }
 
                 // Log resolution info
-                ResolutionInfo previewResolution = preview.getResolutionInfo();
+                ResolutionInfo previewResolution = currentPreview.getResolutionInfo();
                 if (previewResolution != null) {
                     currentPreviewResolution = previewResolution.getResolution();
                     Log.d(TAG, "Preview resolution: " + currentPreviewResolution);
@@ -3518,5 +3531,203 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentRecording = null;
         currentVideoFile = null;
         currentVideoCallback = null;
+    }
+
+    /**
+     * Enables real-time face detection on the camera feed.
+     *
+     * @param options Face detection configuration options (JSON object)
+     * @throws Exception if face detection cannot be enabled
+     */
+    public void enableFaceDetection(JSONObject options) throws Exception {
+        if (!isRunning) {
+            throw new Exception("Camera is not running");
+        }
+
+        if (isFaceDetectionEnabled) {
+            Log.w(TAG, "Face detection is already enabled");
+            return;
+        }
+
+        // Parse options
+        boolean enableLandmarks = options.optBoolean("enableLandmarks", false);
+        boolean enableContours = options.optBoolean("enableContours", false);
+        boolean enableClassification = options.optBoolean("enableClassification", false);
+        boolean enableTracking = options.optBoolean("enableTracking", true);
+        String performanceMode = options.optString("performanceMode", "fast");
+        float minFaceSize = (float) options.optDouble("minFaceSize", 0.1);
+        int detectionInterval = options.optInt("detectionInterval", 1);
+
+        // Build ML Kit face detector options
+        com.google.mlkit.vision.face.FaceDetectorOptions.Builder optionsBuilder =
+            new com.google.mlkit.vision.face.FaceDetectorOptions.Builder();
+
+        // Performance mode
+        if ("accurate".equals(performanceMode)) {
+            optionsBuilder.setPerformanceMode(com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE);
+        } else {
+            optionsBuilder.setPerformanceMode(com.google.mlkit.vision.face.FaceDetectorOptions.PERFORMANCE_MODE_FAST);
+        }
+
+        // Landmark detection
+        if (enableLandmarks) {
+            optionsBuilder.setLandmarkMode(com.google.mlkit.vision.face.FaceDetectorOptions.LANDMARK_MODE_ALL);
+        } else {
+            optionsBuilder.setLandmarkMode(com.google.mlkit.vision.face.FaceDetectorOptions.LANDMARK_MODE_NONE);
+        }
+
+        // Contour detection
+        if (enableContours) {
+            optionsBuilder.setContourMode(com.google.mlkit.vision.face.FaceDetectorOptions.CONTOUR_MODE_ALL);
+        } else {
+            optionsBuilder.setContourMode(com.google.mlkit.vision.face.FaceDetectorOptions.CONTOUR_MODE_NONE);
+        }
+
+        // Classification (smile, eyes open)
+        if (enableClassification) {
+            optionsBuilder.setClassificationMode(com.google.mlkit.vision.face.FaceDetectorOptions.CLASSIFICATION_MODE_ALL);
+        } else {
+            optionsBuilder.setClassificationMode(com.google.mlkit.vision.face.FaceDetectorOptions.CLASSIFICATION_MODE_NONE);
+        }
+
+        // Tracking
+        if (enableTracking) {
+            optionsBuilder.enableTracking();
+        }
+
+        // Minimum face size
+        optionsBuilder.setMinFaceSize(minFaceSize);
+
+        faceDetectorOptions = optionsBuilder.build();
+
+        // Create face detection analyzer with listener
+        FaceDetectionAnalyzer.FaceDetectionListener faceListener = new FaceDetectionAnalyzer.FaceDetectionListener() {
+            @Override
+            public void onFacesDetected(JSONArray faces, int frameWidth, int frameHeight, long timestamp) {
+                if (listener != null) {
+                    listener.onFacesDetected(faces, frameWidth, frameHeight, timestamp);
+                }
+            }
+
+            @Override
+            public void onFaceDetectionError(Exception exception) {
+                if (listener != null) {
+                    listener.onFaceDetectionError(exception.getMessage());
+                }
+            }
+        };
+
+        faceDetectionAnalyzer = new FaceDetectionAnalyzer(faceDetectorOptions, faceListener);
+
+        // Create ImageAnalysis use case
+        faceDetectionAnalysis = new ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build();
+
+        faceDetectionAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), faceDetectionAnalyzer);
+
+        // Rebind camera with face detection
+        try {
+            if (cameraProvider != null && currentPreview != null) {
+                // Unbind all and rebind with face detection
+                cameraProvider.unbindAll();
+
+                currentPreview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                // Bind with face detection
+                if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
+                    camera = cameraProvider.bindToLifecycle(
+                        this,
+                        currentCameraSelector,
+                        currentPreview,
+                        imageCapture,
+                        videoCapture,
+                        faceDetectionAnalysis
+                    );
+                } else {
+                    camera = cameraProvider.bindToLifecycle(
+                        this,
+                        currentCameraSelector,
+                        currentPreview,
+                        imageCapture,
+                        faceDetectionAnalysis
+                    );
+                }
+
+                isFaceDetectionEnabled = true;
+                Log.d(TAG, "Face detection enabled successfully");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to enable face detection", e);
+            throw new Exception("Failed to enable face detection: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Disables face detection.
+     *
+     * @throws Exception if face detection cannot be disabled
+     */
+    public void disableFaceDetection() throws Exception {
+        if (!isFaceDetectionEnabled) {
+            Log.w(TAG, "Face detection is not enabled");
+            return;
+        }
+
+        // Close the analyzer
+        if (faceDetectionAnalyzer != null) {
+            faceDetectionAnalyzer.close();
+            faceDetectionAnalyzer = null;
+        }
+
+        // Rebind camera without face detection
+        try {
+            if (cameraProvider != null && currentPreview != null) {
+                // Unbind all and rebind without face detection
+                cameraProvider.unbindAll();
+
+                currentPreview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                // Bind without face detection
+                if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
+                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, currentPreview, imageCapture, videoCapture);
+                } else {
+                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, currentPreview, imageCapture);
+                }
+
+                isFaceDetectionEnabled = false;
+                faceDetectionAnalysis = null;
+                Log.d(TAG, "Face detection disabled successfully");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to disable face detection", e);
+            throw new Exception("Failed to disable face detection: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Checks if face detection is currently enabled.
+     *
+     * @return true if face detection is enabled
+     */
+    public boolean isFaceDetectionEnabled() {
+        return isFaceDetectionEnabled;
+    }
+
+    /**
+     * Gets face detection capabilities for this device.
+     *
+     * @return JSON object with capabilities
+     */
+    public JSONObject getFaceDetectionCapabilities() {
+        JSONObject capabilities = new JSONObject();
+        try {
+            capabilities.put("supported", true);
+            capabilities.put("landmarks", true);
+            capabilities.put("contours", true);
+            capabilities.put("classification", true);
+            capabilities.put("tracking", true);
+        } catch (JSONException e) {
+            Log.e(TAG, "Error creating capabilities JSON", e);
+        }
+        return capabilities;
     }
 }

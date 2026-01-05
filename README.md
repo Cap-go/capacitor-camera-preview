@@ -26,12 +26,13 @@ A **free**, **fully-featured** alternative to paid camera plugins, built for max
 - **Complete UI control** - Build your own camera interface with HTML/JS overlays instead of native constraints
 - **Full hardware access** - Manual focus, zoom, exposure controls, flash modes, multiple cameras
 - **Video recording** - Record with custom settings, no arbitrary limitations
+- **Face detection & tracking** - Real-time face detection with landmarks for Snapchat-like filters (NEW!)
 - **Universal device support** - Tested across hundreds of Android and iOS devices
 - **Performance optimized** - Direct camera stream access, efficient memory usage
 - **Modern package management** - Supports both Swift Package Manager (SPM) and CocoaPods (SPM-ready for Capacitor 8)
 - **Same JavaScript API** - Compatible interface with paid alternatives
 
-Unlike restrictive paid plugins, you get full camera control to build exactly the experience you want - from QR scanners to professional video apps.
+Unlike restrictive paid plugins, you get full camera control to build exactly the experience you want - from QR scanners to professional video apps, and now face-filter experiences!
 
 <br>
 
@@ -168,6 +169,81 @@ console.log('Current EV:', currentEV);
 const nextEV = Math.max(min, Math.min(max, currentEV + step));
 await CameraPreview.setExposureCompensation({ value: nextEV });
 ```
+
+## Face Detection & Tracking (NEW! 🎭)
+
+Real-time face detection with landmarks for creating Snapchat-like filters and AR experiences!
+
+**Supported Platforms:** Android (ML Kit), iOS (Vision Framework)
+
+### Quick Start
+
+```ts
+import { CameraPreview } from '@capgo/camera-preview';
+
+// Start camera (use front camera for face filters)
+await CameraPreview.start({ position: 'front' });
+
+// Enable face detection
+await CameraPreview.enableFaceDetection({
+  enableLandmarks: true,
+  performanceMode: 'fast',
+  detectionInterval: 2  // Process every 2 frames
+});
+
+// Listen for detected faces
+const listener = await CameraPreview.addListener('onFacesDetected', (event) => {
+  console.log(`Detected ${event.faces.length} face(s)`);
+  event.faces.forEach(face => {
+    // face.bounds - Face bounding box (normalized 0-1)
+    // face.angles - Head rotation (roll, yaw, pitch)
+    // face.landmarks - Facial landmarks (eyes, nose, mouth, etc.)
+    // face.smilingProbability - Smile detection (Android only)
+    // face.leftEyeOpenProbability - Eye state (Android only)
+  });
+});
+
+// Cleanup
+await CameraPreview.disableFaceDetection();
+await listener.remove();
+```
+
+### Features by Platform
+
+| Feature | Android (ML Kit) | iOS (Vision) |
+|---------|-----------------|--------------|
+| Face Bounds | ✅ | ✅ |
+| Face Angles | ✅ | ✅ (roll, yaw) |
+| Landmarks | ✅ | ✅ |
+| Contours | ✅ | ❌ |
+| Smile Detection | ✅ | ❌ |
+| Eye Detection | ✅ | ❌ |
+| Tracking IDs | ✅ | ❌ |
+
+### Complete Examples
+
+- **Basic face detection**: See [FACE_DETECTION_EXAMPLE.md](./FACE_DETECTION_EXAMPLE.md)
+- **Interactive demo**: See [FACE_DETECTION_DEMO_GUIDE.md](./FACE_DETECTION_DEMO_GUIDE.md) - Test all features in the example app
+- **Snapchat-like filters**: Overlay images on detected faces with rotation
+- **AR effects**: Use landmarks for precise positioning
+- **Performance tips**: Optimize for real-time rendering
+
+**Note:** All coordinates are normalized (0-1). Multiply by preview dimensions to get pixel coordinates.
+
+### Testing the Demo
+
+The example app includes a full-featured Face Detection Demo:
+
+1. Navigate to the Camera View page
+2. Click **"Face Detection Demo"** button
+3. Enable face detection and test all features:
+   - Real-time face tracking with persistent IDs
+   - Facial landmarks visualization
+   - Smile and eye detection
+   - Face angle indicators
+   - Configurable performance settings
+
+See [FACE_DETECTION_DEMO_GUIDE.md](./FACE_DETECTION_DEMO_GUIDE.md) for detailed testing instructions.
 
 Example app (Ionic):
 
@@ -350,6 +426,7 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setFocus(...)`](#setfocus)
 * [`addListener('screenResize', ...)`](#addlistenerscreenresize-)
 * [`addListener('orientationChange', ...)`](#addlistenerorientationchange-)
+* [`addListener('onFacesDetected', ...)`](#addlisteneronfacesdetected-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -360,6 +437,10 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`getExposureCompensation()`](#getexposurecompensation)
 * [`setExposureCompensation(...)`](#setexposurecompensation)
 * [`getPluginVersion()`](#getpluginversion)
+* [`enableFaceDetection(...)`](#enablefacedetection)
+* [`disableFaceDetection()`](#disablefacedetection)
+* [`isFaceDetectionEnabled()`](#isfacedetectionenabled)
+* [`getFaceDetectionCapabilities()`](#getfacedetectioncapabilities)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
 * [Enums](#enums)
@@ -912,6 +993,27 @@ Adds a listener for orientation change events.
 --------------------
 
 
+### addListener('onFacesDetected', ...)
+
+```typescript
+addListener(eventName: 'onFacesDetected', listenerFunc: (event: FaceDetectionEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for face detection events.
+Called continuously with detected face data when face detection is enabled.
+
+| Param              | Type                                                                                  | Description                                         |
+| ------------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| **`eventName`**    | <code>'onFacesDetected'</code>                                                        | - The event name to listen for ('onFacesDetected'). |
+| **`listenerFunc`** | <code>(event: <a href="#facedetectionevent">FaceDetectionEvent</a>) =&gt; void</code> | - The function to call when faces are detected.     |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.1.0
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -1060,6 +1162,67 @@ getPluginVersion() => Promise<{ version: string; }>
 Get the native Capacitor plugin version
 
 **Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
+
+--------------------
+
+
+### enableFaceDetection(...)
+
+```typescript
+enableFaceDetection(options?: FaceDetectionOptions | undefined) => Promise<void>
+```
+
+Enables real-time face detection on the camera preview.
+Emits 'onFacesDetected' events with detected face data.
+
+| Param         | Type                                                                  | Description                         |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------- |
+| **`options`** | <code><a href="#facedetectionoptions">FaceDetectionOptions</a></code> | - Configuration for face detection. |
+
+**Since:** 8.1.0
+
+--------------------
+
+
+### disableFaceDetection()
+
+```typescript
+disableFaceDetection() => Promise<void>
+```
+
+Disables face detection on the camera preview.
+
+**Since:** 8.1.0
+
+--------------------
+
+
+### isFaceDetectionEnabled()
+
+```typescript
+isFaceDetectionEnabled() => Promise<{ enabled: boolean; }>
+```
+
+Checks if face detection is currently enabled.
+
+**Returns:** <code>Promise&lt;{ enabled: boolean; }&gt;</code>
+
+**Since:** 8.1.0
+
+--------------------
+
+
+### getFaceDetectionCapabilities()
+
+```typescript
+getFaceDetectionCapabilities() => Promise<FaceDetectionCapabilities>
+```
+
+Gets the face detection capabilities for the current device.
+
+**Returns:** <code>Promise&lt;<a href="#facedetectioncapabilities">FaceDetectionCapabilities</a>&gt;</code>
+
+**Since:** 8.1.0
 
 --------------------
 
@@ -1227,6 +1390,85 @@ Represents the detailed information of the currently active lens.
 | **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
 
 
+#### FaceDetectionEvent
+
+Face detection event data emitted in real-time.
+
+| Prop              | Type                        | Description                                        |
+| ----------------- | --------------------------- | -------------------------------------------------- |
+| **`faces`**       | <code>DetectedFace[]</code> | Array of detected faces.                           |
+| **`timestamp`**   | <code>number</code>         | Timestamp when faces were detected (milliseconds). |
+| **`frameWidth`**  | <code>number</code>         | Width of the camera frame in pixels.               |
+| **`frameHeight`** | <code>number</code>         | Height of the camera frame in pixels.              |
+
+
+#### DetectedFace
+
+A single detected face with all its properties.
+
+| Prop                          | Type                                                    | Description                                                 |
+| ----------------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| **`trackingId`**              | <code>number</code>                                     | Unique tracking ID for this face across frames.             |
+| **`bounds`**                  | <code><a href="#facebounds">FaceBounds</a></code>       | The bounding box of the face.                               |
+| **`angles`**                  | <code><a href="#faceangles">FaceAngles</a></code>       | Face orientation angles (if available).                     |
+| **`landmarks`**               | <code><a href="#facelandmarks">FaceLandmarks</a></code> | Facial landmarks (if enabled and available).                |
+| **`smilingProbability`**      | <code>number</code>                                     | Probability that the person is smiling (0-1, if available). |
+| **`leftEyeOpenProbability`**  | <code>number</code>                                     | Probability that the left eye is open (0-1, if available).  |
+| **`rightEyeOpenProbability`** | <code>number</code>                                     | Probability that the right eye is open (0-1, if available). |
+
+
+#### FaceBounds
+
+The bounding box of a detected face with normalized coordinates.
+
+| Prop         | Type                | Description                                 |
+| ------------ | ------------------- | ------------------------------------------- |
+| **`x`**      | <code>number</code> | Top-left x coordinate (normalized 0-1).     |
+| **`y`**      | <code>number</code> | Top-left y coordinate (normalized 0-1).     |
+| **`width`**  | <code>number</code> | Width of the face bounds (normalized 0-1).  |
+| **`height`** | <code>number</code> | Height of the face bounds (normalized 0-1). |
+
+
+#### FaceAngles
+
+Face orientation angles in degrees.
+
+| Prop        | Type                | Description                                        |
+| ----------- | ------------------- | -------------------------------------------------- |
+| **`roll`**  | <code>number</code> | Head rotation around Z-axis (-180 to 180 degrees). |
+| **`yaw`**   | <code>number</code> | Head rotation around Y-axis (-180 to 180 degrees). |
+| **`pitch`** | <code>number</code> | Head rotation around X-axis (-180 to 180 degrees). |
+
+
+#### FaceLandmarks
+
+Facial landmarks for precise filter positioning.
+
+| Prop              | Type                                    | Description                  |
+| ----------------- | --------------------------------------- | ---------------------------- |
+| **`leftEye`**     | <code><a href="#point">Point</a></code> | Left eye position.           |
+| **`rightEye`**    | <code><a href="#point">Point</a></code> | Right eye position.          |
+| **`nose`**        | <code><a href="#point">Point</a></code> | Nose base position.          |
+| **`mouth`**       | <code><a href="#point">Point</a></code> | Mouth center position.       |
+| **`leftEar`**     | <code><a href="#point">Point</a></code> | Left ear position.           |
+| **`rightEar`**    | <code><a href="#point">Point</a></code> | Right ear position.          |
+| **`leftCheek`**   | <code><a href="#point">Point</a></code> | Left cheek position.         |
+| **`rightCheek`**  | <code><a href="#point">Point</a></code> | Right cheek position.        |
+| **`leftMouth`**   | <code><a href="#point">Point</a></code> | Left mouth corner position.  |
+| **`rightMouth`**  | <code><a href="#point">Point</a></code> | Right mouth corner position. |
+| **`bottomMouth`** | <code><a href="#point">Point</a></code> | Bottom mouth position.       |
+
+
+#### Point
+
+A point in 2D space with normalized coordinates (0-1).
+
+| Prop    | Type                | Description                       |
+| ------- | ------------------- | --------------------------------- |
+| **`x`** | <code>number</code> | The x coordinate, normalized 0-1. |
+| **`y`** | <code>number</code> | The y coordinate, normalized 0-1. |
+
+
 #### SafeAreaInsets
 
 Represents safe area insets for devices.
@@ -1237,6 +1479,34 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 | ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **`orientation`** | <code>number</code> | Current device orientation (1 = portrait, 2 = landscape, 0 = unknown).                                                                                                                                                                           |
 | **`top`**         | <code>number</code> | Orientation-aware notch/camera cutout inset (excluding status bar). In portrait mode: returns top inset (notch at top). In landscape mode: returns left inset (notch at side). Android: Value in dp, iOS: Value in pixels (status bar excluded). |
+
+
+#### FaceDetectionOptions
+
+Options for configuring face detection.
+
+| Prop                       | Type                              | Description                                                              | Default             |
+| -------------------------- | --------------------------------- | ------------------------------------------------------------------------ | ------------------- |
+| **`enableLandmarks`**      | <code>boolean</code>              | Enable detailed landmark detection for precise filter positioning.       | <code>false</code>  |
+| **`enableContours`**       | <code>boolean</code>              | Enable face contours for advanced filters (Android only).                | <code>false</code>  |
+| **`enableClassification`** | <code>boolean</code>              | Enable classification features (smile, eye open probabilities).          | <code>false</code>  |
+| **`enableTracking`**       | <code>boolean</code>              | Enable face tracking IDs for consistent identification across frames.    | <code>true</code>   |
+| **`performanceMode`**      | <code>'fast' \| 'accurate'</code> | Performance mode: 'fast' for real-time, 'accurate' for higher precision. | <code>'fast'</code> |
+| **`minFaceSize`**          | <code>number</code>               | Minimum face size as a proportion of image (0-1).                        | <code>0.1</code>    |
+| **`detectionInterval`**    | <code>number</code>               | Process every N frames (1 = every frame, 2 = every other frame, etc.).   | <code>1</code>      |
+
+
+#### FaceDetectionCapabilities
+
+Face detection capabilities for the current device.
+
+| Prop                 | Type                 | Description                                           |
+| -------------------- | -------------------- | ----------------------------------------------------- |
+| **`supported`**      | <code>boolean</code> | Whether face detection is supported on this platform. |
+| **`landmarks`**      | <code>boolean</code> | Whether landmark detection is available.              |
+| **`contours`**       | <code>boolean</code> | Whether contour detection is available.               |
+| **`classification`** | <code>boolean</code> | Whether classification (smile, eyes) is available.    |
+| **`tracking`**       | <code>boolean</code> | Whether face tracking is available.                   |
 
 
 ### Type Aliases

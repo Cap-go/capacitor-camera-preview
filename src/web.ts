@@ -1250,4 +1250,36 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   async getPluginVersion(): Promise<{ version: string }> {
     return { version: 'web' };
   }
+
+  // Face detection methods (unsupported on web - would require TensorFlow.js or similar)
+  async enableFaceDetection(_options?: any): Promise<void> {
+    void _options;
+    throw new Error(
+      'Face detection not supported under the web platform. Consider using TensorFlow.js face-landmarks-detection for web implementation.',
+    );
+  }
+
+  async disableFaceDetection(): Promise<void> {
+    throw new Error('Face detection not supported under the web platform');
+  }
+
+  async isFaceDetectionEnabled(): Promise<{ enabled: boolean }> {
+    return { enabled: false };
+  }
+
+  async getFaceDetectionCapabilities(): Promise<{
+    supported: boolean;
+    landmarks: boolean;
+    contours: boolean;
+    classification: boolean;
+    tracking: boolean;
+  }> {
+    return {
+      supported: false,
+      landmarks: false,
+      contours: false,
+      classification: false,
+      tracking: false,
+    };
+  }
 }

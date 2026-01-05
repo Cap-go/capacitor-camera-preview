@@ -14,6 +14,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'face-detection',
+        loadComponent: () =>
+          import('./pages/face-detection/face-detection.page').then(
+            (m) => m.FaceDetectionPage,
+          ),
+      },
+      {
         path: 'gallery',
         loadComponent: () =>
           import('./pages/gallery/gallery.component').then(
