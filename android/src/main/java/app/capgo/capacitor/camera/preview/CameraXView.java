@@ -2549,6 +2549,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 if (targetCameraInfo != null) {
                     // Determine position from the target camera
                     String position = isBackCamera(targetCameraInfo) ? "rear" : "front";
+                    boolean wasCentered = sessionConfig.isCentered();
                     
                     // Update sessionConfig with the new device ID
                     sessionConfig = new CameraSessionConfiguration(
@@ -2570,6 +2571,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getDisableFocusIndicator(),
                         sessionConfig.isVideoModeEnabled()
                     );
+
+                    sessionConfig.setCentered(wasCentered);
                     
                     Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
                     bindCameraUseCases(); // Will now use deviceId from sessionConfig
