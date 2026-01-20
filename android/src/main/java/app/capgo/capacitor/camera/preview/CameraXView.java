@@ -1975,8 +1975,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             currentFocusFuture.cancel(true);
         }
 
-        // Reset exposure compensation to 0 on tap-to-focus
+       //If locked don't auto adjust exposure
         if (!"LOCK".equals(currentExposureMode)) { 
+
+            // Reset exposure compensation to 0 on tap-to-focus
             try {
                 ExposureState state = camera.getCameraInfo().getExposureState();
                 Range<Integer> range = state.getExposureCompensationRange();
