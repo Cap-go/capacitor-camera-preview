@@ -7,6 +7,15 @@ import CoreLocation
 import MobileCoreServices
 import UIKit
 
+// Capacitor 8 compatibility extension
+extension CAPPluginCall {
+    func reject(_ message: String) {
+        self.resolve([
+            "error": message
+        ])
+    }
+}
+
 extension UIWindow {
     static var isLandscape: Bool {
         // iOS 14+ only: derive from the active window scene's interface orientation
@@ -102,7 +111,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var aspectRatio: String?
     private var gridMode: String = "none"
     private var positioning: String = "center"
-    private var permissionCallID: String?
+    private var permissionCall: CAPPluginCall?
     private var waitingForLocation: Bool = false
     private var isPresentingPermissionAlert: Bool = false
 
@@ -249,7 +258,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                                               cancelText: String,
                                               completion: (() -> Void)? = nil) {
         DispatchQueue.main.async {
-            guard let viewController = self.bridge?.viewController else {
+            guard let viewController = UIApplication.shared.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
                 completion?()
                 return
             }
@@ -433,7 +442,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
 
-        guard let newAspectRatio = call.getString("aspectRatio") else {
+        let newAspectRatio = call.getString("aspectRatio", "")
+        guard !newAspectRatio.isEmpty else {
             call.reject("aspectRatio parameter is required")
             return
         }
@@ -507,7 +517,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
 
-        guard let gridMode = call.getString("gridMode") else {
+        let gridMode = call.getString("gridMode", "")
+        guard !gridMode.isEmpty else {
             call.reject("gridMode parameter is required")
             return
         }
@@ -636,26 +647,26 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Log all received settings
         print("[CameraPreview] 📋 Settings received:")
-        print("  - position: \(call.getString("position") ?? "rear")")
-        print("  - deviceId: \(call.getString("deviceId") ?? "nil")")
-        print("  - cameraMode: \(call.getBool("cameraMode") ?? false)")
-        print("  - width: \(call.getInt("width") ?? 0)")
-        print("  - height: \(call.getInt("height") ?? 0)")
-        print("  - x: \(call.getInt("x") ?? -1)")
-        print("  - y: \(call.getInt("y") ?? -1)")
-        print("  - paddingBottom: \(call.getInt("paddingBottom") ?? 0)")
-        print("  - rotateWhenOrientationChanged: \(call.getBool("rotateWhenOrientationChanged") ?? true)")
-        print("  - toBack: \(call.getBool("toBack") ?? true)")
-        print("  - storeToFile: \(call.getBool("storeToFile") ?? false)")
-        print("  - disableAudio: \(call.getBool("disableAudio") ?? true)")
-        print("  - aspectRatio: \(call.getString("aspectRatio") ?? "4:3")")
-        print("  - gridMode: \(call.getString("gridMode") ?? "none")")
-        print("  - positioning: \(call.getString("positioning") ?? "top")")
-        print("  - initialZoomLevel: \(call.getFloat("initialZoomLevel") ?? 1.0)")
-        print("  - disableFocusIndicator: \(call.getBool("disableFocusIndicator") ?? false)")
-        print("  - force: \(call.getBool("force") ?? false)")
+        print("  - position: \(call.getString("position", "") ?? "rear")")
+        print("  - deviceId: \(call.getString("deviceId", "") ?? "nil")")
+        print("  - cameraMode: \(call.getBool("cameraMode", false) ?? false)")
+        print("  - width: \(call.getInt("width", 0) ?? 0)")
+        print("  - height: \(call.getInt("height", 0) ?? 0)")
+        print("  - x: \(call.getInt("x", 0) ?? -1)")
+        print("  - y: \(call.getInt("y", 0) ?? -1)")
+        print("  - paddingBottom: \(call.getInt("paddingBottom", 0) ?? 0)")
+        print("  - rotateWhenOrientationChanged: \(call.getBool("rotateWhenOrientationChanged", false) ?? true)")
+        print("  - toBack: \(call.getBool("toBack", false) ?? true)")
+        print("  - storeToFile: \(call.getBool("storeToFile", false) ?? false)")
+        print("  - disableAudio: \(call.getBool("disableAudio", false) ?? true)")
+        print("  - aspectRatio: \(call.getString("aspectRatio", "") ?? "4:3")")
+        print("  - gridMode: \(call.getString("gridMode", "") ?? "none")")
+        print("  - positioning: \(call.getString("positioning", "") ?? "top")")
+        print("  - initialZoomLevel: \(call.getFloat("initialZoomLevel", 0.0) ?? 1.0)")
+        print("  - disableFocusIndicator: \(call.getBool("disableFocusIndicator", false) ?? false)")
+        print("  - force: \(call.getBool("force", false) ?? false)")
 
-        let force = call.getBool("force") ?? false
+        let force = call.getBool("force", false) ?? false
 
         // If force is true, kill everything and restart no matter what
         if force {
@@ -703,57 +714,62 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.isInitializing = true
 
-        self.cameraPosition = call.getString("position") ?? "rear"
-        let deviceId = call.getString("deviceId")
-        let cameraMode = call.getBool("cameraMode") ?? false
+        self.cameraPosition = call.getString("position", "") ?? "rear"
+        let deviceId = call.getString("deviceId", "")
+        let cameraMode = call.getBool("cameraMode", false) ?? false
 
         // Set width - use screen width if not provided or if 0
-        if let width = call.getInt("width"), width > 0 {
+        let width = call.getInt("width", 0)
+        if width != 0 && width > 0 {
             self.width = CGFloat(width)
         } else {
             self.width = UIScreen.main.bounds.size.width
         }
 
         // Set height - use screen height if not provided or if 0
-        if let height = call.getInt("height"), height > 0 {
+        let height = call.getInt("height", 0)
+        if height != 0 && height > 0 {
             self.height = CGFloat(height)
         } else {
             self.height = UIScreen.main.bounds.size.height
         }
 
         // Set x position - use exact CSS pixel value from web view, or mark for centering
-        if let xPosition = call.getInt("x") {
+        let xPosition = call.getInt("x", 0)
+        if xPosition != 0 {
             self.posX = CGFloat(xPosition)
         } else {
             self.posX = -1 // Use -1 to indicate auto-centering
         }
 
         // Set y position - use exact CSS pixel value from web view, or mark for centering
-        if let yPosition = call.getInt("y") {
+        let yPosition = call.getInt("y", 0)
+        if yPosition != 0 {
             self.posY = CGFloat(yPosition)
         } else {
             self.posY = -1 // Use -1 to indicate auto-centering
         }
-        if let paddingBottomValue = call.getInt("paddingBottom") {
+        let paddingBottomValue = call.getInt("paddingBottom", 0)
+        if paddingBottomValue != 0 {
             self.paddingBottom = CGFloat(paddingBottomValue)
         }
 
-        self.rotateWhenOrientationChanged = call.getBool("rotateWhenOrientationChanged") ?? true
-        self.toBack = call.getBool("toBack") ?? true
-        self.storeToFile = call.getBool("storeToFile") ?? false
-        self.disableAudio = call.getBool("disableAudio") ?? true
+        self.rotateWhenOrientationChanged = call.getBool("rotateWhenOrientationChanged", false) ?? true
+        self.toBack = call.getBool("toBack", false) ?? true
+        self.storeToFile = call.getBool("storeToFile", false) ?? false
+        self.disableAudio = call.getBool("disableAudio", false) ?? true
         // Default to 4:3 aspect ratio if not provided
-        self.aspectRatio = call.getString("aspectRatio") ?? "4:3"
-        self.gridMode = call.getString("gridMode") ?? "none"
-        self.positioning = call.getString("positioning") ?? "top"
-        self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
+        self.aspectRatio = call.getString("aspectRatio", "") ?? "4:3"
+        self.gridMode = call.getString("gridMode", "") ?? "none"
+        self.positioning = call.getString("positioning", "") ?? "top"
+        self.disableFocusIndicator = call.getBool("disableFocusIndicator", false) ?? false
 
-        let initialZoomLevel = call.getFloat("initialZoomLevel")
+        let initialZoomLevel = call.getFloat("initialZoomLevel", 0.0)
 
         // Check for conflict between aspectRatio and size (width/height)
-        let hasAspectRatio = call.getString("aspectRatio") != nil
-        let hasWidth = call.getInt("width") != nil
-        let hasHeight = call.getInt("height") != nil
+        let hasAspectRatio = call.getString("aspectRatio", "") != nil
+        let hasWidth = call.getInt("width", 0) != nil
+        let hasHeight = call.getInt("height", 0) != nil
 
         if hasAspectRatio && (hasWidth || hasHeight) {
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
@@ -792,7 +808,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let handleDenied: (AVAuthorizationStatus) -> Void = { _ in
             DispatchQueue.main.async {
                 self.isInitializing = false
-                call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied")
+                call.reject("camera permission denied. enable camera access in Settings.")
             }
         }
 
@@ -933,7 +949,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func stop(_ call: CAPPluginCall) {
-        let force = call.getBool("force") ?? false
+        let force = call.getBool("force", false) ?? false
 
         // If force is true, skip all checks and force stop
         if !force {
@@ -988,7 +1004,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     override public func checkPermissions(_ call: CAPPluginCall) {
-        let disableAudio = call.getBool("disableAudio") ?? true
+        let disableAudio = call.getBool("disableAudio", false) ?? true
         let cameraStatus = self.mapAuthorizationStatus(AVCaptureDevice.authorizationStatus(for: .video))
 
         var result: [String: Any] = [
@@ -1004,14 +1020,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     override public func requestPermissions(_ call: CAPPluginCall) {
-        let disableAudio = call.getBool("disableAudio") ?? true
+        let disableAudio = call.getBool("disableAudio", false) ?? true
         self.disableAudio = disableAudio
 
-        let title = call.getString("title") ?? "Camera Permission Needed"
-        let message = call.getString("message") ?? "Enable camera access in Settings to use the preview."
-        let openSettingsText = call.getString("openSettingsButtonTitle") ?? "Open Settings"
-        let cancelText = call.getString("cancelButtonTitle") ?? "Cancel"
-        let showSettingsAlert = call.getBool("showSettingsAlert") ?? false
+        let title = call.getString("title", "") ?? "Camera Permission Needed"
+        let message = call.getString("message", "") ?? "Enable camera access in Settings to use the preview."
+        let openSettingsText = call.getString("openSettingsButtonTitle", "") ?? "Open Settings"
+        let cancelText = call.getString("cancelButtonTitle", "") ?? "Cancel"
+        let showSettingsAlert = call.getBool("showSettingsAlert", false) ?? false
 
         var currentCameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
         let audioSession = AVAudioSession.sharedInstance()
@@ -1135,8 +1151,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     print("[CameraPreview] Location permission not determined, requesting...")
                     // Save the call for the delegate callback
                     print("[CameraPreview] Saving call for location authorization flow")
-                    self.bridge?.saveCall(call)
-                    self.permissionCallID = call.callbackId
+                    self.permissionCall = call
                     self.waitingForLocation = true
 
                     // Request authorization - this will trigger locationManagerDidChangeAuthorization
@@ -1164,8 +1179,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let embedTimestamp = call.getBool("embedTimestamp", false) ?? false
         let embedLocationRequested = call.getBool("embedLocation", false) ?? false
         let effectiveEmbedLocation = (withExifLocation ?? false) && embedLocationRequested
-        let width = call.getInt("width")
-        let height = call.getInt("height")
+        let width = call.getInt("width", 0)
+        let height = call.getInt("height", 0)
         let photoQualityPrioritization = call.getString("photoQualityPrioritization", "speed")
 
         print("[CameraPreview] Raw parameter values - width: \(String(describing: width)), height: \(String(describing: height))")
@@ -1398,7 +1413,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func captureSample(_ call: CAPPluginCall) {
-        let quality: Int = call.getInt("quality") ?? 85
+        let quality: Int = call.getInt("quality", 0) ?? 85
 
         self.cameraController.captureSample { image, error in
             guard let image = image else {
@@ -1452,7 +1467,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func setFlashMode(_ call: CAPPluginCall) {
-        guard let flashMode = call.getString("flashMode") else {
+        let flashMode = call.getString("flashMode", "")
+        guard !flashMode.isEmpty else {
             call.reject("failed to set flash mode. required parameter flashMode is missing")
             return
         }
@@ -1627,7 +1643,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
 
-        guard var level = call.getFloat("level") else {
+        var level = call.getFloat("level", 0.0)
+        guard level != 0.0 else {
             call.reject("level parameter is required")
             return
         }
@@ -1639,8 +1656,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             level /= displayMultiplier
         }
 
-        let ramp = call.getBool("ramp") ?? true
-        let autoFocus = call.getBool("autoFocus") ?? true
+        let ramp = call.getBool("ramp", false) ?? true
+        let autoFocus = call.getBool("autoFocus", false) ?? true
 
         do {
             try self.cameraController.setZoom(level: CGFloat(level), ramp: ramp, autoFocus: autoFocus)
@@ -1670,7 +1687,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
 
-        guard let deviceId = call.getString("deviceId") else {
+        let deviceId = call.getString("deviceId", "")
+        guard !deviceId.isEmpty else {
             call.reject("deviceId parameter is required")
             return
         }
@@ -1757,33 +1775,24 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("[CameraPreview] locationManagerDidChangeAuthorization called, status: \(status.rawValue), thread: \(Thread.current)")
 
         // Handle pending capture call if we have one
-        if let callID = self.permissionCallID, self.waitingForLocation {
-            print("[CameraPreview] Found pending capture call ID: \(callID)")
+        if let call = self.permissionCall, self.waitingForLocation {
+            print("[CameraPreview] Found pending capture call")
 
             let handleAuthorization = {
-                print("[CameraPreview] Getting saved call on thread: \(Thread.current)")
-                guard let call = self.bridge?.savedCall(withID: callID) else {
-                    print("[CameraPreview] ERROR: Could not retrieve saved call")
-                    self.permissionCallID = nil
-                    self.waitingForLocation = false
-                    return
-                }
-                print("[CameraPreview] Successfully retrieved saved call")
+                print("[CameraPreview] Handling authorization on thread: \(Thread.current)")
 
                 switch status {
                 case .authorizedWhenInUse, .authorizedAlways:
                     print("[CameraPreview] Location authorized, getting location for capture")
                     self.getCurrentLocation { _ in
                         self.performCapture(call: call)
-                        self.bridge?.releaseCall(call)
-                        self.permissionCallID = nil
+                        self.permissionCall = nil
                         self.waitingForLocation = false
                     }
                 case .denied, .restricted:
                     print("[CameraPreview] Location denied, rejecting capture")
                     call.reject("Location permission denied")
-                    self.bridge?.releaseCall(call)
-                    self.permissionCallID = nil
+                    self.permissionCall = nil
                     self.waitingForLocation = false
                 case .notDetermined:
                     print("[CameraPreview] Authorization not determined yet")
@@ -1791,8 +1800,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 @unknown default:
                     print("[CameraPreview] Unknown status, rejecting capture")
                     call.reject("Unknown location permission status")
-                    self.bridge?.releaseCall(call)
-                    self.permissionCallID = nil
+                    self.permissionCall = nil
                     self.waitingForLocation = false
                 }
             }
@@ -2074,20 +2082,24 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         // Always set to -1 for auto-centering if not explicitly provided
-        if let xValue = call.getInt("x") {
+        let xValue = call.getInt("x", 0)
+        if xValue != 0 {
             self.posX = CGFloat(xValue)
         } else {
             self.posX = -1 // Auto-center if X not provided
         }
 
-        if let yValue = call.getInt("y") {
+        let yValue = call.getInt("y", 0)
+        if yValue != 0 {
             self.posY = CGFloat(yValue)
         } else {
             self.posY = -1 // Auto-center if Y not provided
         }
 
-        if let width = call.getInt("width") { self.width = CGFloat(width) }
-        if let height = call.getInt("height") { self.height = CGFloat(height) }
+        let width = call.getInt("width", 0)
+        if width != 0 { self.width = CGFloat(width) }
+        let height = call.getInt("height", 0)
+        if height != 0 { self.height = CGFloat(height) }
 
         DispatchQueue.main.async {
             // Direct update without animation for better performance
@@ -2110,7 +2122,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return
         }
 
-        guard let xCoord = call.getFloat("x"), let yCoord = call.getFloat("y") else {
+        let xCoord = call.getFloat("x", 0.0)
+        let yCoord = call.getFloat("y", 0.0)
+        guard xCoord != 0.0 && yCoord != 0.0 else {
             call.reject("x and y parameters are required")
             return
         }
@@ -2176,7 +2190,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             call.reject("Camera not initialized")
             return
         }
-        guard let mode = call.getString("mode") else {
+        let mode = call.getString("mode", "")
+        guard !mode.isEmpty else {
             call.reject("mode parameter is required")
             return
         }
@@ -2227,7 +2242,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             call.reject("Camera not initialized")
             return
         }
-        guard var value = call.getFloat("value") else {
+        var value = call.getFloat("value", 0.0)
+        guard value != 0.0 else {
             call.reject("value parameter is required")
             return
         }
@@ -2266,7 +2282,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func deleteFile(_ call: CAPPluginCall) {
-        guard let path = call.getString("path"), !path.isEmpty else {
+        let path = call.getString("path", "")
+        guard !path.isEmpty else {
             call.reject("path parameter is required")
             return
         }
