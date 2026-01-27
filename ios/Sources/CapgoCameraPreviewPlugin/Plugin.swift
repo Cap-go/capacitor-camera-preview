@@ -83,6 +83,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var isInitializing: Bool = false
     private var isInitialized: Bool = false
     private var backgroundSession: AVCaptureSession?
+    private var isGeneratingOrientationNotifications: Bool = false
 
     var previewView: UIView!
     var cameraPosition = String()
@@ -679,7 +680,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     self.cameraController.stopRequestedAfterCapture = false
                     self.cameraController.cleanup()
                     NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
-                    UIDevice.current.endGeneratingDeviceOrientationNotifications()
+                    if self.isGeneratingDeviceOrientationNotifications {
+                        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+                        self.isGeneratingDeviceOrientationNotifications = false
+                    }
                     self.isInitialized = false
                     self.isInitializing = false
                 }
@@ -781,6 +785,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 DispatchQueue.main.async {
                     if self.rotateWhenOrientationChanged == true {
                         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                        self.isGeneratingDeviceOrientationNotifications = true
                         NotificationCenter.default.addObserver(self,
                                                             selector: #selector(self.handleOrientationChange),
                                                             name: UIDevice.orientationDidChangeNotification,
@@ -972,7 +977,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             // Remove notification observers regardless
             NotificationCenter.default.removeObserver(self)
             NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
-            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            if self.isGeneratingDeviceOrientationNotifications {
+                UIDevice.current.endGeneratingDeviceOrientationNotifications()
+                self.isGeneratingDeviceOrientationNotifications = false
+            }
 
             if self.cameraController.isCapturingPhoto && !force {
                 // Defer heavy cleanup until capture callback completes (only if not forcing)
