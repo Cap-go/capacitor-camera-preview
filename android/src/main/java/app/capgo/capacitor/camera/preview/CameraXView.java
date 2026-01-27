@@ -1905,13 +1905,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                     physicalMaxZoom = zoomRange.getUpper();
                                 }
                             }
-    
-                            String physicalLabel = "Physical " + physicalDeviceType + " (" + position + ")";
-                            List<LensInfo> physicalLenses = new ArrayList<>();
-                            physicalLenses.add(
-                                new LensInfo(focalLengths != null ? focalLengths[0] : 4.25f, physicalDeviceType, 1.0f, physicalMaxZoom)
-                            );
-    
+                             float physicalFocalLength = (focalLengths != null && focalLengths.length > 0) ? focalLengths[0] : 4.25f;
+                             String physicalLabel = "Physical " + physicalDeviceType + " (" + position + ")";
+                             List<LensInfo> physicalLenses = new ArrayList<>();
+                             physicalLenses.add(
+                             new LensInfo(physicalFocalLength, physicalDeviceType, 1.0f, physicalMaxZoom)
+                             );
+                            
                             devices.add(
                                 new app.capgo.capacitor.camera.preview.model.CameraDevice(
                                     physicalId,
