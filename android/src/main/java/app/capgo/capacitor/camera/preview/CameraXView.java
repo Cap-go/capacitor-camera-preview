@@ -1817,9 +1817,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             }
                         } else {
                             // Fallback: classify by focal length alone
-                            if (focalLength < 2.5f) {
+                            if (focalLength < 3.0f) {
                                 deviceType = "ultraWide";
-                            } else if (focalLength > 5.5f) {
+                            } else if (focalLength > 5.0f) {
                                 deviceType = "telephoto";
                             }
                         }
