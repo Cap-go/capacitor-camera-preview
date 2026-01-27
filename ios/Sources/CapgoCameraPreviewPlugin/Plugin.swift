@@ -83,7 +83,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var isInitializing: Bool = false
     private var isInitialized: Bool = false
     private var backgroundSession: AVCaptureSession?
-    private var isGeneratingOrientationNotifications: Bool = false
+    private var isGeneratingDeviceOrientationNotifications: Bool = false
 
     var previewView: UIView!
     var cameraPosition = String()
