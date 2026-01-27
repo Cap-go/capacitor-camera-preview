@@ -542,6 +542,19 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    /**
+     * Compute layout parameters for the camera preview container based on the current session configuration,
+     * device screen size, WebView/parent geometry, and optional aspect-ratio centering.
+     *
+     * The returned FrameLayout.LayoutParams contains width, height, leftMargin (x) and topMargin (y)
+     * for placing the preview. When an aspect ratio is specified and sessionConfig is in centered mode,
+     * the preview size is scaled to the largest area that fits the aspect ratio within the screen and
+     * any axis with a coordinate equal to -1 is auto-centered for that axis; axes explicitly provided
+     * in sessionConfig are preserved. Coordinates supplied by sessionConfig are assumed to already
+     * include WebView insets.
+     *
+     * @return a FrameLayout.LayoutParams configured with the computed preview width, height, leftMargin and topMargin
+     */
     private FrameLayout.LayoutParams calculatePreviewLayoutParams() {
         // sessionConfig already contains pixel-converted coordinates with webview offsets applied
         int x = sessionConfig.getX();
@@ -663,9 +676,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         Log.d(TAG, "Width-limited sizing: " + width + "x" + height);
                     }
 
-                    // Center the preview
-                    x = (screenWidthPx - width) / 2;
-                    y = (screenHeightPx - height) / 2;
+                    // Center the preview only overwrite what was not explicitly set
+                    if (sessionConfig.getX() == -1){
+                        x = (screenWidthPx - width) / 2;
+                    }
+                    if (sessionConfig.getY() == -1){
+                        y = (screenHeightPx - height) / 2;
+                    }
 
                     Log.d(TAG, "Auto-centered position: x=" + x + ", y=" + y);
                 } catch (NumberFormatException e) {
