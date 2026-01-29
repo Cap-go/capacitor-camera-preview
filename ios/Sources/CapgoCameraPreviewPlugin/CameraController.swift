@@ -360,10 +360,12 @@ extension CameraController {
             }
 
             // Start accelerometer
+            var startedAccelerometer = false
             if self.motionManager.isAccelerometerAvailable {
 +                self.motionManager.accelerometerUpdateInterval = 1.0 / 60.0
 +                if !self.motionManager.isAccelerometerActive {
 +                    self.motionManager.startAccelerometerUpdates()
+                     startedAccelerometer = true
 +                }
 +            }
 
@@ -455,6 +457,7 @@ extension CameraController {
                     completionHandler(nil)
                 }
             } catch {
+                if startedAccelerometer (self.motionManager.stopAccelerometerUpdates())
                 DispatchQueue.main.async {
                     completionHandler(error)
                 }
