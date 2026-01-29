@@ -457,7 +457,9 @@ extension CameraController {
                     completionHandler(nil)
                 }
             } catch {
-                if startedAccelerometer (self.motionManager.stopAccelerometerUpdates())
+                if startedAccelerometer {
+                    self.motionManager.stopAccelerometerUpdates()
+                    }
                 DispatchQueue.main.async {
                     completionHandler(error)
                 }
