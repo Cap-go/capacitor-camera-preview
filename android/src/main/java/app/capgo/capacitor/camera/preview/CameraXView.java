@@ -364,6 +364,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void startSession(CameraSessionConfiguration config) {
         this.sessionConfig = config;
         cameraExecutor = Executors.newSingleThreadExecutor();
+
+        // Start accelerometer for orientation detection regardless of lock
+        if (sensorManager == null) {
+            sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        }
+        if (accelerometer != null) {
+            sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
+        }
         synchronized (operationLock) {
             activeOperations = 0;
             stopPending = false;
