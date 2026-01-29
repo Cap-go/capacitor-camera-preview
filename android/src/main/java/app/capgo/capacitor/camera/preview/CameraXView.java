@@ -1026,7 +1026,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
         
         // If no accelerometer data yet, fall back to display rotation
-        if (x == 0 && y == 0) {
+        final float epsilon = 1.0f;
+        if (Math.abs(x) < epsilon && Math.abs(y) < epsilon) {
             if (previewView != null && previewView.getDisplay() != null) {
                 return previewView.getDisplay().getRotation();
             }

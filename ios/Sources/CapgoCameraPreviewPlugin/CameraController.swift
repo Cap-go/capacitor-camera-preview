@@ -41,7 +41,7 @@ class CameraController: NSObject {
     // For capture only - uses accelerometer to detect physical orientation to properly position videos/images
     private func getPhysicalOrientation() -> AVCaptureVideoOrientation {
         guard let accelerometerData = motionManager.accelerometerData else {
-            return getVideoOrientation() // Fallback to interface in case of accelerometer fail
+            return lastCaptureOrientation ?? getVideoOrientation() // Fallback to interface in case of accelerometer fail
         }
 
         let x = accelerometerData.acceleration.x
@@ -360,9 +360,12 @@ extension CameraController {
             }
 
             // Start accelerometer
-            if !self.motionManager.isAccelerometerActive {
-                self.motionManager.startAccelerometerUpdates()
-            }
+            if self.motionManager.isAccelerometerAvailable {
++                self.motionManager.accelerometerUpdateInterval = 1.0 / 60.0
++                if !self.motionManager.isAccelerometerActive {
++                    self.motionManager.startAccelerometerUpdates()
++                }
++            }
 
             do {
                 // Create session if needed
