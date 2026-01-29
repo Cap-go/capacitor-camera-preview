@@ -94,6 +94,7 @@ class CameraController: NSObject {
     private var lastZoomUpdateTime: TimeInterval = 0
     private let zoomUpdateThrottle: TimeInterval = 1.0 / 60.0 // 60 FPS max
     private let motionManager = CMMotionManager()
+    private var lastCaptureOrientation: AVCaptureVideoOrientation?
 
     var videoFileURL: URL?
     private let saneMaxZoomFactor: CGFloat = 25.5
@@ -927,7 +928,9 @@ extension CameraController {
 
         // Make sure capture is getting the physical orientation not interface orientation
         if let connection = photoOutput.connection(with: .video) {
-            connection.videoOrientation = self.getPhysicalOrientation()
+            let captureOrientation = self.getPhysicalOrientation()
+            self.lastCaptureOrientation = captureOrientation
+            connection.videoOrientation = captureOrientation
         }
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
@@ -1321,7 +1324,7 @@ extension CameraController {
         }
 
         // Use physical orientation for capture works with portrait lock
-        let orientation = self.getPhysicalOrientation()
+        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
         let isPortrait = (orientation == .portrait || orientation == .portraitUpsideDown)
 
         let ratioWidth: CGFloat

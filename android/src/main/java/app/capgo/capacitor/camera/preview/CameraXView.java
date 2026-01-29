@@ -166,6 +166,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Sensor accelerometer;
     private final float[] lastAccelerometerValues = new float[3]; // x,y, and z
     private final Object accelerometerLock = new Object();
+    private volatile int lastCaptureRotation = -1; // -1 unknown
 
     private final SensorEventListener accelerometerListener = new SensorEventListener() {
         @Override
@@ -1079,6 +1080,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         // Set rotation from accelerometer for device orientation regardless of lock
         int rotation = getRotationFromAccelerometer();
+        lastCaptureRotation = rotation;
         imageCapture.setTargetRotation(rotation);
         Log.d(TAG, "capturePhoto: Set target rotation to " + rotation + " from accelerometer");
 
@@ -1835,7 +1837,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         int previewH = Math.max(1, bounds.height());
 
         // Check if device physical orientation differs from UI orientation
-        int rotation = getRotationFromAccelerometer();
+        int rotation = (lastCaptureRotation != -1) ? lastCaptureRotation : getRotationFromAccelerometer();
         boolean physicalInLandscape = (rotation == android.view.Surface.ROTATION_90 || rotation == android.view.Surface.ROTATION_270);
         boolean previewIsPortrait = previewH > previewW;
         
