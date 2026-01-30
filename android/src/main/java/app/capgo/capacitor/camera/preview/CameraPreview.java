@@ -1636,16 +1636,21 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     ")"
             );
 
-            // Transition window background to transparent now that camera is ready
+            // Transition window and webview backgrounds to transparent now that camera is ready
             // This prevents flickering during camera initialization
+            // Both are set together in the same UI thread operation to avoid race conditions
             if (isToBackMode()) {
                 getBridge()
                     .getActivity()
                     .runOnUiThread(() -> {
                         try {
+                            // Set window background to transparent
                             getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                            // Set webview background to transparent
+                            // This ensures both happen atomically, preventing any visual glitches
+                            getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
                         } catch (Exception e) {
-                            Log.w(TAG, "Failed to set window background to transparent", e);
+                            Log.w(TAG, "Failed to set backgrounds to transparent", e);
                         }
                     });
             }
