@@ -13,15 +13,15 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.location.Location;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
 import android.media.MediaScannerConnection;
 import android.os.Build;
 import android.os.Environment;
@@ -184,7 +184,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
         }
 
-        @Override 
+        @Override
         public void onAccuracyChanged(Sensor sensor, int accuracy) {
             // Not Needed
         }
@@ -377,7 +377,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             lastAccelerometerValues[2] = 0f;
         }
         lastCaptureRotation = -1;
-        
+
         // Start accelerometer for orientation detection regardless of lock
         if (sensorManager == null) {
             sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
@@ -436,7 +436,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void performImmediateStop() {
         isRunning = false;
-        // Stop accelerometer 
+        // Stop accelerometer
         if (sensorManager != null && accelerometer != null) {
             sensorManager.unregisterListener(accelerometerListener);
         }
@@ -1088,7 +1088,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             x = lastAccelerometerValues[0];
             y = lastAccelerometerValues[1];
         }
-        
+
         // If no accelerometer data yet, fall back to display rotation
         final float epsilon = 1.0f;
         if (Math.abs(x) < epsilon && Math.abs(y) < epsilon) {
@@ -1097,7 +1097,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
             return android.view.Surface.ROTATION_0;
         }
-        
+
         // Android accelerometer: +X is right, +Y is up, +Z is toward user
         // Determine orientation based on which axis has the strongest gravity component
         if (Math.abs(x) > Math.abs(y)) {
@@ -1905,14 +1905,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         int rotation = (lastCaptureRotation != -1) ? lastCaptureRotation : getRotationFromAccelerometer();
         boolean physicalInLandscape = (rotation == android.view.Surface.ROTATION_90 || rotation == android.view.Surface.ROTATION_270);
         boolean previewIsPortrait = previewH > previewW;
-        
+
         // If physical orientation doesn't match preview orientation swap ratio
         if (physicalInLandscape == previewIsPortrait) {
             int temp = previewW;
             previewW = previewH;
             previewH = temp;
         }
-        
+
         float previewRatio = (float) previewW / (float) previewH;
 
         int imgW = image.getWidth();
@@ -1946,13 +1946,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(context);
             ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
             CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-    
+
             List<CameraInfo> availableCameras = cameraProvider.getAvailableCameraInfos();
-    
+
             for (CameraInfo cameraInfo : availableCameras) {
                 String logicalCameraId = Camera2CameraInfo.from(cameraInfo).getCameraId();
                 String position = isBackCamera(cameraInfo) ? "rear" : "front";
-                    
+
                 // Add logical camera
                 ZoomState zoomState = cameraInfo.getZoomState().getValue();
                 float minZoom = zoomState != null ? zoomState.getMinZoomRatio() : 1.0f;
@@ -1966,10 +1966,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(logicalCameraId);
                     float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
                     android.util.SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-                    
+
                     if (focalLengths != null && focalLengths.length > 0) {
                         focalLength = focalLengths[0];
-                        
+
                         // Calculate FOV to determine camera type
                         if (sensorSize != null && sensorSize.getWidth() > 0) {
                             double fov = 2 * Math.toDegrees(Math.atan(sensorSize.getWidth() / (2 * focalLength)));
@@ -1987,7 +1987,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             }
                         }
                     }
-                                        
                 } catch (CameraAccessException e) {
                     Log.e(TAG, "Failed to get characteristics for " + logicalCameraId, e);
                 }
@@ -2008,15 +2007,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     )
                 );
                 Log.d(TAG, "Added logical camera: " + logicalCameraId + " zoom: " + minZoom + "-" + maxZoom);
-    
+
                 // Get and add physical cameras
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     Set<CameraInfo> physicalCameraInfos = cameraInfo.getPhysicalCameraInfos();
                     Log.d(TAG, "Physical camera count from CameraX: " + physicalCameraInfos.size());
-                    
+
                     if (physicalCameraInfos.isEmpty()) {
                         Log.w(TAG, "No physical cameras exposed through CameraX for " + logicalCameraId);
-                        
+
                         // Try to get physical IDs from CameraManager
                         try {
                             CameraCharacteristics chars = cameraManager.getCameraCharacteristics(logicalCameraId);
@@ -2030,25 +2029,28 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         }
                         continue;
                     }
-    
+
                     for (CameraInfo physicalCameraInfo : physicalCameraInfos) {
                         String physicalId = Camera2CameraInfo.from(physicalCameraInfo).getCameraId();
                         Log.d(TAG, "Processing physical camera: " + physicalId);
-                        
+
                         if (physicalId.equals(logicalCameraId)) {
                             Log.d(TAG, "Skipping - same as logical ID");
                             continue;
                         }
-    
+
                         try {
                             CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(physicalId);
                             String physicalDeviceType = "wideAngle";
                             float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
                             android.util.SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-    
+
                             Log.d(TAG, "  Focal lengths: " + (focalLengths != null ? Arrays.toString(focalLengths) : "null"));
-                            Log.d(TAG, "  Sensor size: " + (sensorSize != null ? sensorSize.getWidth() + "x" + sensorSize.getHeight() : "null"));
-    
+                            Log.d(
+                                TAG,
+                                "  Sensor size: " + (sensorSize != null ? sensorSize.getWidth() + "x" + sensorSize.getHeight() : "null")
+                            );
+
                             if (focalLengths != null && focalLengths.length > 0 && sensorSize != null && sensorSize.getWidth() > 0) {
                                 double fov = 2 * Math.toDegrees(Math.atan(sensorSize.getWidth() / (2 * focalLengths[0])));
                                 Log.d(TAG, "  Calculated FOV: " + fov);
@@ -2058,7 +2060,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 if (focalLengths[0] < 3.0f) physicalDeviceType = "ultraWide";
                                 else if (focalLengths[0] > 5.0f) physicalDeviceType = "telephoto";
                             }
-    
+
                             float physicalMinZoom = 1.0f;
                             float physicalMaxZoom = 1.0f;
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -2068,13 +2070,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                     physicalMaxZoom = zoomRange.getUpper();
                                 }
                             }
-                             float physicalFocalLength = (focalLengths != null && focalLengths.length > 0) ? focalLengths[0] : 4.25f;
-                             String physicalLabel = "Physical " + physicalDeviceType + " (" + position + ")";
-                             List<LensInfo> physicalLenses = new ArrayList<>();
-                             physicalLenses.add(
-                             new LensInfo(physicalFocalLength, physicalDeviceType, 1.0f, physicalMaxZoom)
-                             );
-                            
+                            float physicalFocalLength = (focalLengths != null && focalLengths.length > 0) ? focalLengths[0] : 4.25f;
+                            String physicalLabel = "Physical " + physicalDeviceType + " (" + position + ")";
+                            List<LensInfo> physicalLenses = new ArrayList<>();
+                            physicalLenses.add(new LensInfo(physicalFocalLength, physicalDeviceType, 1.0f, physicalMaxZoom));
+
                             devices.add(
                                 new app.capgo.capacitor.camera.preview.model.CameraDevice(
                                     physicalId,
@@ -2093,7 +2093,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     }
                 }
             }
-            
+
             Log.d(TAG, "=== Enumeration Complete: " + devices.size() + " cameras ===");
             return devices;
         } catch (Exception e) {
@@ -2210,9 +2210,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             currentFocusFuture.cancel(true);
         }
 
-       //If locked don't auto adjust exposure
-        if (!"LOCK".equals(currentExposureMode)) { 
-
+        //If locked don't auto adjust exposure
+        if (!"LOCK".equals(currentExposureMode)) {
             // Reset exposure compensation to 0 on tap-to-focus
             try {
                 ExposureState state = camera.getCameraInfo().getExposureState();
@@ -2699,7 +2698,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void switchToDevice(String deviceId) {
         Log.d(TAG, "======================== SWITCH TO DEVICE ========================");
         Log.d(TAG, "switchToDevice: Attempting to switch to device " + deviceId);
-    
+
         mainExecutor.execute(() -> {
             try {
                 // Standard physical device selection logic...
@@ -2718,10 +2717,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     // Determine position from the target camera
                     String position = isBackCamera(targetCameraInfo) ? "rear" : "front";
                     boolean wasCentered = sessionConfig.isCentered();
-                    
+
                     // Update sessionConfig with the new device ID
                     sessionConfig = new CameraSessionConfiguration(
-                        deviceId, 
+                        deviceId,
                         position,
                         sessionConfig.getX(),
                         sessionConfig.getY(),
@@ -2741,7 +2740,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     );
 
                     sessionConfig.setCentered(wasCentered);
-                    
+
                     Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
                     bindCameraUseCases(); // Will now use deviceId from sessionConfig
                 } else {
@@ -2798,8 +2797,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             previewView.setAlpha(opacity);
         }
     }
-
-    
 
     private void updateLayoutParams() {
         if (sessionConfig == null) return;

@@ -787,9 +787,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                         self.isGeneratingDeviceOrientationNotifications = true
                         NotificationCenter.default.addObserver(self,
-                                                            selector: #selector(self.handleOrientationChange),
-                                                            name: UIDevice.orientationDidChangeNotification,
-                                                            object: nil)
+                                                               selector: #selector(self.handleOrientationChange),
+                                                               name: UIDevice.orientationDidChangeNotification,
+                                                               object: nil)
                     }
                     self.completeStartCamera(call: call)
                 }

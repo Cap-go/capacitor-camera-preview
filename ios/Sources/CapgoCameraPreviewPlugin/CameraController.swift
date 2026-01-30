@@ -53,8 +53,8 @@ class CameraController: NSObject {
         } else {
             // Portrait
             return y > 0 ? .portraitUpsideDown : .portrait
-            }
         }
+    }
 
     var captureSession: AVCaptureSession?
     var disableFocusIndicator: Bool = false
@@ -365,7 +365,7 @@ extension CameraController {
                 self.motionManager.accelerometerUpdateInterval = 1.0 / 60.0
                 if !self.motionManager.isAccelerometerActive {
                     self.motionManager.startAccelerometerUpdates()
-                     startedAccelerometer = true
+                    startedAccelerometer = true
                 }
             }
 
@@ -459,7 +459,7 @@ extension CameraController {
             } catch {
                 if startedAccelerometer {
                     self.motionManager.stopAccelerometerUpdates()
-                    }
+                }
                 DispatchQueue.main.async {
                     completionHandler(error)
                 }
@@ -1326,7 +1326,7 @@ extension CameraController {
 
     func cropImageToAspectRatio(image: UIImage, aspectRatio: String) -> UIImage? {
         let components = aspectRatio.split(separator: ":").compactMap {Float(String($0))}
-        guard components.count == 2 else {            
+        guard components.count == 2 else {
             print("[CameraPreview] cropImageToAspectRatio - Failed to parse aspect ratio: \(aspectRatio)")
             return image
         }
@@ -1758,7 +1758,7 @@ extension CameraController {
             // Skip exposure point if exposure locked
             if device.exposureMode != .locked {
 
-            // Also set exposure point if supported
+                // Also set exposure point if supported
                 if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
                     device.exposureMode = .autoExpose
                     device.setExposureTargetBias(0.0) { _ in }
