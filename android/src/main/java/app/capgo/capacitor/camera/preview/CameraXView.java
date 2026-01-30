@@ -18,6 +18,10 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.location.Location;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.MediaScannerConnection;
 import android.os.Build;
 import android.os.Environment;
@@ -156,6 +160,31 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final Object operationLock = new Object();
     private int activeOperations = 0;
     private boolean stopPending = false;
+
+    // Sensor Fields
+    private SensorManager sensorManager;
+    private Sensor accelerometer;
+    private final float[] lastAccelerometerValues = new float[3]; // x,y, and z
+    private final Object accelerometerLock = new Object();
+    private volatile int lastCaptureRotation = -1; // -1 unknown
+
+    private final SensorEventListener accelerometerListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+                synchronized (accelerometerLock) {
+                    lastAccelerometerValues[0] = event.values[0];
+                    lastAccelerometerValues[1] = event.values[1];
+                    lastAccelerometerValues[2] = event.values[2];
+                }
+            }
+        }
+
+        @Override 
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // Not Needed
+        }
+    };
 
     private boolean IsOperationRunning(String name) {
         synchronized (operationLock) {
@@ -336,6 +365,23 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void startSession(CameraSessionConfiguration config) {
         this.sessionConfig = config;
         cameraExecutor = Executors.newSingleThreadExecutor();
+
+        // Reset cached orientation so we don't reuse stale values across sessions
+        synchronized (accelerometerLock) {
+            lastAccelerometerValues[0] = 0f;
+            lastAccelerometerValues[1] = 0f;
+            lastAccelerometerValues[2] = 0f;
+        }
+        lastCaptureRotation = -1;
+        
+        // Start accelerometer for orientation detection regardless of lock
+        if (sensorManager == null) {
+            sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        }
+        if (accelerometer != null) {
+            sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
+        }
         synchronized (operationLock) {
             activeOperations = 0;
             stopPending = false;
@@ -386,6 +432,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void performImmediateStop() {
         isRunning = false;
+        // Stop accelerometer 
+        if (sensorManager != null && accelerometer != null) {
+            sensorManager.unregisterListener(accelerometerListener);
+        }
         // Cancel any ongoing focus operation when stopping session
         if (currentFocusFuture != null && !currentFocusFuture.isDone()) {
             currentFocusFuture.cancel(true);
@@ -988,6 +1038,50 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    /**
+     * Get device rotation from accelerometer data.
+     * This works even when portrait lock is enabled.
+     * Falls back to display rotation if accelerometer data is not available.
+     */
+    private int getRotationFromAccelerometer() {
+        float x, y;
+        synchronized (accelerometerLock) {
+            x = lastAccelerometerValues[0];
+            y = lastAccelerometerValues[1];
+        }
+        
+        // If no accelerometer data yet, fall back to display rotation
+        final float epsilon = 1.0f;
+        if (Math.abs(x) < epsilon && Math.abs(y) < epsilon) {
+            if (previewView != null && previewView.getDisplay() != null) {
+                return previewView.getDisplay().getRotation();
+            }
+            return android.view.Surface.ROTATION_0;
+        }
+        
+        // Android accelerometer: +X is right, +Y is up, +Z is toward user
+        // Determine orientation based on which axis has the strongest gravity component
+        if (Math.abs(x) > Math.abs(y)) {
+            // Landscape orientation
+            if (x > 0) {
+                // Device tilted to the left (top of device points left)
+                return android.view.Surface.ROTATION_90;
+            } else {
+                // Device tilted to the right (top of device points right)
+                return android.view.Surface.ROTATION_270;
+            }
+        } else {
+            // Portrait orientation
+            if (y > 0) {
+                // Normal portrait (top of device points up)
+                return android.view.Surface.ROTATION_0;
+            } else {
+                // Upside down portrait
+                return android.view.Surface.ROTATION_180;
+            }
+        }
+    }
+
     public void capturePhoto(
         int quality,
         final boolean saveToGallery,
@@ -1009,6 +1103,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             Log.d(TAG, "capturePhoto: Ignored because stop is pending");
             return;
         }
+
+        // Set rotation from accelerometer for device orientation regardless of lock
+        int rotation = getRotationFromAccelerometer();
+        lastCaptureRotation = rotation;
+        imageCapture.setTargetRotation(rotation);
+        Log.d(TAG, "capturePhoto: Set target rotation to " + rotation + " from accelerometer");
 
         Log.d(
             TAG,
@@ -1761,6 +1861,19 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Rect bounds = getActualCameraBounds();
         int previewW = Math.max(1, bounds.width());
         int previewH = Math.max(1, bounds.height());
+
+        // Check if device physical orientation differs from UI orientation
+        int rotation = (lastCaptureRotation != -1) ? lastCaptureRotation : getRotationFromAccelerometer();
+        boolean physicalInLandscape = (rotation == android.view.Surface.ROTATION_90 || rotation == android.view.Surface.ROTATION_270);
+        boolean previewIsPortrait = previewH > previewW;
+        
+        // If physical orientation doesn't match preview orientation swap ratio
+        if (physicalInLandscape == previewIsPortrait) {
+            int temp = previewW;
+            previewW = previewH;
+            previewH = temp;
+        }
+        
         float previewRatio = (float) previewW / (float) previewH;
 
         int imgW = image.getWidth();
@@ -3463,6 +3576,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (currentRecording != null) {
             throw new Exception("Video recording is already in progress");
         }
+
+        // Update video capture rotation from accelerometer for device orientation
+        int rotation = getRotationFromAccelerometer();
+        videoCapture.setTargetRotation(rotation);
+        Log.d(TAG, "startRecordVideo: Using rotation " + rotation + " from accelerometer");
 
         // Create output file
         String fileName = "video_" + System.currentTimeMillis() + ".mp4";
