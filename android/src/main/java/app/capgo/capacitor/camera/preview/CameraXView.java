@@ -143,6 +143,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private CameraXViewListener listener;
     private final Context context;
     private final WebView webView;
+    // WebView's default background is white; we store this to restore on error or cleanup
+    // Note: WebView doesn't provide a way to query its current background color, so we assume
+    // the default white background. This is consistent across Android versions.
+    private int originalWebViewBackground = android.graphics.Color.WHITE;
     private final LifecycleRegistry lifecycleRegistry;
     private final Executor mainExecutor;
     private ExecutorService cameraExecutor;
@@ -471,6 +475,22 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         });
     }
 
+    private void restoreWebViewBackground() {
+        // Capture sessionConfig reference once to avoid race conditions
+        CameraSessionConfiguration config = sessionConfig;
+        boolean shouldRestore = config != null && config.isToBack();
+        if (shouldRestore) {
+            // Capture background color before posting to UI thread
+            final int backgroundColorToRestore = originalWebViewBackground;
+            webView.post(() -> {
+                // Additional safety check in case webView context changed
+                if (webView != null) {
+                    webView.setBackgroundColor(backgroundColorToRestore);
+                }
+            });
+        }
+    }
+
     private void setupCamera() {
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(context);
         cameraProviderFuture.addListener(
@@ -480,6 +500,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     setupPreviewView();
                     bindCameraUseCases();
                 } catch (Exception e) {
+                    // Restore webView background on error
+                    restoreWebViewBackground();
                     if (listener != null) {
                         listener.onCameraStartError("Error initializing camera: " + e.getMessage());
                     }
@@ -494,7 +516,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             removePreviewView();
         }
         if (sessionConfig.isToBack()) {
-            webView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            // Set to black initially to prevent flickering, will be transparent after camera starts
+            webView.setBackgroundColor(android.graphics.Color.BLACK);
         }
 
         // Create a container to hold both the preview and grid overlay
@@ -781,7 +804,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (focusIndicatorView != null) {
             focusIndicatorView = null;
         }
-        webView.setBackgroundColor(android.graphics.Color.WHITE);
+        webView.setBackgroundColor(originalWebViewBackground);
     }
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
@@ -999,10 +1022,20 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         // Update grid overlay bounds after camera is started
                         updateGridOverlayBounds();
 
+                        // Now transition to transparent background after camera is ready
+                        // This prevents flickering during camera initialization
+                        if (sessionConfig.isToBack()) {
+                            webView.post(() -> {
+                                webView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                            });
+                        }
+
                         listener.onCameraStarted(actualWidth, actualHeight, actualX, actualY);
                     });
                 }
             } catch (Exception e) {
+                // Restore webView background on error
+                restoreWebViewBackground();
                 if (listener != null) listener.onCameraStartError("Error binding camera: " + e.getMessage());
             }
         });
