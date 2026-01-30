@@ -2732,6 +2732,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getDisableAudio(),
                         sessionConfig.getZoomFactor(),
                         sessionConfig.getAspectRatio(),
+                        sessionConfig.getAspectMode(),
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
                         sessionConfig.isVideoModeEnabled()
@@ -2775,6 +2776,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.isDisableAudio(), // disableAudio
             sessionConfig.getZoomFactor(), // zoomFactor
             sessionConfig.getAspectRatio(), // aspectRatio
+            sessionConfig.getAspectMode(), // aspectMode
             sessionConfig.getGridMode(), // gridMode
             sessionConfig.getDisableFocusIndicator(), // disableFocusIndicator
             sessionConfig.isVideoModeEnabled() // enableVideoMode
@@ -2891,6 +2893,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.getDisableAudio(),
             sessionConfig.getZoomFactor(),
             aspectRatio,
+            sessionConfig.getAspectMode(),
             currentGridMode,
             sessionConfig.getDisableFocusIndicator(),
             sessionConfig.isVideoModeEnabled()
@@ -2965,6 +2968,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.getDisableAudio(),
             sessionConfig.getZoomFactor(),
             aspectRatio,
+            sessionConfig.getAspectMode(),
             currentGridMode,
             sessionConfig.getDisableFocusIndicator(),
             sessionConfig.isVideoModeEnabled()
@@ -3026,6 +3030,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 sessionConfig.getDisableAudio(),
                 sessionConfig.getZoomFactor(),
                 sessionConfig.getAspectRatio(),
+                sessionConfig.getAspectMode(),
                 gridMode,
                 sessionConfig.getDisableFocusIndicator(),
                 sessionConfig.isVideoModeEnabled()
@@ -3364,6 +3369,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getDisableAudio(),
                         sessionConfig.getZoomFactor(),
                         calculatedAspectRatio,
+                        sessionConfig.getAspectMode(),
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
                         sessionConfig.isVideoModeEnabled()
