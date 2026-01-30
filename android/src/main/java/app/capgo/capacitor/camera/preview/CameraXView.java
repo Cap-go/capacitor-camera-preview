@@ -542,6 +542,19 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    /**
+     * Compute layout parameters for the camera preview container based on the current session configuration,
+     * device screen size, WebView/parent geometry, and optional aspect-ratio centering.
+     *
+     * The returned FrameLayout.LayoutParams contains width, height, leftMargin (x) and topMargin (y)
+     * for placing the preview. When an aspect ratio is specified and sessionConfig is in centered mode,
+     * the preview size is scaled to the largest area that fits the aspect ratio within the screen and
+     * any axis with a coordinate equal to -1 is auto-centered for that axis; axes explicitly provided
+     * in sessionConfig are preserved. Coordinates supplied by sessionConfig are assumed to already
+     * include WebView insets.
+     *
+     * @return a FrameLayout.LayoutParams configured with the computed preview width, height, leftMargin and topMargin
+     */
     private FrameLayout.LayoutParams calculatePreviewLayoutParams() {
         // sessionConfig already contains pixel-converted coordinates with webview offsets applied
         int x = sessionConfig.getX();
