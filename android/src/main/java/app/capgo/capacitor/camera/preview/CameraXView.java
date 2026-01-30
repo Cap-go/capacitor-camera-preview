@@ -677,10 +677,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     }
 
                     // Center the preview only overwrite what was not explicitly set
-                    if (sessionConfig.getX() == -1){
+                    if (sessionConfig.getX() == -1) {
                         x = (screenWidthPx - width) / 2;
                     }
-                    if (sessionConfig.getY() == -1){
+                    if (sessionConfig.getY() == -1) {
                         y = (screenHeightPx - height) / 2;
                     }
 
