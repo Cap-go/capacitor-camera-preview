@@ -127,6 +127,14 @@ export interface CameraPreviewOptions {
    */
   aspectRatio?: '4:3' | '16:9';
   /**
+   * Controls how the camera preview fills the available space.
+   * - 'contain': Fits the entire preview within the space, may show letterboxing (default).
+   * - 'cover': Fills the entire space, may crop edges of the preview.
+   * @default "contain"
+   * @platform android, ios, web
+   */
+  aspectMode?: 'cover' | 'contain';
+  /**
    * The grid overlay to display on the camera preview.
    * @default "none"
    * @since 2.1.0

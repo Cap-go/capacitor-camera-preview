@@ -538,12 +538,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         // Use TextureView-backed implementation for broader device compatibility when overlaying with WebView
         // This avoids SurfaceView z-order issues seen on some MIUI/EMUI devices.
         previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
-        // Match iOS behavior: FIT when no aspect ratio, FILL when aspect ratio is set
-        String initialAspectRatio = sessionConfig != null ? sessionConfig.getAspectRatio() : null;
+        // Set scale type based on aspectMode: 'contain' uses FIT, 'cover' uses FILL
+        String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
         previewView.setScaleType(
-            (initialAspectRatio == null || initialAspectRatio.isEmpty())
-                ? PreviewView.ScaleType.FIT_CENTER
-                : PreviewView.ScaleType.FILL_CENTER
+            "cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER
         );
         // Also make preview view touchable as backup
         previewView.setClickable(true);
@@ -960,10 +958,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     Log.d(TAG, "Image capture resolution: " + imageCaptureResolution.getResolution());
                 }
 
-                // Update scale type based on aspect ratio whenever (re)binding
-                String ar = sessionConfig != null ? sessionConfig.getAspectRatio() : null;
+                // Update scale type based on aspectMode
+                String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
                 previewView.setScaleType(
-                    (ar == null || ar.isEmpty()) ? PreviewView.ScaleType.FIT_CENTER : PreviewView.ScaleType.FILL_CENTER
+                    "cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER
                 );
 
                 // Set initial zoom if specified, prioritizing targetZoom over default zoomFactor
