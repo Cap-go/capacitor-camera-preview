@@ -1,4 +1,3 @@
-
 package app.capgo.capacitor.camera.preview;
 
 import android.Manifest;
@@ -541,11 +540,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
         // Set scale type based on aspectMode: 'contain' uses FIT, 'cover' uses FILL
         String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
-        previewView.setScaleType(
-            "cover".equals(aspectMode)
-                ? PreviewView.ScaleType.FILL_CENTER
-                : PreviewView.ScaleType.FIT_CENTER
-        );
+        previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
         // Also make preview view touchable as backup
         previewView.setClickable(true);
         previewView.setFocusable(true);
@@ -963,11 +958,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 // Update scale type based on aspectMode
                 String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
-                previewView.setScaleType(
-                    "cover".equals(aspectMode)
-                        ? PreviewView.ScaleType.FILL_CENTER
-                        : PreviewView.ScaleType.FIT_CENTER
-                );
+                previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
 
                 // Set initial zoom if specified, prioritizing targetZoom over default zoomFactor
                 float initialZoom = sessionConfig.getTargetZoom() != 1.0f ? sessionConfig.getTargetZoom() : sessionConfig.getZoomFactor();
