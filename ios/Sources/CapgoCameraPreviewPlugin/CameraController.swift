@@ -1755,11 +1755,15 @@ extension CameraController {
             // Set the focus point
             device.focusPointOfInterest = point
 
+            // Skip exposure point if exposure locked
+            if device.exposureMode != .locked {
+
             // Also set exposure point if supported
-            if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
-                device.exposureMode = .autoExpose
-                device.setExposureTargetBias(0.0) { _ in }
-                device.exposurePointOfInterest = point
+                if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
+                    device.exposureMode = .autoExpose
+                    device.setExposureTargetBias(0.0) { _ in }
+                    device.exposurePointOfInterest = point
+                }
             }
 
             device.unlockForConfiguration()
@@ -2224,12 +2228,14 @@ extension CameraController: UIGestureRecognizerDelegate {
                 device.focusPointOfInterest = CGPoint(x: CGFloat(devicePoint?.x ?? 0), y: CGFloat(devicePoint?.y ?? 0))
                 device.focusMode = focusMode
             }
-
-            let exposureMode = AVCaptureDevice.ExposureMode.autoExpose
-            if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(exposureMode) {
-                device.exposurePointOfInterest = CGPoint(x: CGFloat(devicePoint?.x ?? 0), y: CGFloat(devicePoint?.y ?? 0))
-                device.exposureMode = exposureMode
-                device.setExposureTargetBias(0.0) { _ in }
+            // Skip exposure point if locked
+            if device.exposureMode != .locked {
+                let exposureMode = AVCaptureDevice.ExposureMode.autoExpose
+                if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(exposureMode) {
+                    device.exposurePointOfInterest = CGPoint(x: CGFloat(devicePoint?.x ?? 0), y: CGFloat(devicePoint?.y ?? 0))
+                    device.exposureMode = exposureMode
+                    device.setExposureTargetBias(0.0) { _ in }
+                }
             }
         } catch {
             debugPrint(error)
