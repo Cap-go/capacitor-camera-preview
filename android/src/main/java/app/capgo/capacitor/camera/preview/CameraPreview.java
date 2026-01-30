@@ -1645,9 +1645,10 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         try {
                             // Set window background to transparent
                             getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                            // Set webview background to transparent
-                            // This ensures both happen atomically, preventing any visual glitches
-                            getBridge().getWebView().setBackgroundColor(Color.TRANSPARENT);
+                            // Set webview background to almost-transparent for MIUI compatibility
+                            // Use alpha=1 instead of 0 to work around MIUI/Xiaomi rendering issues
+                            // where Color.TRANSPARENT (alpha=0) is not rendered correctly
+                            getBridge().getWebView().setBackgroundColor(Color.argb(1, 255, 255, 255));
                         } catch (Exception e) {
                             Log.w(TAG, "Failed to set backgrounds to transparent", e);
                         }
