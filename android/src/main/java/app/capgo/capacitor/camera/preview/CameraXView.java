@@ -851,8 +851,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 // Bind with or without video capture based on enableVideoMode
                 if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
                     camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture, videoCapture);
+                    CameraInfo cameraInfo = camera.getCameraInfo();
+                    currentDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
+                    Log.d(TAG, "bindCameraUseCases: Camera successfully bound to device ID: " + currentDeviceId);
                 } else {
                     camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture);
+                    CameraInfo cameraInfo = camera.getCameraInfo();
+                    currentDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
+                    Log.d(TAG, "bindCameraUseCases: Camera successfully bound to device ID: " + currentDeviceId);
                 }
 
                 resetExposureCompensationToDefault();
@@ -1901,26 +1907,66 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     // not working for xiaomi https://xiaomi.eu/community/threads/mi-11-ultra-unable-to-access-camera-lenses-in-apps-camera2-api.61456/
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     public static List<app.capgo.capacitor.camera.preview.model.CameraDevice> getAvailableDevicesStatic(Context context) {
-        Log.d(TAG, "getAvailableDevicesStatic: Starting CameraX device enumeration with getPhysicalCameraInfos.");
+        Log.d(TAG, "=== Starting Camera Enumeration ===");
         List<app.capgo.capacitor.camera.preview.model.CameraDevice> devices = new ArrayList<>();
         try {
             ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(context);
             ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
             CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-
-            for (CameraInfo cameraInfo : cameraProvider.getAvailableCameraInfos()) {
+    
+            List<CameraInfo> availableCameras = cameraProvider.getAvailableCameraInfos();
+    
+            for (CameraInfo cameraInfo : availableCameras) {
                 String logicalCameraId = Camera2CameraInfo.from(cameraInfo).getCameraId();
                 String position = isBackCamera(cameraInfo) ? "rear" : "front";
-
+                    
                 // Add logical camera
-                float minZoom = Objects.requireNonNull(cameraInfo.getZoomState().getValue()).getMinZoomRatio();
-                float maxZoom = cameraInfo.getZoomState().getValue().getMaxZoomRatio();
+                ZoomState zoomState = cameraInfo.getZoomState().getValue();
+                float minZoom = zoomState != null ? zoomState.getMinZoomRatio() : 1.0f;
+                float maxZoom = zoomState != null ? zoomState.getMaxZoomRatio() : 1.0f;
+
+                // Determine device type by analyzing camera characteristics
+                String deviceType = "wideAngle";
+                float focalLength = 4.25f;
+
+                try {
+                    CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(logicalCameraId);
+                    float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                    android.util.SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                    
+                    if (focalLengths != null && focalLengths.length > 0) {
+                        focalLength = focalLengths[0];
+                        
+                        // Calculate FOV to determine camera type
+                        if (sensorSize != null && sensorSize.getWidth() > 0) {
+                            double fov = 2 * Math.toDegrees(Math.atan(sensorSize.getWidth() / (2 * focalLength)));
+                            if (fov > 90) {
+                                deviceType = "ultraWide";
+                            } else if (fov < 40) {
+                                deviceType = "telephoto";
+                            }
+                        } else {
+                            // Fallback: classify by focal length alone
+                            if (focalLength < 3.0f) {
+                                deviceType = "ultraWide";
+                            } else if (focalLength > 5.0f) {
+                                deviceType = "telephoto";
+                            }
+                        }
+                    }
+                                        
+                } catch (CameraAccessException e) {
+                    Log.e(TAG, "Failed to get characteristics for " + logicalCameraId, e);
+                }
                 List<LensInfo> logicalLenses = new ArrayList<>();
-                logicalLenses.add(new LensInfo(4.25f, "wideAngle", 1.0f, maxZoom));
+                logicalLenses.add(new LensInfo(focalLength, deviceType, 1.0f, maxZoom));
+
+                String label = "Logical " + deviceType + " (" + position + ")";
+
                 devices.add(
                     new app.capgo.capacitor.camera.preview.model.CameraDevice(
                         logicalCameraId,
-                        "Logical Camera (" + position + ")",
+                        label,
                         position,
                         logicalLenses,
                         minZoom,
@@ -1928,34 +1974,58 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         true
                     )
                 );
-                Log.d(TAG, "Found logical camera: " + logicalCameraId + " (" + position + ") with zoom " + minZoom + "-" + maxZoom);
-
+                Log.d(TAG, "Added logical camera: " + logicalCameraId + " zoom: " + minZoom + "-" + maxZoom);
+    
                 // Get and add physical cameras
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     Set<CameraInfo> physicalCameraInfos = cameraInfo.getPhysicalCameraInfos();
-                    if (physicalCameraInfos.isEmpty()) continue;
-
-                    Log.d(TAG, "Logical camera " + logicalCameraId + " has " + physicalCameraInfos.size() + " physical cameras.");
-
+                    Log.d(TAG, "Physical camera count from CameraX: " + physicalCameraInfos.size());
+                    
+                    if (physicalCameraInfos.isEmpty()) {
+                        Log.w(TAG, "No physical cameras exposed through CameraX for " + logicalCameraId);
+                        
+                        // Try to get physical IDs from CameraManager
+                        try {
+                            CameraCharacteristics chars = cameraManager.getCameraCharacteristics(logicalCameraId);
+                            Set<String> physicalIds = chars.getPhysicalCameraIds();
+                            Log.d(TAG, "CameraManager reports " + physicalIds.size() + " physical cameras for " + logicalCameraId);
+                            for (String pid : physicalIds) {
+                                Log.d(TAG, "  Physical camera ID: " + pid);
+                            }
+                        } catch (CameraAccessException e) {
+                            Log.e(TAG, "Failed to get characteristics", e);
+                        }
+                        continue;
+                    }
+    
                     for (CameraInfo physicalCameraInfo : physicalCameraInfos) {
                         String physicalId = Camera2CameraInfo.from(physicalCameraInfo).getCameraId();
-                        if (physicalId.equals(logicalCameraId)) continue; // Already added as logical
-
+                        Log.d(TAG, "Processing physical camera: " + physicalId);
+                        
+                        if (physicalId.equals(logicalCameraId)) {
+                            Log.d(TAG, "Skipping - same as logical ID");
+                            continue;
+                        }
+    
                         try {
                             CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(physicalId);
-                            String deviceType = "wideAngle";
+                            String physicalDeviceType = "wideAngle";
                             float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
                             android.util.SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-
+    
+                            Log.d(TAG, "  Focal lengths: " + (focalLengths != null ? Arrays.toString(focalLengths) : "null"));
+                            Log.d(TAG, "  Sensor size: " + (sensorSize != null ? sensorSize.getWidth() + "x" + sensorSize.getHeight() : "null"));
+    
                             if (focalLengths != null && focalLengths.length > 0 && sensorSize != null && sensorSize.getWidth() > 0) {
                                 double fov = 2 * Math.toDegrees(Math.atan(sensorSize.getWidth() / (2 * focalLengths[0])));
-                                if (fov > 90) deviceType = "ultraWide";
-                                else if (fov < 40) deviceType = "telephoto";
+                                Log.d(TAG, "  Calculated FOV: " + fov);
+                                if (fov > 90) physicalDeviceType = "ultraWide";
+                                else if (fov < 40) physicalDeviceType = "telephoto";
                             } else if (focalLengths != null && focalLengths.length > 0) {
-                                if (focalLengths[0] < 3.0f) deviceType = "ultraWide";
-                                else if (focalLengths[0] > 5.0f) deviceType = "telephoto";
+                                if (focalLengths[0] < 3.0f) physicalDeviceType = "ultraWide";
+                                else if (focalLengths[0] > 5.0f) physicalDeviceType = "telephoto";
                             }
-
+    
                             float physicalMinZoom = 1.0f;
                             float physicalMaxZoom = 1.0f;
                             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -1965,17 +2035,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                     physicalMaxZoom = zoomRange.getUpper();
                                 }
                             }
-
-                            String label = "Physical " + deviceType + " (" + position + ")";
-                            List<LensInfo> physicalLenses = new ArrayList<>();
-                            physicalLenses.add(
-                                new LensInfo(focalLengths != null ? focalLengths[0] : 4.25f, deviceType, 1.0f, physicalMaxZoom)
-                            );
-
+                             float physicalFocalLength = (focalLengths != null && focalLengths.length > 0) ? focalLengths[0] : 4.25f;
+                             String physicalLabel = "Physical " + physicalDeviceType + " (" + position + ")";
+                             List<LensInfo> physicalLenses = new ArrayList<>();
+                             physicalLenses.add(
+                             new LensInfo(physicalFocalLength, physicalDeviceType, 1.0f, physicalMaxZoom)
+                             );
+                            
                             devices.add(
                                 new app.capgo.capacitor.camera.preview.model.CameraDevice(
                                     physicalId,
-                                    label,
+                                    physicalLabel,
                                     position,
                                     physicalLenses,
                                     physicalMinZoom,
@@ -1983,13 +2053,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                     false
                                 )
                             );
-                            Log.d(TAG, "Found physical camera: " + physicalId + " (" + label + ")");
+                            Log.d(TAG, "Added physical camera: " + physicalId + " (" + physicalDeviceType + ")");
                         } catch (CameraAccessException e) {
                             Log.e(TAG, "Failed to access characteristics for physical camera " + physicalId, e);
                         }
                     }
                 }
             }
+            
+            Log.d(TAG, "=== Enumeration Complete: " + devices.size() + " cameras ===");
             return devices;
         } catch (Exception e) {
             Log.e(TAG, "getAvailableDevicesStatic: Error getting devices", e);
@@ -2592,40 +2664,60 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     public void switchToDevice(String deviceId) {
+        Log.d(TAG, "======================== SWITCH TO DEVICE ========================");
         Log.d(TAG, "switchToDevice: Attempting to switch to device " + deviceId);
-
+    
         mainExecutor.execute(() -> {
             try {
                 // Standard physical device selection logic...
                 List<CameraInfo> cameraInfos = cameraProvider.getAvailableCameraInfos();
+
                 CameraInfo targetCameraInfo = null;
                 for (CameraInfo cameraInfo : cameraInfos) {
-                    if (deviceId.equals(Camera2CameraInfo.from(cameraInfo).getCameraId())) {
+                    String id = Camera2CameraInfo.from(cameraInfo).getCameraId();
+                    if (deviceId.equals(id)) {
                         targetCameraInfo = cameraInfo;
                         break;
                     }
                 }
 
                 if (targetCameraInfo != null) {
-                    Log.d(TAG, "switchToDevice: Found matching CameraInfo for deviceId: " + deviceId);
-                    final CameraInfo finalTarget = targetCameraInfo;
+                    // Determine position from the target camera
+                    String position = isBackCamera(targetCameraInfo) ? "rear" : "front";
+                    boolean wasCentered = sessionConfig.isCentered();
+                    
+                    // Update sessionConfig with the new device ID
+                    sessionConfig = new CameraSessionConfiguration(
+                        deviceId, 
+                        position,
+                        sessionConfig.getX(),
+                        sessionConfig.getY(),
+                        sessionConfig.getWidth(),
+                        sessionConfig.getHeight(),
+                        sessionConfig.getPaddingBottom(),
+                        sessionConfig.getToBack(),
+                        sessionConfig.getStoreToFile(),
+                        sessionConfig.getEnableOpacity(),
+                        sessionConfig.getDisableExifHeaderStripping(),
+                        sessionConfig.getDisableAudio(),
+                        sessionConfig.getZoomFactor(),
+                        sessionConfig.getAspectRatio(),
+                        sessionConfig.getGridMode(),
+                        sessionConfig.getDisableFocusIndicator(),
+                        sessionConfig.isVideoModeEnabled()
+                    );
 
-                    // This filter will receive a list of all cameras and must return the one we want.
-
-                    currentCameraSelector = new CameraSelector.Builder()
-                        .addCameraFilter((cameras) -> {
-                            // This filter will receive a list of all cameras and must return the one we want.
-                            return Collections.singletonList(finalTarget);
-                        })
-                        .build();
-                    currentDeviceId = deviceId;
-                    bindCameraUseCases(); // Rebind with the new, highly specific selector
+                    sessionConfig.setCentered(wasCentered);
+                    
+                    Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
+                    bindCameraUseCases(); // Will now use deviceId from sessionConfig
                 } else {
                     Log.e(TAG, "switchToDevice: Could not find any CameraInfo matching deviceId: " + deviceId);
                 }
             } catch (Exception e) {
                 Log.e(TAG, "switchToDevice: Error switching camera", e);
             }
+            Log.d(TAG, "================================================================");
         });
     }
 
@@ -2673,6 +2765,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             previewView.setAlpha(opacity);
         }
     }
+
+    
 
     private void updateLayoutParams() {
         if (sessionConfig == null) return;
