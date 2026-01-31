@@ -947,6 +947,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         // Set to solid black first to prevent flickering during transition
                         // This provides a stable base before camera preview is ready
                         getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.BLACK));
+                        getBridge().getWebView().setBackgroundColor(Color.argb(1, 0, 0, 0));
                     } catch (Exception ignored) {}
                 }
                 DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
@@ -1651,7 +1652,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     .getActivity()
                     .runOnUiThread(() -> {
                         try {
-                            getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                            // Use "almost transparent" to avoid WebView hardware acceleration compositing bug
+                            getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.argb(1,0,0,0)));
                         } catch (Exception e) {
                             Log.w(TAG, "Failed to set window background to transparent", e);
                         }
