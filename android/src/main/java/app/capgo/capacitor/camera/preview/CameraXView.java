@@ -1026,7 +1026,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         // This prevents flickering during camera initialization
                         if (sessionConfig.isToBack()) {
                             webView.post(() -> {
-                                webView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                                // Use "almost transparent" to avoid WebView hardware acceleration compositing bug
+                                webView.setBackgroundColor(android.graphics.Color.argb(1,0,0,0));
                             });
                         }
 
