@@ -101,6 +101,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     var locationManager: CLLocationManager?
     var currentLocation: CLLocation?
     private var aspectRatio: String?
+    private var aspectMode: String = "contain"
     private var gridMode: String = "none"
     private var positioning: String = "center"
     private var permissionCallID: String?
@@ -748,6 +749,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.disableAudio = call.getBool("disableAudio") ?? true
         // Default to 4:3 aspect ratio if not provided
         self.aspectRatio = call.getString("aspectRatio") ?? "4:3"
+        // Default to 'contain' aspect mode if not provided
+        self.aspectMode = call.getString("aspectMode") ?? "contain"
         self.gridMode = call.getString("gridMode") ?? "none"
         self.positioning = call.getString("positioning") ?? "top"
         self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
@@ -772,7 +775,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
 
-            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator) { error in
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
@@ -913,14 +916,16 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     // Use the calculateAspectRatioFrame method from CameraController
                     let frame = self.cameraController.calculateAspectRatioFrame(for: aspectRatio, in: self.previewView.bounds)
                     previewLayer.frame = frame
-                    previewLayer.videoGravity = .resizeAspectFill
+                    // Set videoGravity based on aspectMode
+                    previewLayer.videoGravity = self.cameraController.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
 
                     // Keep grid overlay in sync with preview if it exists
                     self.cameraController.gridOverlayView?.frame = frame
                 } else {
                     // No aspect ratio set, use full bounds
                     self.cameraController.previewLayer?.frame = self.previewView.bounds
-                    self.cameraController.previewLayer?.videoGravity = .resizeAspectFill
+                    // Set videoGravity based on aspectMode
+                    self.cameraController.previewLayer?.videoGravity = self.cameraController.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
                 }
 
                 CATransaction.commit()
@@ -1697,7 +1702,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 self.cameraController.previewLayer?.frame = self.previewView.bounds
-                self.cameraController.previewLayer?.videoGravity = .resizeAspectFill
+                // Set videoGravity based on aspectMode
+                self.cameraController.previewLayer?.videoGravity = self.cameraController.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
                 CATransaction.commit()
 
                 self.previewView.isUserInteractionEnabled = true
