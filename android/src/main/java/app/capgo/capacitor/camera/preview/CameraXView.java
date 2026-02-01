@@ -840,9 +840,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 ResolutionSelector resolutionSelector = resolutionSelectorBuilder.build();
 
-                int rotation = previewView != null && previewView.getDisplay() != null
-                    ? previewView.getDisplay().getRotation()
-                    : android.view.Surface.ROTATION_0;
+                int rotation =
+                    previewView != null && previewView.getDisplay() != null
+                        ? previewView.getDisplay().getRotation()
+                        : android.view.Surface.ROTATION_0;
 
                 Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
@@ -1022,14 +1023,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         // Update grid overlay bounds after camera is started
                         updateGridOverlayBounds();
 
-                        // Now transition to transparent background after camera is ready
-                        // This prevents flickering during camera initialization
-                        if (sessionConfig.isToBack()) {
-                            webView.post(() -> {
-                                webView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                            });
-                        }
-
+                        // Notify listener that camera is started
+                        // The listener (CameraPreview) will handle setting both window and webview to transparent
                         listener.onCameraStarted(actualWidth, actualHeight, actualX, actualY);
                     });
                 }
@@ -1580,9 +1575,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 );
             org.apache.commons.imaging.formats.tiff.TiffImageMetadata exif = jpegMetadata != null ? jpegMetadata.getExif() : null;
 
-            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet = exif != null
-                ? exif.getOutputSet()
-                : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet =
+                exif != null ? exif.getOutputSet() : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
 
             // Update orientation if requested (normalize to 1)
             org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory rootDir = outputSet.getOrCreateRootDirectory();
@@ -2553,7 +2547,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     if (parent != null) {
                         parent.removeView(focusIndicatorView);
                     }
-                } catch (Exception ignore) {} finally {
+                } catch (Exception ignore) {
+                } finally {
                     focusIndicatorView = null;
                 }
             });

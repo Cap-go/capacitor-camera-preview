@@ -807,9 +807,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             result.put("microphone", mapPermissionState(audioState));
         }
 
-        boolean showSettingsAlert = call.getBoolean("showSettingsAlert") != null
-            ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert"))
-            : false;
+        boolean showSettingsAlert =
+            call.getBoolean("showSettingsAlert") != null ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert")) : false;
 
         String cameraStateString = result.getString("camera");
         boolean cameraNeedsSettings = "denied".equals(cameraStateString) || "prompt-with-rationale".equals(cameraStateString);
@@ -858,9 +857,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String deviceId = originalDeviceId; // Use a mutable variable
 
         final String position = (positionParam == null ||
-                positionParam.isEmpty() ||
-                "rear".equals(positionParam) ||
-                "back".equals(positionParam))
+            positionParam.isEmpty() ||
+            "rear".equals(positionParam) ||
+            "back".equals(positionParam))
             ? "back"
             : "front";
         // Use -1 as default to indicate centering is needed when x/y not provided
@@ -1636,16 +1635,22 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     ")"
             );
 
-            // Transition window background to transparent now that camera is ready
+            // Transition window and webview backgrounds to transparent now that camera is ready
             // This prevents flickering during camera initialization
+            // Both are set together in the same UI thread operation to avoid race conditions
             if (isToBackMode()) {
                 getBridge()
                     .getActivity()
                     .runOnUiThread(() -> {
                         try {
+                            // Set window background to transparent
                             getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                            // Set webview background to almost-transparent for MIUI compatibility
+                            // Use alpha=1 instead of 0 to work around MIUI/Xiaomi rendering issues
+                            // where Color.TRANSPARENT (alpha=0) is not rendered correctly
+                            getBridge().getWebView().setBackgroundColor(Color.argb(1, 255, 255, 255));
                         } catch (Exception e) {
-                            Log.w(TAG, "Failed to set window background to transparent", e);
+                            Log.w(TAG, "Failed to set backgrounds to transparent", e);
                         }
                     });
             }
@@ -1872,9 +1877,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
 
-        boolean disableAudio = call.getBoolean("disableAudio") != null
-            ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
-            : this.lastDisableAudio;
+        boolean disableAudio =
+            call.getBoolean("disableAudio") != null ? Boolean.TRUE.equals(call.getBoolean("disableAudio")) : this.lastDisableAudio;
         this.lastDisableAudio = disableAudio;
         String permissionAlias = disableAudio ? CAMERA_ONLY_PERMISSION_ALIAS : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
