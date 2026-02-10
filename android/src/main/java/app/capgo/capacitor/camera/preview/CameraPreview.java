@@ -79,6 +79,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     protected void handleOnResume() {
         super.handleOnResume();
         if (lastSessionConfig != null) {
+            // Set to black to avoid flicker, transparent set later
+            if (lastSessionConfig.isToBack()) {
+                try {
+                    getBridge()
+                        .getActivity()
+                        .getWindow()
+                        .setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK));
+                    getBridge().getWebView().setBackgroundColor(android.graphics.Color.BLACK);
+                } catch (Exception ignored) {}
+            }
             // Recreate camera with last known configuration
             if (cameraXView == null) {
                 cameraXView = new CameraXView(getContext(), getBridge().getWebView());
