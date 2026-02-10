@@ -2759,7 +2759,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         // Determine current position based on session config and flip it
         String currentPosition = sessionConfig.getPosition();
         String newPosition = "front".equals(currentPosition) ? "rear" : "front";
-
+        // Maintain centered config
+        boolean wasCentered = sessionConfig.isCentered();
         Log.d(TAG, "flipCamera: Switching from " + currentPosition + " to " + newPosition);
 
         sessionConfig = new CameraSessionConfiguration(
@@ -2781,6 +2782,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.getDisableFocusIndicator(), // disableFocusIndicator
             sessionConfig.isVideoModeEnabled() // enableVideoMode
         );
+
+        sessionConfig.setCentered(wasCentered);
 
         // Clear current device ID to force position-based selection
         currentDeviceId = null;
