@@ -99,6 +99,8 @@ class CameraController: NSObject {
     var videoFileURL: URL?
     private let saneMaxZoomFactor: CGFloat = 25.5
 
+    var videoQuality: String = "high"
+
     // Track output preparation status
     private var outputsPrepared: Bool = false
 
@@ -348,7 +350,7 @@ extension CameraController {
         self.outputsPrepared = true
     }
 
-    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, initialZoomLevel: Float?, disableFocusIndicator: Bool = false, completionHandler: @escaping (Error?) -> Void) {
+    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), zoom: \(initialZoomLevel ?? 1)")
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -471,39 +473,67 @@ extension CameraController {
         guard let captureSession = self.captureSession else { return }
 
         var targetPreset: AVCaptureSession.Preset = .photo
-        if let aspectRatio = aspectRatio {
-            switch aspectRatio {
-            case "16:9":
-                // Start with 1080p for faster initialization, 4K only when explicitly needed
-                // This maintains capture quality while optimizing preview performance
-                if captureSession.canSetSessionPreset(.hd1920x1080) {
-                    targetPreset = .hd1920x1080
-                } else if captureSession.canSetSessionPreset(.hd4K3840x2160) {
-                    targetPreset = .hd4K3840x2160
-                }
-            case "4:3":
-                if captureSession.canSetSessionPreset(.photo) {
-                    targetPreset = .photo
-                } else if captureSession.canSetSessionPreset(.high) {
-                    targetPreset = .high
+
+        // Prioritize video quality setting
+        switch self.videoQuality.lowercased() {
+            case "low":
+                // Match Android "Low" (SD/480p)
+                if captureSession.canSetSessionPreset(.vga640x480) {
+                    targetPreset = .vga640x480
                 } else {
-                    targetPreset = captureSession.sessionPreset
+                    targetPreset = .low
                 }
-            default:
-                if captureSession.canSetSessionPreset(.photo) {
-                    targetPreset = .photo
-                } else if captureSession.canSetSessionPreset(.high) {
-                    targetPreset = .high
+            case "medium":
+                // Match Android "Medium" (HD/720p)
+                if captureSession.canSetSessionPreset(.hd1280x720) {
+                    targetPreset = .hd1280x720
                 } else {
-                    targetPreset = captureSession.sessionPreset
+                    targetPreset = .medium
                 }
-            }
-        }
+            case "high":
+            // Exisiting logic for High Quality (4K/1080p based on Asepct Ratio)
+
+                if let aspectRatio = aspectRatio {
+                    switch aspectRatio {
+                    case "16:9":
+                        // Start with 1080p for faster initialization, 4K only when explicitly needed
+                        // This maintains capture quality while optimizing preview performance
+                        if captureSession.canSetSessionPreset(.hd1920x1080) {
+                            targetPreset = .hd1920x1080
+                        } else if captureSession.canSetSessionPreset(.hd4K3840x2160) {
+                            targetPreset = .hd4K3840x2160
+                        }
+                    case "4:3":
+                        if captureSession.canSetSessionPreset(.photo) {
+                            targetPreset = .photo
+                        } else if captureSession.canSetSessionPreset(.high) {
+                            targetPreset = .high
+                        } else {
+                            targetPreset = captureSession.sessionPreset
+                        }
+                    default:
+                        if captureSession.canSetSessionPreset(.photo) {
+                            targetPreset = .photo
+                        } else if captureSession.canSetSessionPreset(.high) {
+                            targetPreset = .high
+                        } else {
+                            targetPreset = captureSession.sessionPreset
+                        }
+                    }
+                }
+                // Handle unexpected values
+                default:
+                    if captureSession.canSetSessionPreset(.photo) {
+                        targetPreset = .photo
+                    } else {
+                        targetPreset = .high
+                    }
+                }
 
         if captureSession.canSetSessionPreset(targetPreset) {
             captureSession.sessionPreset = targetPreset
+            }
         }
-    }
 
     /// Update the requested aspect ratio at runtime and reconfigure session/preview accordingly
     func updateAspectRatio(_ aspectRatio: String?) {
@@ -802,7 +832,21 @@ extension CameraController {
     }
 
     // Helper: pick the best preset the TARGET device supports for a given aspect ratio
-    private func bestPreset(for aspectRatio: String?, on device: AVCaptureDevice) -> AVCaptureSession.Preset {
+    private func bestPreset(for aspectRatio: String?, quality: String, on device: AVCaptureDevice) -> AVCaptureSession.Preset {
+
+        // Handle specific quality overrides first
+        switch quality.lowercased() {
+            case "low":
+                if device.supportsSessionPreset(.vga640x480) { return .vga640x480 }
+                return .low
+            case "medium":
+                if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
+                return .medium
+            case "high":
+                break // Exit and go off code below
+            default: 
+                break // Exit and go off code below
+        }
         // Preference order depends on aspect ratio
         if aspectRatio == "16:9" {
             // Prefer 4K → 1080p → 720p → high → photo → vga
@@ -840,7 +884,7 @@ extension CameraController {
         }
 
         // Compute the desired preset for the TARGET device up front
-        let desiredPreset = bestPreset(for: self.requestedAspectRatio, on: targetDevice)
+        let desiredPreset = bestPreset(for: self.requestedAspectRatio, quality: self.videoQuality, on: targetDevice)
 
         // Keep the preview layer visually stable during the swap
         let savedPreviewFrame = self.previewLayer?.frame
