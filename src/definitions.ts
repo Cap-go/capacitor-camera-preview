@@ -233,7 +233,8 @@ export interface CameraPreviewOptions {
   /**
    * Sets the quality of video for recording.
    * Options: 'low', 'medium', 'high'
-   * Requires 'enableVideoMode' to be true
+   * @note On Android requires 'enableVideoMode' to be true
+   * @note Will affect the entire preview stream for iOS
    * @platform ios, android
    * @default "high"
    */
