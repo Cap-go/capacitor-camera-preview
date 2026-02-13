@@ -295,6 +295,13 @@ export interface CameraPreviewPictureOptions {
    * @default "speed"
    */
   photoQualityPrioritization?: 'speed' | 'balanced' | 'quality';
+  /**
+   * Sets the quality of video for recording.
+   * Options: 'low', 'medium', 'high'
+   * @platform ios, android
+   * @default "high"
+   */
+  videoQuality?: 'low' | 'medium' | 'high';
 }
 
 /** Represents EXIF data extracted from an image. */
