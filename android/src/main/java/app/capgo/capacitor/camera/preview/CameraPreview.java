@@ -894,6 +894,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         //noinspection DataFlowIssue
         final boolean disableFocusIndicator = call.getBoolean("disableFocusIndicator", false);
         final boolean enableVideoMode = Boolean.TRUE.equals(call.getBoolean("enableVideoMode", false));
+        final String videoQuality = call.getString("videoQuality", "high");
 
         // Check for conflict between aspectRatio and size
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
@@ -1193,7 +1194,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     aspectRatio,
                     gridMode,
                     disableFocusIndicator,
-                    enableVideoMode
+                    enableVideoMode,
+                    videoQuality
                 );
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);

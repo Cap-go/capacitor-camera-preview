@@ -655,6 +655,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("  - initialZoomLevel: \(call.getFloat("initialZoomLevel") ?? 1.0)")
         print("  - disableFocusIndicator: \(call.getBool("disableFocusIndicator") ?? false)")
         print("  - force: \(call.getBool("force") ?? false)")
+        print("  - videoQuality: \(call.getString("videoQuality") ?? "high")")
 
         let force = call.getBool("force") ?? false
 
@@ -752,6 +753,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.positioning = call.getString("positioning") ?? "top"
         self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
 
+        // Default to high if not provided
+        let videoQuality = call.getString("videoQuality") ?? "high"
+
         let initialZoomLevel = call.getFloat("initialZoomLevel")
 
         // Check for conflict between aspectRatio and size (width/height)
@@ -772,7 +776,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
 
-            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator) { error in
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
