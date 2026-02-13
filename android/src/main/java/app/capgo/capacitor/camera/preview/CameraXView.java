@@ -856,10 +856,38 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 // Only setup VideoCapture if enableVideoMode is true
                 if (sessionConfig.isVideoModeEnabled()) {
-                    QualitySelector qualitySelector = QualitySelector.fromOrderedList(
-                        Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
-                        FallbackStrategy.higherQualityOrLowerThan(Quality.FHD)
-                    );
+                    QualitySelector qualitySelector;
+                    
+                    // Get quality from sessionConfig default to high if null
+                    String videoQuality = sessionConfig.getVideoQuality() != null ? sessionConfig.getVideoQuality() : "high";
+
+                    switch (videoQuality.toLowerCase()) {
+                        case "low": 
+                            // Target SD, allow falling back to lower if needed
+                            qualitySelector = QualitySelector.fromOrderedList(
+                                Arrays.asList(Quality.SD, Quality.LOWEST),
+                                FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                        );
+                        break;
+
+                        case "medium":
+                            // Target HD, allow falling back to SD
+                            qualitySelector = QualitySelector.fromOrderedList(
+                                Arrays.asList(Quality.HD, Quality.SD),
+                                FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)
+                            );
+                        break;
+
+                        case "high":
+                        default: 
+                            // Target FHD allow falling back SD
+                            qualitySelector  = QualitySelector.fromOrderedList(
+                                Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
+                                FallbackStrategy.higherQualityOrLowerThan(Quality.FHD)
+                            );
+                        break;
+                    }
+
                     Recorder recorder = new Recorder.Builder().setQualitySelector(qualitySelector).build();
                     videoCapture = VideoCapture.withOutput(recorder);
                 }
@@ -2736,7 +2764,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getAspectRatio(),
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
-                        sessionConfig.isVideoModeEnabled()
+                        sessionConfig.isVideoModeEnabled(),
+                        sessionConfig.getVideoQuality()
                     );
 
                     sessionConfig.setCentered(wasCentered);
@@ -2779,7 +2808,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.getAspectRatio(), // aspectRatio
             sessionConfig.getGridMode(), // gridMode
             sessionConfig.getDisableFocusIndicator(), // disableFocusIndicator
-            sessionConfig.isVideoModeEnabled() // enableVideoMode
+            sessionConfig.isVideoModeEnabled(), // enableVideoMode
+            sessionConfig.getVideoQuality() // videoQuality
         );
 
         // Clear current device ID to force position-based selection
@@ -2895,7 +2925,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             aspectRatio,
             currentGridMode,
             sessionConfig.getDisableFocusIndicator(),
-            sessionConfig.isVideoModeEnabled()
+            sessionConfig.isVideoModeEnabled(),
+            sessionConfig.getVideoQuality()
         );
         sessionConfig.setCentered(true);
 
@@ -2969,7 +3000,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             aspectRatio,
             currentGridMode,
             sessionConfig.getDisableFocusIndicator(),
-            sessionConfig.isVideoModeEnabled()
+            sessionConfig.isVideoModeEnabled(),
+            sessionConfig.getVideoQuality()
         );
         sessionConfig.setCentered(true);
 
@@ -3030,7 +3062,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 sessionConfig.getAspectRatio(),
                 gridMode,
                 sessionConfig.getDisableFocusIndicator(),
-                sessionConfig.isVideoModeEnabled()
+                sessionConfig.isVideoModeEnabled(),
+                sessionConfig.getVideoQuality()
             );
 
             // Update the grid overlay immediately
@@ -3368,7 +3401,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         calculatedAspectRatio,
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
-                        sessionConfig.isVideoModeEnabled()
+                        sessionConfig.isVideoModeEnabled(),
+                        sessionCong.getVideoQuality()
                     );
 
                     // If aspect ratio changed due to size update, rebind camera
