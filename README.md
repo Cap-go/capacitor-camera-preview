@@ -1097,7 +1097,7 @@ Defines the configuration options for starting the camera preview.
 | **`positioning`**                  | <code><a href="#camerapositioning">CameraPositioning</a></code> | The vertical positioning of the camera preview.                                                                                                                                                         | <code>"center"</code> | 2.3.0  |
 | **`enableVideoMode`**              | <code>boolean</code>                                            | If true, enables video capture capabilities when the camera starts.                                                                                                                                     | <code>false</code>    | 7.11.0 |
 | **`force`**                        | <code>boolean</code>                                            | If true, forces the camera to start/restart even if it's already running or busy. This will kill the current camera session and start a new one, ignoring all state checks.                             | <code>false</code>    |        |
-| **`videoQuality`**                 | <code>'low' \| 'medium' \| 'high'</code>                        | Sets the quality of video for recording. On iOS will lower quality of photos Options: 'low', 'medium', 'high'                                                                                                                               | <code>"high"</code>   |        |
+| **`videoQuality`**                 | <code><a href="#videoquality">VideoQuality</a></code>                        | Sets the quality of video for recording. On iOS will lower quality of photos. Recommend increasing quality in capture for iOS.                                                                                                                              | <code>"high"</code>   |        |
 
 
 #### ExifData
@@ -1247,6 +1247,8 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 
 <code>'none' | '3x3' | '4x4'</code>
 
+#### VideoQuality 
+<code>'low' \| 'medium' \| 'high'</code>
 
 #### CameraPosition
 
