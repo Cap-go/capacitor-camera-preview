@@ -1097,7 +1097,7 @@ Defines the configuration options for starting the camera preview.
 | **`positioning`**                  | <code><a href="#camerapositioning">CameraPositioning</a></code> | The vertical positioning of the camera preview.                                                                                                                                                         | <code>"center"</code> | 2.3.0  |
 | **`enableVideoMode`**              | <code>boolean</code>                                            | If true, enables video capture capabilities when the camera starts.                                                                                                                                     | <code>false</code>    | 7.11.0 |
 | **`force`**                        | <code>boolean</code>                                            | If true, forces the camera to start/restart even if it's already running or busy. This will kill the current camera session and start a new one, ignoring all state checks.                             | <code>false</code>    |        |
-| **`videoQuality`** | <code>string</code> | Sets the quality of video recording. Options: `'low'`, `'medium'`, `'high'`. On Android, requires `enableVideoMode` to be true. On iOS, this affects the resolution of the entire preview stream. | <code>'low' \| 'medium' \| 'high'</code> | |
+| **`videoQuality`**                 | <code>'low' \| 'medium' \| 'high'</code>                        | Sets the quality of video for recording. Options: 'low', 'medium', 'high'                                                                                                                               | <code>"high"</code>   |        |
 
 
 #### ExifData
@@ -1280,9 +1280,7 @@ The available flash modes for the camera.
 
 From T, pick a set of properties whose keys are in the union K
 
-<code>{
- [P in K]: T[P];
- }</code>
+<code>{ [P in K]: T[P]; }</code>
 
 
 #### FlashMode

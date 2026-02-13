@@ -857,35 +857,33 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 // Only setup VideoCapture if enableVideoMode is true
                 if (sessionConfig.isVideoModeEnabled()) {
                     QualitySelector qualitySelector;
-                    
+
                     // Get quality from sessionConfig default to high if null
                     String videoQuality = sessionConfig.getVideoQuality() != null ? sessionConfig.getVideoQuality() : "high";
 
                     switch (videoQuality.toLowerCase()) {
-                        case "low": 
+                        case "low":
                             // Target SD, allow falling back to lower if needed
                             qualitySelector = QualitySelector.fromOrderedList(
                                 Arrays.asList(Quality.SD, Quality.LOWEST),
                                 FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
-                        );
-                        break;
-
+                            );
+                            break;
                         case "medium":
                             // Target HD, allow falling back to SD
                             qualitySelector = QualitySelector.fromOrderedList(
                                 Arrays.asList(Quality.HD, Quality.SD),
                                 FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)
                             );
-                        break;
-
+                            break;
                         case "high":
-                        default: 
+                        default:
                             // Target FHD allow falling back SD
-                            qualitySelector  = QualitySelector.fromOrderedList(
+                            qualitySelector = QualitySelector.fromOrderedList(
                                 Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
                                 FallbackStrategy.higherQualityOrLowerThan(Quality.FHD)
                             );
-                        break;
+                            break;
                     }
 
                     Recorder recorder = new Recorder.Builder().setQualitySelector(qualitySelector).build();
@@ -3405,7 +3403,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
                         sessionConfig.isVideoModeEnabled(),
-                        sessionCong.getVideoQuality()
+                        sessionConfig.getVideoQuality()
                     );
 
                     // If aspect ratio changed due to size update, rebind camera

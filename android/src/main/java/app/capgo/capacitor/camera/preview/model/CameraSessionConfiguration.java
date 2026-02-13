@@ -63,7 +63,7 @@ public class CameraSessionConfiguration {
         this.gridMode = gridMode != null ? gridMode : "none";
         this.disableFocusIndicator = disableFocusIndicator;
         this.enableVideoMode = enableVideoMode;
-        this.videoQuality = videoQuality != null ? videoQuality: "high";
+        this.videoQuality = videoQuality != null ? videoQuality : "high";
     }
 
     public void setTargetZoom(float zoom) {

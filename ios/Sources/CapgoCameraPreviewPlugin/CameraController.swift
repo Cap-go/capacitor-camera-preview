@@ -476,64 +476,64 @@ extension CameraController {
 
         // Prioritize video quality setting
         switch self.videoQuality.lowercased() {
-            case "low":
-                // Match Android "Low" (SD/480p)
-                if captureSession.canSetSessionPreset(.vga640x480) {
-                    targetPreset = .vga640x480
-                } else {
-                    targetPreset = .low
-                }
-            case "medium":
-                // Match Android "Medium" (HD/720p)
-                if captureSession.canSetSessionPreset(.hd1280x720) {
-                    targetPreset = .hd1280x720
-                } else {
-                    targetPreset = .medium
-                }
-            case "high":
+        case "low":
+            // Match Android "Low" (SD/480p)
+            if captureSession.canSetSessionPreset(.vga640x480) {
+                targetPreset = .vga640x480
+            } else {
+                targetPreset = .low
+            }
+        case "medium":
+            // Match Android "Medium" (HD/720p)
+            if captureSession.canSetSessionPreset(.hd1280x720) {
+                targetPreset = .hd1280x720
+            } else {
+                targetPreset = .medium
+            }
+        case "high":
             // Exisiting logic for High Quality (4K/1080p based on Asepct Ratio)
 
-                if let aspectRatio = aspectRatio {
-                    switch aspectRatio {
-                    case "16:9":
-                        // Start with 1080p for faster initialization, 4K only when explicitly needed
-                        // This maintains capture quality while optimizing preview performance
-                        if captureSession.canSetSessionPreset(.hd1920x1080) {
-                            targetPreset = .hd1920x1080
-                        } else if captureSession.canSetSessionPreset(.hd4K3840x2160) {
-                            targetPreset = .hd4K3840x2160
-                        }
-                    case "4:3":
-                        if captureSession.canSetSessionPreset(.photo) {
-                            targetPreset = .photo
-                        } else if captureSession.canSetSessionPreset(.high) {
-                            targetPreset = .high
-                        } else {
-                            targetPreset = captureSession.sessionPreset
-                        }
-                    default:
-                        if captureSession.canSetSessionPreset(.photo) {
-                            targetPreset = .photo
-                        } else if captureSession.canSetSessionPreset(.high) {
-                            targetPreset = .high
-                        } else {
-                            targetPreset = captureSession.sessionPreset
-                        }
+            if let aspectRatio = aspectRatio {
+                switch aspectRatio {
+                case "16:9":
+                    // Start with 1080p for faster initialization, 4K only when explicitly needed
+                    // This maintains capture quality while optimizing preview performance
+                    if captureSession.canSetSessionPreset(.hd1920x1080) {
+                        targetPreset = .hd1920x1080
+                    } else if captureSession.canSetSessionPreset(.hd4K3840x2160) {
+                        targetPreset = .hd4K3840x2160
                     }
-                }
-                // Handle unexpected values
+                case "4:3":
+                    if captureSession.canSetSessionPreset(.photo) {
+                        targetPreset = .photo
+                    } else if captureSession.canSetSessionPreset(.high) {
+                        targetPreset = .high
+                    } else {
+                        targetPreset = captureSession.sessionPreset
+                    }
                 default:
                     if captureSession.canSetSessionPreset(.photo) {
                         targetPreset = .photo
-                    } else {
+                    } else if captureSession.canSetSessionPreset(.high) {
                         targetPreset = .high
+                    } else {
+                        targetPreset = captureSession.sessionPreset
                     }
                 }
+            }
+        // Handle unexpected values
+        default:
+            if captureSession.canSetSessionPreset(.photo) {
+                targetPreset = .photo
+            } else {
+                targetPreset = .high
+            }
+        }
 
         if captureSession.canSetSessionPreset(targetPreset) {
             captureSession.sessionPreset = targetPreset
-            }
         }
+    }
 
     /// Update the requested aspect ratio at runtime and reconfigure session/preview accordingly
     func updateAspectRatio(_ aspectRatio: String?) {
@@ -836,16 +836,16 @@ extension CameraController {
 
         // Handle specific quality overrides first
         switch quality.lowercased() {
-            case "low":
-                if device.supportsSessionPreset(.vga640x480) { return .vga640x480 }
-                return .low
-            case "medium":
-                if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
-                return .medium
-            case "high":
-                break // Exit and go off code below
-            default: 
-                break // Exit and go off code below
+        case "low":
+            if device.supportsSessionPreset(.vga640x480) { return .vga640x480 }
+            return .low
+        case "medium":
+            if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
+            return .medium
+        case "high":
+            break // Exit and go off code below
+        default:
+            break // Exit and go off code below
         }
         // Preference order depends on aspect ratio
         if aspectRatio == "16:9" {
