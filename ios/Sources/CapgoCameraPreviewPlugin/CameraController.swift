@@ -381,6 +381,9 @@ extension CameraController {
                     throw CameraControllerError.captureSessionIsMissing
                 }
 
+                // Set quality of video
+                self.videoQuality = videoQuality
+
                 // Prepare outputs early
                 self.prepareOutputs()
 
@@ -529,7 +532,6 @@ extension CameraController {
                 targetPreset = .high
             }
         }
-
         if captureSession.canSetSessionPreset(targetPreset) {
             captureSession.sessionPreset = targetPreset
         }

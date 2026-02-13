@@ -655,7 +655,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("  - initialZoomLevel: \(call.getFloat("initialZoomLevel") ?? 1.0)")
         print("  - disableFocusIndicator: \(call.getBool("disableFocusIndicator") ?? false)")
         print("  - force: \(call.getBool("force") ?? false)")
-        print(" -videoQuality: \(call.getString("videoQuality") ?? "high")")
+        print("  - videoQuality: \(call.getString("videoQuality") ?? "high")")
 
         let force = call.getBool("force") ?? false
 
