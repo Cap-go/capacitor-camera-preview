@@ -14,7 +14,7 @@
         "@angular/platform-browser-dynamic": "^19.2.6",
         "@angular/router": "^19.2.6",
         "@capacitor/android": "^8.0.0",
-        "@capacitor/app": "7.1.1",
+        "@capacitor/app": "7.1.2",
         "@capacitor/core": "^8.0.0",
         "@capacitor/haptics": "7.0.3",
         "@capacitor/ios": "^8.0.0",
@@ -56,7 +56,7 @@
         "karma-chrome-launcher": "~3.2.0",
         "karma-coverage": "~2.2.1",
         "karma-jasmine": "~5.1.0",
-        "karma-jasmine-html-reporter": "~2.1.0",
+        "karma-jasmine-html-reporter": "~2.2.0",
         "prettier": "^3.5.3",
         "prettier-plugin-organize-imports": "^4.1.0",
         "prettier-plugin-packagejson": "^2.5.15",
@@ -299,7 +299,7 @@
 
     "@capacitor/android": ["@capacitor/android@8.0.0", "", { "peerDependencies": { "@capacitor/core": "^8.0.0" } }, "sha512-FrBSvVAC5JuLaYHNyDnwQny0/SYnP+xDQbc/KA4wInmRkMXLDv22fkx9aBJIDrxjuUVd+jsRih4SAt8FgMEzCw=="],
 
-    "@capacitor/app": ["@capacitor/app@7.1.1", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-H4rmMXlL6GEDs2Yds5JvYqZxz4mdp7R4XdGJ7p+oGV+YapuQ2kW38UabuhdP6qSrKfIeLde6qx+8FEX02krypA=="],
+    "@capacitor/app": ["@capacitor/app@7.1.2", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-d4I/oF/PRu4megL7/IGKYfe5j7yzSON1FRFgq6kH+m5kH6g7V+wyjHRLauCzGNjdRx4S+nWOumINds0qcRBtKg=="],
 
     "@capacitor/cli": ["@capacitor/cli@8.0.0", "", { "dependencies": { "@ionic/cli-framework-output": "^2.2.8", "@ionic/utils-subprocess": "^3.0.1", "@ionic/utils-terminal": "^2.3.5", "commander": "^12.1.0", "debug": "^4.4.0", "env-paths": "^2.2.0", "fs-extra": "^11.2.0", "kleur": "^4.1.5", "native-run": "^2.0.1", "open": "^8.4.0", "plist": "^3.1.0", "prompts": "^2.4.2", "rimraf": "^6.0.1", "semver": "^7.6.3", "tar": "^6.1.11", "tslib": "^2.8.1", "xml2js": "^0.6.2" }, "bin": { "cap": "bin/capacitor", "capacitor": "bin/capacitor" } }, "sha512-v9hEBi69xGxuuZhg55N031bMEenKaPSv71Il8C22VOOH6surDyv/MPeImN0oVfFc7eiklaW3rDFYVz6cmXfJWQ=="],
 
@@ -1509,7 +1509,7 @@
 
     "karma-jasmine": ["karma-jasmine@5.1.0", "", { "dependencies": { "jasmine-core": "^4.1.0" }, "peerDependencies": { "karma": "^6.0.0" } }, "sha512-i/zQLFrfEpRyQoJF9fsCdTMOF5c2dK7C7OmsuKg2D0YSsuZSfQDiLuaiktbuio6F2wiCsZSnSnieIQ0ant/uzQ=="],
 
-    "karma-jasmine-html-reporter": ["karma-jasmine-html-reporter@2.1.0", "", { "peerDependencies": { "jasmine-core": "^4.0.0 || ^5.0.0", "karma": "^6.0.0", "karma-jasmine": "^5.0.0" } }, "sha512-sPQE1+nlsn6Hwb5t+HHwyy0A1FNCVKuL1192b+XNauMYWThz2kweiBVW1DqloRpVvZIJkIoHVB7XRpK78n1xbQ=="],
+    "karma-jasmine-html-reporter": ["karma-jasmine-html-reporter@2.2.0", "", { "peerDependencies": { "jasmine-core": "^4.0.0 || ^5.0.0 || ^6.0.0", "karma": "^6.0.0", "karma-jasmine": "^5.0.0" } }, "sha512-J0laEC43Oy2RdR5V5R3bqmdo7yRIYySq6XHKbA+e5iSAgLjhR1oICLGeSREPlJXpeyNcdJf3J17YcdhD0mRssQ=="],
 
     "karma-source-map-support": ["karma-source-map-support@1.4.0", "", { "dependencies": { "source-map-support": "^0.5.5" } }, "sha512-RsBECncGO17KAoJCYXjv+ckIz+Ii9NCi+9enk+rq6XC81ezYkb4/RHE6CTXdA7IOJqoF3wcaLfVG0CPmE5ca6A=="],
 
