@@ -33,6 +33,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private videoElement: HTMLVideoElement | null = null;
   private isStarted = false;
   private orientationListenerBound = false;
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: BlobPart[] = [];
 
   constructor() {
     super();
@@ -643,12 +645,70 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   }
 
   async stopRecordVideo(): Promise<any> {
-    throw new Error('stopRecordVideo not supported under the web platform');
+    if (!this.mediaRecorder) {
+      throw new Error('video recording is not running');
+    }
+
+    const recorder = this.mediaRecorder;
+
+    return await new Promise((resolve, reject) => {
+      recorder.onstop = () => {
+        try {
+          const blob = new Blob(this.recordedChunks, {
+            type: recorder.mimeType || 'video/webm',
+          });
+          this.recordedChunks = [];
+          this.mediaRecorder = null;
+
+          const videoFilePath = URL.createObjectURL(blob);
+          resolve({ videoFilePath });
+        } catch (error) {
+          reject(error);
+        }
+      };
+
+      recorder.onerror = (event) => {
+        this.mediaRecorder = null;
+        this.recordedChunks = [];
+        reject((event as any)?.error || new Error('failed to stop video recording'));
+      };
+
+      recorder.stop();
+    });
   }
 
   async startRecordVideo(_options: CameraPreviewOptions): Promise<any> {
-    console.log('startRecordVideo', _options);
-    throw new Error('startRecordVideo not supported under the web platform');
+    const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
+    if (!video?.srcObject) {
+      throw new Error('camera is not running');
+    }
+
+    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+      throw new Error('video recording is already running');
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      throw new Error('MediaRecorder API is not available in this browser');
+    }
+
+    const stream = video.srcObject as MediaStream;
+    const supportsWebmVp9 = MediaRecorder.isTypeSupported('video/webm;codecs=vp9');
+    const supportsWebmVp8 = MediaRecorder.isTypeSupported('video/webm;codecs=vp8');
+    const mimeType = supportsWebmVp9
+      ? 'video/webm;codecs=vp9'
+      : supportsWebmVp8
+        ? 'video/webm;codecs=vp8'
+        : 'video/webm';
+
+    this.recordedChunks = [];
+    this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+    this.mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        this.recordedChunks.push(event.data);
+      }
+    };
+
+    this.mediaRecorder.start();
   }
 
   async getSupportedFlashModes(): Promise<{
