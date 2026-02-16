@@ -22,7 +22,7 @@
     "@angular/platform-browser-dynamic": "^19.2.6",
     "@angular/router": "^19.2.6",
     "@capacitor/android": "^8.0.0",
-    "@capacitor/app": "7.1.1",
+    "@capacitor/app": "7.1.2",
     "@capacitor/core": "^8.0.0",
     "@capacitor/haptics": "7.0.3",
     "@capacitor/ios": "^8.0.0",
