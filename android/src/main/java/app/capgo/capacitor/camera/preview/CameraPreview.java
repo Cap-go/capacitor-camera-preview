@@ -79,6 +79,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     protected void handleOnResume() {
         super.handleOnResume();
         if (lastSessionConfig != null) {
+            // Set to black to avoid flicker, transparent set later
+            if (lastSessionConfig.isToBack()) {
+                try {
+                    getBridge()
+                        .getActivity()
+                        .getWindow()
+                        .setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK));
+                    getBridge().getWebView().setBackgroundColor(android.graphics.Color.BLACK);
+                } catch (Exception ignored) {}
+            }
             // Recreate camera with last known configuration
             if (cameraXView == null) {
                 cameraXView = new CameraXView(getContext(), getBridge().getWebView());
@@ -895,6 +905,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         //noinspection DataFlowIssue
         final boolean disableFocusIndicator = call.getBoolean("disableFocusIndicator", false);
         final boolean enableVideoMode = Boolean.TRUE.equals(call.getBoolean("enableVideoMode", false));
+        final String videoQuality = call.getString("videoQuality", "high");
 
         // Check for conflict between aspectRatio and size
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
@@ -1195,7 +1206,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     aspectMode,
                     gridMode,
                     disableFocusIndicator,
-                    enableVideoMode
+                    enableVideoMode,
+                    videoQuality
                 );
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);
