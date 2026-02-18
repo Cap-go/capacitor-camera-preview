@@ -840,10 +840,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 ResolutionSelector resolutionSelector = resolutionSelectorBuilder.build();
 
-                int rotation =
-                    previewView != null && previewView.getDisplay() != null
-                        ? previewView.getDisplay().getRotation()
-                        : android.view.Surface.ROTATION_0;
+                int rotation = previewView != null && previewView.getDisplay() != null
+                    ? previewView.getDisplay().getRotation()
+                    : android.view.Surface.ROTATION_0;
 
                 Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
@@ -1601,8 +1600,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 );
             org.apache.commons.imaging.formats.tiff.TiffImageMetadata exif = jpegMetadata != null ? jpegMetadata.getExif() : null;
 
-            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet =
-                exif != null ? exif.getOutputSet() : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet = exif != null
+                ? exif.getOutputSet()
+                : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
 
             // Update orientation if requested (normalize to 1)
             org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory rootDir = outputSet.getOrCreateRootDirectory();
@@ -2573,8 +2573,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     if (parent != null) {
                         parent.removeView(focusIndicatorView);
                     }
-                } catch (Exception ignore) {
-                } finally {
+                } catch (Exception ignore) {} finally {
                     focusIndicatorView = null;
                 }
             });

@@ -817,8 +817,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             result.put("microphone", mapPermissionState(audioState));
         }
 
-        boolean showSettingsAlert =
-            call.getBoolean("showSettingsAlert") != null ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert")) : false;
+        boolean showSettingsAlert = call.getBoolean("showSettingsAlert") != null
+            ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert"))
+            : false;
 
         String cameraStateString = result.getString("camera");
         boolean cameraNeedsSettings = "denied".equals(cameraStateString) || "prompt-with-rationale".equals(cameraStateString);
@@ -867,9 +868,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String deviceId = originalDeviceId; // Use a mutable variable
 
         final String position = (positionParam == null ||
-            positionParam.isEmpty() ||
-            "rear".equals(positionParam) ||
-            "back".equals(positionParam))
+                positionParam.isEmpty() ||
+                "rear".equals(positionParam) ||
+                "back".equals(positionParam))
             ? "back"
             : "front";
         // Use -1 as default to indicate centering is needed when x/y not provided
@@ -1889,8 +1890,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
 
-        boolean disableAudio =
-            call.getBoolean("disableAudio") != null ? Boolean.TRUE.equals(call.getBoolean("disableAudio")) : this.lastDisableAudio;
+        boolean disableAudio = call.getBoolean("disableAudio") != null
+            ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
+            : this.lastDisableAudio;
         this.lastDisableAudio = disableAudio;
         String permissionAlias = disableAudio ? CAMERA_ONLY_PERMISSION_ALIAS : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
