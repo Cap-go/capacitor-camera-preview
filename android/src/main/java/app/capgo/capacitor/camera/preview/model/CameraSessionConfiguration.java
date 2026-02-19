@@ -19,6 +19,7 @@ public class CameraSessionConfiguration {
     private final boolean disableAudio;
     private final float zoomFactor;
     private final String aspectRatio;
+    private final String aspectMode;
     private final String gridMode;
     private final boolean disableFocusIndicator;
     private final boolean enableVideoMode;
@@ -41,6 +42,7 @@ public class CameraSessionConfiguration {
         boolean disableAudio,
         float zoomFactor,
         String aspectRatio,
+        String aspectMode,
         String gridMode,
         boolean disableFocusIndicator,
         boolean enableVideoMode,
@@ -60,6 +62,7 @@ public class CameraSessionConfiguration {
         this.disableAudio = disableAudio;
         this.zoomFactor = zoomFactor;
         this.aspectRatio = aspectRatio;
+        this.aspectMode = aspectMode != null ? aspectMode : "contain";
         this.gridMode = gridMode != null ? gridMode : "none";
         this.disableFocusIndicator = disableFocusIndicator;
         this.enableVideoMode = enableVideoMode;
@@ -128,6 +131,10 @@ public class CameraSessionConfiguration {
 
     public String getAspectRatio() {
         return aspectRatio;
+    }
+
+    public String getAspectMode() {
+        return aspectMode;
     }
 
     public String getGridMode() {

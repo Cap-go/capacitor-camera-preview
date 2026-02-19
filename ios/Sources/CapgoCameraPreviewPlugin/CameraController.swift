@@ -132,6 +132,7 @@ class CameraController: NSObject {
 
     // Track whether an aspect ratio was explicitly requested
     var requestedAspectRatio: String?
+    var requestedAspectMode: String = "contain"
 
     func calculateAspectRatioFrame(for aspectRatio: String, in bounds: CGRect) -> CGRect {
         guard let ratio = parseAspectRatio(aspectRatio) else {
@@ -350,8 +351,8 @@ extension CameraController {
         self.outputsPrepared = true
     }
 
-    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", completionHandler: @escaping (Error?) -> Void) {
-        print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), zoom: \(initialZoomLevel ?? 1)")
+    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", completionHandler: @escaping (Error?) -> Void) {
+        print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else {
@@ -392,6 +393,7 @@ extension CameraController {
 
                 // Set aspect ratio preset and remember requested ratio
                 self.requestedAspectRatio = aspectRatio
+                self.requestedAspectMode = aspectMode
                 self.configureSessionPreset(for: aspectRatio)
 
                 // Set disableFocusIndicator
@@ -576,10 +578,12 @@ extension CameraController {
                 if let aspect = aspectRatio {
                     let frame = self.calculateAspectRatioFrame(for: aspect, in: bounds)
                     previewLayer.frame = frame
-                    previewLayer.videoGravity = .resizeAspectFill
+                    // Set videoGravity based on aspectMode
+                    previewLayer.videoGravity = self.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
                 } else {
                     previewLayer.frame = bounds
-                    previewLayer.videoGravity = .resizeAspect
+                    // Set videoGravity based on aspectMode
+                    previewLayer.videoGravity = self.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
                 }
 
                 // Keep grid overlay in sync with preview
@@ -731,11 +735,13 @@ extension CameraController {
             // Calculate the frame based on requested aspect ratio
             let frame = calculateAspectRatioFrame(for: aspectRatio, in: view.bounds)
             previewLayer.frame = frame
-            previewLayer.videoGravity = .resizeAspectFill
+            // Set videoGravity based on aspectMode
+            previewLayer.videoGravity = requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
         } else {
             // No specific aspect ratio requested - fill the entire view
             previewLayer.frame = view.bounds
-            previewLayer.videoGravity = .resizeAspect
+            // Set videoGravity based on aspectMode
+            previewLayer.videoGravity = requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
         }
         print("[CameraPreview] ⏱ Layer configuration took \(CFAbsoluteTimeGetCurrent() - configStartTime) seconds")
 

@@ -210,6 +210,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     // Reset any default margins that might interfere
     this.videoElement.style.margin = '0';
     this.videoElement.style.padding = '0';
+    // Set object-fit based on aspectMode (default: contain)
+    const aspectMode = options.aspectMode || 'contain';
+    this.videoElement.style.objectFit = aspectMode;
 
     container.appendChild(this.videoElement);
     if (options.toBack) {

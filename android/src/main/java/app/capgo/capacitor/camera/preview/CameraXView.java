@@ -538,13 +538,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         // Use TextureView-backed implementation for broader device compatibility when overlaying with WebView
         // This avoids SurfaceView z-order issues seen on some MIUI/EMUI devices.
         previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
-        // Match iOS behavior: FIT when no aspect ratio, FILL when aspect ratio is set
-        String initialAspectRatio = sessionConfig != null ? sessionConfig.getAspectRatio() : null;
-        previewView.setScaleType(
-            (initialAspectRatio == null || initialAspectRatio.isEmpty())
-                ? PreviewView.ScaleType.FIT_CENTER
-                : PreviewView.ScaleType.FILL_CENTER
-        );
+        // Set scale type based on aspectMode: 'contain' uses FIT, 'cover' uses FILL
+        String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
+        previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
         // Also make preview view touchable as backup
         previewView.setClickable(true);
         previewView.setFocusable(true);
@@ -986,11 +982,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     Log.d(TAG, "Image capture resolution: " + imageCaptureResolution.getResolution());
                 }
 
-                // Update scale type based on aspect ratio whenever (re)binding
-                String ar = sessionConfig != null ? sessionConfig.getAspectRatio() : null;
-                previewView.setScaleType(
-                    (ar == null || ar.isEmpty()) ? PreviewView.ScaleType.FIT_CENTER : PreviewView.ScaleType.FILL_CENTER
-                );
+                // Update scale type based on aspectMode
+                String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
+                previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
 
                 // Set initial zoom if specified, prioritizing targetZoom over default zoomFactor
                 float initialZoom = sessionConfig.getTargetZoom() != 1.0f ? sessionConfig.getTargetZoom() : sessionConfig.getZoomFactor();
@@ -2760,6 +2754,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getDisableAudio(),
                         sessionConfig.getZoomFactor(),
                         sessionConfig.getAspectRatio(),
+                        sessionConfig.getAspectMode(),
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
                         sessionConfig.isVideoModeEnabled(),
@@ -2805,6 +2800,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.isDisableAudio(), // disableAudio
             sessionConfig.getZoomFactor(), // zoomFactor
             sessionConfig.getAspectRatio(), // aspectRatio
+            sessionConfig.getAspectMode(), // aspectMode
             sessionConfig.getGridMode(), // gridMode
             sessionConfig.getDisableFocusIndicator(), // disableFocusIndicator
             sessionConfig.isVideoModeEnabled(), // enableVideoMode
@@ -2924,6 +2920,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.getDisableAudio(),
             sessionConfig.getZoomFactor(),
             aspectRatio,
+            sessionConfig.getAspectMode(),
             currentGridMode,
             sessionConfig.getDisableFocusIndicator(),
             sessionConfig.isVideoModeEnabled(),
@@ -2999,6 +2996,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             sessionConfig.getDisableAudio(),
             sessionConfig.getZoomFactor(),
             aspectRatio,
+            sessionConfig.getAspectMode(),
             currentGridMode,
             sessionConfig.getDisableFocusIndicator(),
             sessionConfig.isVideoModeEnabled(),
@@ -3061,6 +3059,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 sessionConfig.getDisableAudio(),
                 sessionConfig.getZoomFactor(),
                 sessionConfig.getAspectRatio(),
+                sessionConfig.getAspectMode(),
                 gridMode,
                 sessionConfig.getDisableFocusIndicator(),
                 sessionConfig.isVideoModeEnabled(),
@@ -3400,6 +3399,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         sessionConfig.getDisableAudio(),
                         sessionConfig.getZoomFactor(),
                         calculatedAspectRatio,
+                        sessionConfig.getAspectMode(),
                         sessionConfig.getGridMode(),
                         sessionConfig.getDisableFocusIndicator(),
                         sessionConfig.isVideoModeEnabled(),

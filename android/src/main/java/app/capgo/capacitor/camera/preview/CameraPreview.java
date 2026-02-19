@@ -897,6 +897,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean disableAudio = Boolean.TRUE.equals(call.getBoolean("disableAudio", true));
         this.lastDisableAudio = disableAudio;
         final String aspectRatio = call.getString("aspectRatio", "4:3");
+        final String aspectMode = call.getString("aspectMode", "contain");
         final String gridMode = call.getString("gridMode", "none");
         final String positioning = call.getString("positioning", "top");
         //noinspection DataFlowIssue
@@ -1202,6 +1203,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     disableAudio,
                     1.0f,
                     aspectRatio,
+                    aspectMode,
                     gridMode,
                     disableFocusIndicator,
                     enableVideoMode,
