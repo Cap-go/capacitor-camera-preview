@@ -2209,15 +2209,18 @@ extension CameraController {
             throw CameraControllerError.fileVideoOutputNotFound
         }
 
-        // Ensure audio session is configured for recording before starting a movie.
+        // Ensure audio session is configured for recording before starting a movie,
+        // only when we are actually recording audio (disableAudio was false).
         // This reclaims the microphone even if other parts of the app changed the
         // AVAudioSession category (e.g. for UI sound effects) between recordings.
-        do {
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
-            try audioSession.setActive(true)
-        } catch {
-            print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
+        if self.audioInput != nil {
+            do {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
+                try audioSession.setActive(true)
+            } catch {
+                print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
+            }
         }
 
         // Ensure the movie file output is attached to the active session.
