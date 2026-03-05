@@ -976,6 +976,15 @@ extension CameraController {
             captureSession.sessionPreset = desiredPreset
         }
 
+        // Re-attach movie file output so its connection is bound to the new input.
+        if let fileVideoOutput = self.fileVideoOutput,
+           captureSession.outputs.contains(where: { $0 === fileVideoOutput }) {
+            captureSession.removeOutput(fileVideoOutput)
+            if captureSession.canAddOutput(fileVideoOutput) {
+                captureSession.addOutput(fileVideoOutput)
+            }
+        }
+
         // Keep orientation correct
         self.updateVideoOrientation()
     }
@@ -2200,6 +2209,20 @@ extension CameraController {
             throw CameraControllerError.fileVideoOutputNotFound
         }
 
+        // Ensure audio session is configured for recording before starting a movie,
+        // only when we are actually recording audio (disableAudio was false).
+        // This reclaims the microphone even if other parts of the app changed the
+        // AVAudioSession category (e.g. for UI sound effects) between recordings.
+        if self.audioInput != nil {
+            do {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
+                try audioSession.setActive(true)
+            } catch {
+                print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
+            }
+        }
+
         // Ensure the movie file output is attached to the active session.
         // If the camera was started without cameraMode=true, the output may not have been added yet.
         if !captureSession.outputs.contains(where: { $0 === fileVideoOutput }) {
@@ -2213,12 +2236,17 @@ extension CameraController {
             captureSession.commitConfiguration()
         }
 
-        // cpcp_video_A6C01203 - portrait
-        //
         if let connection = fileVideoOutput.connection(with: .video) {
             if connection.isEnabled == false { connection.isEnabled = true }
             // Goes off accelerometer now
             connection.videoOrientation = self.getPhysicalOrientation()
+            
+            // Front camera: mirror the recorded video so it looks natural (selfie style).
+            if self.currentCameraPosition == .front, connection.isVideoMirroringSupported {
+                connection.isVideoMirrored = true
+            } else {
+                connection.isVideoMirrored = false
+            }
         }
 
         let identifier = UUID()
