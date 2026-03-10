@@ -1520,6 +1520,31 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @Override
     public void onCameraStarted(int width, int height, int x, int y) {
+        // Always transition window and WebView backgrounds to transparent when the camera starts,
+        // regardless of whether there is a pending JS call. This is critical for the
+        // background/foreground resume cycle: on resume, handleOnResume() sets backgrounds to
+        // black (to prevent flicker) and then restarts the camera session, but
+        // cameraStartCallbackId is null at that point. Without this unconditional block the
+        // window and WebView stay black after every background/foreground transition.
+        // Both backgrounds are set together in the same UI thread operation to avoid race
+        // conditions and compositor layering issues.
+        if (isToBackMode()) {
+            getBridge()
+                .getActivity()
+                .runOnUiThread(() -> {
+                    try {
+                        // Set window background to transparent
+                        getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                        // Set webview background to almost-transparent for MIUI compatibility
+                        // Use alpha=1 instead of 0 to work around MIUI/Xiaomi rendering issues
+                        // where Color.TRANSPARENT (alpha=0) is not rendered correctly
+                        getBridge().getWebView().setBackgroundColor(Color.argb(1, 255, 255, 255));
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to set backgrounds to transparent", e);
+                    }
+                });
+        }
+
         PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
         if (call != null) {
             // Convert pixel values back to logical units
@@ -1649,26 +1674,6 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     logicalHeight +
                     ")"
             );
-
-            // Transition window and webview backgrounds to transparent now that camera is ready
-            // This prevents flickering during camera initialization
-            // Both are set together in the same UI thread operation to avoid race conditions
-            if (isToBackMode()) {
-                getBridge()
-                    .getActivity()
-                    .runOnUiThread(() -> {
-                        try {
-                            // Set window background to transparent
-                            getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                            // Set webview background to almost-transparent for MIUI compatibility
-                            // Use alpha=1 instead of 0 to work around MIUI/Xiaomi rendering issues
-                            // where Color.TRANSPARENT (alpha=0) is not rendered correctly
-                            getBridge().getWebView().setBackgroundColor(Color.argb(1, 255, 255, 255));
-                        } catch (Exception e) {
-                            Log.w(TAG, "Failed to set backgrounds to transparent", e);
-                        }
-                    });
-            }
 
             call.resolve(result);
             bridge.releaseCall(call);
