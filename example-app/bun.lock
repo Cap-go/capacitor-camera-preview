@@ -43,7 +43,7 @@
         "@angular/language-service": "^19.2.6",
         "@capacitor/cli": "^8.0.0",
         "@ionic/angular-toolkit": "^12.2.0",
-        "@types/jasmine": "~5.1.8",
+        "@types/jasmine": "~6.0.0",
         "@typescript-eslint/eslint-plugin": "^8.33.1",
         "@typescript-eslint/parser": "^8.33.1",
         "eslint": "^9.28.0",
@@ -729,7 +729,7 @@
 
     "@types/http-proxy": ["@types/http-proxy@1.17.17", "", { "dependencies": { "@types/node": "*" } }, "sha512-ED6LB+Z1AVylNTu7hdzuBqOgMnvG/ld6wGCG8wFnAzKX5uyW2K3WD52v0gnLCTK/VLpXtKckgWuyScYK6cSPaw=="],
 
-    "@types/jasmine": ["@types/jasmine@5.1.12", "", {}, "sha512-1BzPxNsFDLDfj9InVR3IeY0ZVf4o9XV+4mDqoCfyPkbsA7dYyKAPAb2co6wLFlHcvxPlt1wShm7zQdV7uTfLGA=="],
+    "@types/jasmine": ["@types/jasmine@6.0.0", "", {}, "sha512-18lgGsLmEh3VJk9eZ5wAjTISxdqzl6YOwu8UdMpolajN57QOCNbl+AbHUd+Yu9ItrsFdB+c8LSZSGNg8nHaguw=="],
 
     "@types/json-schema": ["@types/json-schema@7.0.15", "", {}, "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA=="],
 
