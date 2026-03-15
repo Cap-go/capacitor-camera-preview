@@ -2046,4 +2046,22 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("Could not get plugin version", e);
         }
     }
+
+    @Override
+    
+    @PluginMethod
+    public void setFaceDetectionEnabled(PluginCall call) {
+        boolean enabled = call.getBoolean("enabled", false);
+        if (cameraXView != null) {
+            cameraXView.setFaceDetectionEnabled(enabled);
+            call.resolve();
+        } else {
+            call.reject("Camera is not running");
+        }
+    }
+public void onFaceDetected(JSArray faces) {
+        JSObject ret = new JSObject();
+        ret.put("faces", faces);
+        notifyListeners("onFaceDetected", ret);
+    }
 }

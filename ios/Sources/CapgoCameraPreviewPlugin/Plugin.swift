@@ -77,7 +77,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "getExposureCompensationRange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureCompensation", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setExposureCompensation", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise),\n        CAPPluginMethod(name: "setFaceDetectionEnabled", returnType: CAPPluginReturnPromise)
     ]
     // Camera state tracking
     private var isInitializing: Bool = false
@@ -2343,4 +2343,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         call.resolve(["version": self.pluginVersion])
     }
 
+
+    @objc func setFaceDetectionEnabled(_ call: CAPPluginCall) {
+        let enabled = call.getBool("enabled") ?? false
+        self.cameraController.faceDetectionEnabled = enabled
+        
+        if enabled {
+            self.cameraController.onFaceDetected = { [weak self] faces in
+                self?.notifyListeners("onFaceDetected", data: ["faces": faces])
+            }
+        } else {
+            self.cameraController.onFaceDetected = nil
+        }
+        
+        call.resolve()
+    }
 }
