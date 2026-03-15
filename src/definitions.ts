@@ -314,6 +314,29 @@ export interface CameraPreviewPictureOptions {
   photoQualityPrioritization?: 'speed' | 'balanced' | 'quality';
 }
 
+/**
+ * Represents a detected face.
+ */
+export interface Face {
+  /** The bounding box of the face in normalized coordinates (0-1). */
+  bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  /** The rotation of the face about the vertical axis of the face. */
+  headEulerAngleY?: number;
+  /** The rotation of the face about the axis pointing out of the face. */
+  headEulerAngleZ?: number;
+  /** The probability that the left eye is open. */
+  leftEyeOpenProbability?: number;
+  /** The probability that the right eye is open. */
+  rightEyeOpenProbability?: number;
+  /** The probability that the face is smiling. */
+  smilingProbability?: number;
+}
+
 /** Represents EXIF data extracted from an image. */
 export interface ExifData {
   [key: string]: any;
@@ -736,6 +759,18 @@ export interface CameraPreviewPlugin {
     eventName: 'orientationChange',
     listenerFunc: (data: { orientation: DeviceOrientation }) => void,
   ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for face detection events.
+   * @param {string} eventName - The event name to listen for.
+   * @param {Function} listenerFunc - The function to call when faces are detected.
+   * @returns {Promise<PluginListenerHandle>} A promise that resolves with a handle to the listener.
+   * @since 8.3.0
+   */
+  addListener(
+    eventName: 'onFaceDetected',
+    listenerFunc: (data: { faces: Face[] }) => void,
+  ): Promise<PluginListenerHandle>;
   /**
    * Deletes a file at the given absolute path on the device.
    * Use this to quickly clean up temporary images created with `storeToFile`.
@@ -814,4 +849,13 @@ export interface CameraPreviewPlugin {
    * @throws An error if the something went wrong
    */
   getPluginVersion(): Promise<{ version: string }>;
+  /**
+   * Enables or disables real-time face detection.
+   * When enabled, the plugin will emit 'onFaceDetected' events.
+   *
+   * @param {{ enabled: boolean }} options
+   * @since 8.3.0
+   */
+  setFaceDetectionEnabled(options: { enabled: boolean }): Promise<void>;
+
 }

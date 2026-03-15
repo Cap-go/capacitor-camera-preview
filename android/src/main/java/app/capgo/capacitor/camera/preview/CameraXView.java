@@ -1,5 +1,6 @@
 package app.capgo.capacitor.camera.preview;
 
+import android.annotation.SuppressLint;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -102,6 +103,14 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.json.JSONObject;
+import androidx.camera.core.ImageAnalysis;
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.face.Face;
+import com.google.mlkit.vision.face.FaceDetection;
+import com.google.mlkit.vision.face.FaceDetector;
+import com.google.mlkit.vision.face.FaceDetectorOptions;
 
 public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
@@ -116,6 +125,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         void onCameraStarted(int width, int height, int x, int y);
         void onCameraStartError(String message);
         void onCameraStopped(CameraXView source);
+        void onFaceDetected(JSArray faces);
     }
 
     public interface VideoRecordingCallback {
@@ -148,8 +158,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     // the default white background. This is consistent across Android versions.
     private int originalWebViewBackground = android.graphics.Color.WHITE;
     private final LifecycleRegistry lifecycleRegistry;
+    private ImageAnalysis imageAnalysis;
+    private FaceDetector faceDetector;
+    private boolean faceDetectionEnabled = false;
     private final Executor mainExecutor;
     private ExecutorService cameraExecutor;
+    private ExecutorService analysisExecutor;
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
@@ -369,6 +383,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void startSession(CameraSessionConfiguration config) {
         this.sessionConfig = config;
         cameraExecutor = Executors.newSingleThreadExecutor();
+        analysisExecutor = Executors.newSingleThreadExecutor();
 
         // Reset cached orientation so we don't reuse stale values across sessions
         synchronized (accelerometerLock) {
@@ -455,6 +470,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 lifecycleRegistry.setCurrentState(Lifecycle.State.DESTROYED);
                 if (cameraExecutor != null) {
                     cameraExecutor.shutdown();
+                    analysisExecutor.shutdown();
                 }
                 removePreviewView();
             } catch (Exception e) {
@@ -842,7 +858,85 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
-                imageCapture = new ImageCapture.Builder()
+                
+            imageAnalysis = new ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+
+            imageAnalysis.setAnalyzer(
+                analysisExecutor,
+                imageProxy -> {
+                    if (!faceDetectionEnabled || faceDetector == null) {
+                        imageProxy.close();
+                        return;
+                    }
+
+                    @SuppressLint("UnsafeOptInUsageError")
+                    android.media.Image mediaImage = imageProxy.getImage();
+                    if (mediaImage == null) {
+                        imageProxy.close();
+                        return;
+                    }
+
+                    InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+
+                    faceDetector
+                        .process(image)
+                        .addOnSuccessListener(analysisExecutor, faces -> {
+                            try {
+                                if (faces.isEmpty()) {
+                                    return;
+                                }
+
+                                JSArray facesArray = new JSArray();
+                                for (Face face : faces) {
+                                    JSObject faceObject = new JSObject();
+                                    Rect bounds = face.getBoundingBox();
+                                    
+                                    // Normalized coordinates (0-1)
+                                    JSObject boundsObject = new JSObject();
+                                    // We need the preview resolution to normalize
+                                    // imageProxy.getWidth() and imageProxy.getHeight() are the analysis resolution
+                                    float width = (float) imageProxy.getWidth();
+                                    float height = (float) imageProxy.getHeight();
+                                    
+                                    boundsObject.put("x", bounds.left / width);
+                                    boundsObject.put("y", bounds.top / height);
+                                    boundsObject.put("width", bounds.width() / width);
+                                    boundsObject.put("height", bounds.height() / height);
+                                    
+                                    faceObject.put("bounds", boundsObject);
+                                    faceObject.put("headEulerAngleY", face.getHeadEulerAngleY());
+                                    faceObject.put("headEulerAngleZ", face.getHeadEulerAngleZ());
+                                    
+                                    if (face.getLeftEyeOpenProbability() != null) {
+                                        faceObject.put("leftEyeOpenProbability", face.getLeftEyeOpenProbability());
+                                    }
+                                    if (face.getRightEyeOpenProbability() != null) {
+                                        faceObject.put("rightEyeOpenProbability", face.getRightEyeOpenProbability());
+                                    }
+                                    if (face.getSmilingProbability() != null) {
+                                        faceObject.put("smilingProbability", face.getSmilingProbability());
+                                    }
+                                    
+                                    facesArray.put(faceObject);
+                                }
+
+                                if (listener != null) {
+                                    listener.onFaceDetected(facesArray);
+                                }
+                            } finally {
+                                imageProxy.close();
+                            }
+                        })
+                        .addOnFailureListener(analysisExecutor, e -> {
+                            Log.e(TAG, "Face detection failed", e);
+                            imageProxy.close();
+                        });
+                }
+            );
+
+            imageCapture = new ImageCapture.Builder()
                     .setResolutionSelector(resolutionSelector)
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .setFlashMode(currentFlashMode)
@@ -895,12 +989,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 // Bind with or without video capture based on enableVideoMode
                 if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
-                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture, videoCapture);
+                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture, videoCapture, imageAnalysis);
                     CameraInfo cameraInfo = camera.getCameraInfo();
                     currentDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
                     Log.d(TAG, "bindCameraUseCases: Camera successfully bound to device ID: " + currentDeviceId);
                 } else {
-                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture);
+                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture, imageAnalysis);
                     CameraInfo cameraInfo = camera.getCameraInfo();
                     currentDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
                     Log.d(TAG, "bindCameraUseCases: Camera successfully bound to device ID: " + currentDeviceId);
@@ -3810,5 +3904,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentRecording = null;
         currentVideoFile = null;
         currentVideoCallback = null;
+    }
+
+    public void setFaceDetectionEnabled(boolean enabled) {
+        this.faceDetectionEnabled = enabled;
+        if (enabled && faceDetector == null) {
+            FaceDetectorOptions options = new FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+                .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+                .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                .build();
+            faceDetector = FaceDetection.getClient(options);
+        }
     }
 }

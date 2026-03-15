@@ -1,3 +1,4 @@
+import Vision
 import AVFoundation
 import UIKit
 import CoreLocation
@@ -97,6 +98,11 @@ class CameraController: NSObject {
     private var lastCaptureOrientation: AVCaptureVideoOrientation?
 
     var videoFileURL: URL?
+    var faceDetectionEnabled: Bool = false
+    var onFaceDetected: (([[String: Any]]) -> Void)?
+    private var lastDetectionTime: TimeInterval = 0
+    private let detectionInterval: TimeInterval = 0.1 // 10 FPS max
+
     private let saneMaxZoomFactor: CGFloat = 25.5
 
     var videoQuality: String = "high"
@@ -2472,6 +2478,15 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
 
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        // Face detection logic
+        if faceDetectionEnabled {
+            let currentTime = CACurrentMediaTime()
+            if currentTime - lastDetectionTime >= detectionInterval {
+                lastDetectionTime = currentTime
+                performFaceDetection(sampleBuffer: sampleBuffer)
+            }
+        }
+
         // Check if we're waiting for the first frame
         if !hasReceivedFirstFrame, let firstFrameCallback = firstFrameReadyCallback {
             hasReceivedFirstFrame = true
@@ -2645,5 +2660,52 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
             print("Movie recorded successfully: \(outputFileURL)")
             // You can save the file to the library, upload it, etc.
         }
+    }
+
+    private func performFaceDetection(sampleBuffer: CMSampleBuffer) {
+        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        
+        let request = VNDetectFaceRectanglesRequest { [weak self] request, error in
+            guard let self = self, let results = request.results as? [VNFaceObservation], error == nil else { return }
+            
+            if results.isEmpty { return }
+            
+            var faces: [[String: Any]] = []
+            for face in results {
+                let boundingBox = face.boundingBox
+                // Vision coordinates are normalized (0-1) and origin is bottom-left
+                // We convert to Capacitor standard (top-left) if needed, but 0-1 is good
+                var faceData: [String: Any] = [
+                    "bounds": [
+                        "x": boundingBox.origin.x,
+                        "y": 1.0 - boundingBox.origin.y - boundingBox.size.height,
+                        "width": boundingBox.size.width,
+                        "height": boundingBox.size.height
+                    ]
+                ]
+                
+                if let landmarksRequest = request as? VNDetectFaceLandmarksRequest,
+                   let landmarks = face.landmarks {
+                    // We could add more detail here if needed
+                }
+                
+                // Add euler angles if available (iOS 12+)
+                if #available(iOS 12.0, *) {
+                    if let roll = face.roll {
+                        faceData["headEulerAngleZ"] = roll.doubleValue
+                    }
+                    if let yaw = face.yaw {
+                        faceData["headEulerAngleY"] = yaw.doubleValue
+                    }
+                }
+                
+                faces.append(faceData)
+            }
+            
+            self.onFaceDetected?(faces)
+        }
+        
+        let handler = VNImageRequestHandler(cvPixelBuffer: imageBuffer, options: [:])
+        try? handler.perform([request])
     }
 }
