@@ -1,5 +1,6 @@
 package app.capgo.capacitor.camera.preview;
 
+import android.annotation.SuppressLint;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -871,56 +872,64 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     }
 
                     @SuppressLint("UnsafeOptInUsageError")
-                    InputImage image = InputImage.fromMediaImage(imageProxy.getImage(), imageProxy.getImageInfo().getRotationDegrees());
+                    android.media.Image mediaImage = imageProxy.getImage();
+                    if (mediaImage == null) {
+                        imageProxy.close();
+                        return;
+                    }
+
+                    InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
 
                     faceDetector
                         .process(image)
-                        .addOnSuccessListener(faces -> {
-                            if (faces.isEmpty()) {
+                        .addOnSuccessListener(analysisExecutor, faces -> {
+                            try {
+                                if (faces.isEmpty()) {
+                                    return;
+                                }
+
+                                JSArray facesArray = new JSArray();
+                                for (Face face : faces) {
+                                    JSObject faceObject = new JSObject();
+                                    Rect bounds = face.getBoundingBox();
+                                    
+                                    // Normalized coordinates (0-1)
+                                    JSObject boundsObject = new JSObject();
+                                    // We need the preview resolution to normalize
+                                    // imageProxy.getWidth() and imageProxy.getHeight() are the analysis resolution
+                                    float width = (float) imageProxy.getWidth();
+                                    float height = (float) imageProxy.getHeight();
+                                    
+                                    boundsObject.put("x", bounds.left / width);
+                                    boundsObject.put("y", bounds.top / height);
+                                    boundsObject.put("width", bounds.width() / width);
+                                    boundsObject.put("height", bounds.height() / height);
+                                    
+                                    faceObject.put("bounds", boundsObject);
+                                    faceObject.put("headEulerAngleY", face.getHeadEulerAngleY());
+                                    faceObject.put("headEulerAngleZ", face.getHeadEulerAngleZ());
+                                    
+                                    if (face.getLeftEyeOpenProbability() != null) {
+                                        faceObject.put("leftEyeOpenProbability", face.getLeftEyeOpenProbability());
+                                    }
+                                    if (face.getRightEyeOpenProbability() != null) {
+                                        faceObject.put("rightEyeOpenProbability", face.getRightEyeOpenProbability());
+                                    }
+                                    if (face.getSmilingProbability() != null) {
+                                        faceObject.put("smilingProbability", face.getSmilingProbability());
+                                    }
+                                    
+                                    facesArray.put(faceObject);
+                                }
+
+                                if (listener != null) {
+                                    listener.onFaceDetected(facesArray);
+                                }
+                            } finally {
                                 imageProxy.close();
-                                return;
                             }
-
-                            JSArray facesArray = new JSArray();
-                            for (Face face : faces) {
-                                JSObject faceObject = new JSObject();
-                                Rect bounds = face.getBoundingBox();
-                                
-                                // Normalized coordinates (0-1)
-                                JSObject boundsObject = new JSObject();
-                                // We need the preview resolution to normalize
-                                // imageProxy.getWidth() and imageProxy.getHeight() are the analysis resolution
-                                float width = (float) imageProxy.getWidth();
-                                float height = (float) imageProxy.getHeight();
-                                
-                                boundsObject.put("x", bounds.left / width);
-                                boundsObject.put("y", bounds.top / height);
-                                boundsObject.put("width", bounds.width() / width);
-                                boundsObject.put("height", bounds.height() / height);
-                                
-                                faceObject.put("bounds", boundsObject);
-                                faceObject.put("headEulerAngleY", face.getHeadEulerAngleY());
-                                faceObject.put("headEulerAngleZ", face.getHeadEulerAngleZ());
-                                
-                                if (face.getLeftEyeOpenProbability() != null) {
-                                    faceObject.put("leftEyeOpenProbability", face.getLeftEyeOpenProbability());
-                                }
-                                if (face.getRightEyeOpenProbability() != null) {
-                                    faceObject.put("rightEyeOpenProbability", face.getRightEyeOpenProbability());
-                                }
-                                if (face.getSmilingProbability() != null) {
-                                    faceObject.put("smilingProbability", face.getSmilingProbability());
-                                }
-                                
-                                facesArray.put(faceObject);
-                            }
-
-                            if (listener != null) {
-                                listener.onFaceDetected(facesArray);
-                            }
-                            imageProxy.close();
                         })
-                        .addOnFailureListener(e -> {
+                        .addOnFailureListener(analysisExecutor, e -> {
                             Log.e(TAG, "Face detection failed", e);
                             imageProxy.close();
                         });

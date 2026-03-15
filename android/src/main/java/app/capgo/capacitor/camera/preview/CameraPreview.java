@@ -2047,8 +2047,6 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
-    @Override
-    
     @PluginMethod
     public void setFaceDetectionEnabled(PluginCall call) {
         boolean enabled = call.getBoolean("enabled", false);
@@ -2059,7 +2057,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("Camera is not running");
         }
     }
-public void onFaceDetected(JSArray faces) {
+
+    @Override
+    public void onFaceDetected(JSArray faces) {
         JSObject ret = new JSObject();
         ret.put("faces", faces);
         notifyListeners("onFaceDetected", ret);

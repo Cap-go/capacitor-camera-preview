@@ -314,8 +314,6 @@ export interface CameraPreviewPictureOptions {
   photoQualityPrioritization?: 'speed' | 'balanced' | 'quality';
 }
 
-/** Represents EXIF data extracted from an image. */
-
 /**
  * Represents a detected face.
  */
@@ -339,6 +337,7 @@ export interface Face {
   smilingProbability?: number;
 }
 
+/** Represents EXIF data extracted from an image. */
 export interface ExifData {
   [key: string]: any;
 }
@@ -758,7 +757,9 @@ export interface CameraPreviewPlugin {
    */
   addListener(
     eventName: 'orientationChange',
-    listenerFunc: (data: { orientation: DeviceOrientation }) => void,\n  ): Promise<PluginListenerHandle>;
+    listenerFunc: (data: { orientation: DeviceOrientation }) => void,
+  ): Promise<PluginListenerHandle>;
+
   /**
    * Adds a listener for face detection events.
    * @param {string} eventName - The event name to listen for.
@@ -769,8 +770,6 @@ export interface CameraPreviewPlugin {
   addListener(
     eventName: 'onFaceDetected',
     listenerFunc: (data: { faces: Face[] }) => void,
-  ): Promise<PluginListenerHandle>;
-
   ): Promise<PluginListenerHandle>;
   /**
    * Deletes a file at the given absolute path on the device.
