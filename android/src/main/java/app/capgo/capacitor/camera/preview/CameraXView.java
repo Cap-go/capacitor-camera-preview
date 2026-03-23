@@ -2251,9 +2251,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         MeteringPointFactory factory = previewView.getMeteringPointFactory();
         MeteringPoint point = factory.createPoint(x * viewWidth, y * viewHeight);
 
-        // Create focus and metering action (persistent, no auto-cancel) to match iOS behavior
+        // Create focus and metering action (resets after time to allow for auto focusing on movement later)
         FocusMeteringAction action = new FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
-            .disableAutoCancel()
             .build();
 
         if (IsOperationRunning("setFocus")) {
