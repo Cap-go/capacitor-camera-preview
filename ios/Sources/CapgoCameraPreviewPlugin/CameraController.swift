@@ -56,14 +56,14 @@ class CameraController: NSObject {
         }
     }
 
-    // Continuous focus with significant movement if focus was locked from setFocus earlier 
+    // Continuous focus with significant movement if focus was locked from setFocus earlier
     @objc private func subjectAreaDidChange(notification: NSNotification) {
         guard let device = self.currentCameraPosition == .rear ? rearCamera : frontCamera else { return }
-        
+
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
-            
+
             // Reset Focus to the center and make it continuous
             if device.isFocusModeSupported(.continuousAutoFocus) {
                 device.focusMode = .continuousAutoFocus
@@ -71,7 +71,7 @@ class CameraController: NSObject {
                     device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
                 }
             }
-            
+
             // 2. Reset Exposure to the center ONLY if it is not explicitly locked
             if device.exposureMode != .locked {
                 if device.isExposureModeSupported(.continuousAutoExposure) {
@@ -82,17 +82,17 @@ class CameraController: NSObject {
                     device.setExposureTargetBias(0.0) { _ in }
                 }
             }
-            
+
             // 3. Turn off monitoring until the user taps to focus again
             device.isSubjectAreaChangeMonitoringEnabled = false
-            
+
             print("[CameraPreview] Phone moved: Reset focus. Exposure reset skipped if locked.")
-            
+
         } catch {
             print("[CameraPreview] Failed to reset focus after subject area change: \(error)")
         }
     }
-    
+
     var captureSession: AVCaptureSession?
     var disableFocusIndicator: Bool = false
 
@@ -2285,7 +2285,7 @@ extension CameraController {
             if connection.isEnabled == false { connection.isEnabled = true }
             // Goes off accelerometer now
             connection.videoOrientation = self.getPhysicalOrientation()
-            
+
             // Front camera: mirror the recorded video so it looks natural (selfie style).
             if self.currentCameraPosition == .front, connection.isVideoMirroringSupported {
                 connection.isVideoMirrored = true

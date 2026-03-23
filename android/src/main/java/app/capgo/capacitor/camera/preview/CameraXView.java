@@ -2252,8 +2252,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         MeteringPoint point = factory.createPoint(x * viewWidth, y * viewHeight);
 
         // Create focus and metering action (resets after time to allow for auto focusing on movement later)
-        FocusMeteringAction action = new FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE)
-            .build();
+        FocusMeteringAction action = new FocusMeteringAction.Builder(
+            point,
+            FocusMeteringAction.FLAG_AF | FocusMeteringAction.FLAG_AE
+        ).build();
 
         if (IsOperationRunning("setFocus")) {
             Log.d(TAG, "setFocus: Ignored because stop is pending");
