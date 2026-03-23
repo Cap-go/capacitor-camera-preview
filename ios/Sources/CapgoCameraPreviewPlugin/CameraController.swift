@@ -1761,9 +1761,6 @@ extension CameraController {
             if autoFocus {
                 self.triggerAutoFocus()
             }
-
-            // Turn on subject area monitor for switch to continuous focus if needed
-            device.isSubjectAreaChangeMonitoringEnabled = true
         } catch {
             throw CameraControllerError.invalidOperation
         }
@@ -1869,6 +1866,9 @@ extension CameraController {
                     device.exposurePointOfInterest = point
                 }
             }
+            
+            // Turn on subject area monitor for switch to continuous focus if needed
+            device.isSubjectAreaChangeMonitoringEnabled = true
 
             device.unlockForConfiguration()
         } catch {
