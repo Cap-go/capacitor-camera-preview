@@ -484,6 +484,7 @@ extension CameraController {
                 self.setInitialZoom(level: initialZoomLevel)
 
                 // Set up listener for change in subject area of camera feed
+                NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
                 NotificationCenter.default.addObserver(self, selector: #selector(self.subjectAreaDidChange), name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
 
                 // Start the session - all outputs are already configured
@@ -1866,7 +1867,7 @@ extension CameraController {
                     device.exposurePointOfInterest = point
                 }
             }
-            
+
             // Turn on subject area monitor for switch to continuous focus if needed
             device.isSubjectAreaChangeMonitoringEnabled = true
 
