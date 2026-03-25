@@ -138,6 +138,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private long focusIndicatorAnimationId = 0; // Incrementing token to invalidate previous animations
     private CameraSelector currentCameraSelector;
     private String currentDeviceId;
+    private String currentPhysicalDeviceId;
+    private String currentLogicalDeviceId;
     private int currentFlashMode = ImageCapture.FLASH_MODE_OFF;
     private CameraSessionConfiguration sessionConfig;
     private CameraXViewListener listener;
@@ -189,6 +191,45 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             // Not Needed
         }
     };
+
+    private static final class PhysicalCameraBindingTarget {
+
+        private final CameraInfo logicalCameraInfo;
+        private final String logicalCameraId;
+        private final int requiredFacing;
+
+        private PhysicalCameraBindingTarget(CameraInfo logicalCameraInfo, String logicalCameraId, int requiredFacing) {
+            this.logicalCameraInfo = logicalCameraInfo;
+            this.logicalCameraId = logicalCameraId;
+            this.requiredFacing = requiredFacing;
+        }
+    }
+
+    private static final class CameraBindingPlan {
+
+        private final CameraSelector selector;
+        private final String reportedDeviceId;
+        private final String logicalCameraId;
+        private final String physicalCameraId;
+        private final float fallbackZoom;
+        private final boolean usesPhysicalSelection;
+
+        private CameraBindingPlan(
+            CameraSelector selector,
+            String reportedDeviceId,
+            String logicalCameraId,
+            String physicalCameraId,
+            float fallbackZoom,
+            boolean usesPhysicalSelection
+        ) {
+            this.selector = selector;
+            this.reportedDeviceId = reportedDeviceId;
+            this.logicalCameraId = logicalCameraId;
+            this.physicalCameraId = physicalCameraId;
+            this.fallbackZoom = fallbackZoom;
+            this.usesPhysicalSelection = usesPhysicalSelection;
+        }
+    }
 
     private boolean IsOperationRunning(String name) {
         synchronized (operationLock) {
@@ -436,6 +477,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void performImmediateStop() {
         isRunning = false;
+        currentDeviceId = null;
+        currentPhysicalDeviceId = null;
+        currentLogicalDeviceId = null;
         // Stop accelerometer
         if (sensorManager != null && accelerometer != null) {
             sensorManager.unregisterListener(accelerometerListener);
@@ -815,7 +859,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         " and position: " +
                         sessionConfig.getPosition()
                 );
-                currentCameraSelector = buildCameraSelector();
+                CameraBindingPlan bindingPlan = buildCameraBindingPlan(sessionConfig);
+                currentCameraSelector = bindingPlan.selector;
 
                 ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
                     ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
@@ -893,17 +938,24 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 // is connected and video frames are captured correctly
                 preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
-                // Bind with or without video capture based on enableVideoMode
-                if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
-                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture, videoCapture);
-                    CameraInfo cameraInfo = camera.getCameraInfo();
-                    currentDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
-                    Log.d(TAG, "bindCameraUseCases: Camera successfully bound to device ID: " + currentDeviceId);
-                } else {
-                    camera = cameraProvider.bindToLifecycle(this, currentCameraSelector, preview, imageCapture);
-                    CameraInfo cameraInfo = camera.getCameraInfo();
-                    currentDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
-                    Log.d(TAG, "bindCameraUseCases: Camera successfully bound to device ID: " + currentDeviceId);
+                try {
+                    bindConfiguredUseCases(bindingPlan, preview);
+                } catch (Exception initialBindError) {
+                    if (!bindingPlan.usesPhysicalSelection) {
+                        throw initialBindError;
+                    }
+
+                    Log.w(
+                        TAG,
+                        "bindCameraUseCases: Physical camera binding failed for " +
+                            bindingPlan.physicalCameraId +
+                            ", falling back to logical camera behavior",
+                        initialBindError
+                    );
+
+                    bindingPlan = buildLogicalFallbackPlan(sessionConfig, bindingPlan);
+                    currentCameraSelector = bindingPlan.selector;
+                    bindConfiguredUseCases(bindingPlan, preview);
                 }
 
                 resetExposureCompensationToDefault();
@@ -911,7 +963,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 // Log details about the active camera
                 Log.d(TAG, "Use cases bound. Inspecting active camera and use cases.");
                 CameraInfo cameraInfo = camera.getCameraInfo();
-                Log.d(TAG, "Bound Camera ID: " + Camera2CameraInfo.from(cameraInfo).getCameraId());
+                Log.d(TAG, "Bound Camera ID: " + currentLogicalDeviceId);
+                if (currentPhysicalDeviceId != null) {
+                    Log.d(TAG, "Bound Physical Camera ID: " + currentPhysicalDeviceId);
+                }
 
                 // Log zoom state
                 ZoomState zoomState = cameraInfo.getZoomState().getValue();
@@ -987,7 +1042,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
 
                 // Set initial zoom if specified, prioritizing targetZoom over default zoomFactor
-                float initialZoom = sessionConfig.getTargetZoom() != 1.0f ? sessionConfig.getTargetZoom() : sessionConfig.getZoomFactor();
+                float initialZoom = bindingPlan.fallbackZoom != 1.0f && sessionConfig.getTargetZoom() == 1.0f
+                    ? bindingPlan.fallbackZoom
+                    : (sessionConfig.getTargetZoom() != 1.0f ? sessionConfig.getTargetZoom() : sessionConfig.getZoomFactor());
                 if (initialZoom != 1.0f) {
                     Log.d(TAG, "Applying initial zoom of " + initialZoom);
 
@@ -1057,24 +1114,201 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private CameraSelector buildCameraSelector() {
-        CameraSelector.Builder builder = new CameraSelector.Builder();
-        final String deviceId = sessionConfig.getDeviceId();
+        return buildCameraBindingPlan(sessionConfig).selector;
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    private CameraBindingPlan buildCameraBindingPlan(CameraSessionConfiguration config) {
+        final String deviceId = config.getDeviceId();
+        final String position = config.getPosition();
 
         if (deviceId != null && !deviceId.isEmpty()) {
-            builder.addCameraFilter((cameraInfos) -> {
-                for (CameraInfo cameraInfo : cameraInfos) {
-                    if (deviceId.equals(Camera2CameraInfo.from(cameraInfo).getCameraId())) {
-                        return Collections.singletonList(cameraInfo);
+            CameraInfo directCameraInfo = findAvailableCameraInfoById(deviceId);
+            if (directCameraInfo != null) {
+                CameraSelector.Builder directBuilder = new CameraSelector.Builder();
+                directBuilder.addCameraFilter((cameraInfos) -> {
+                    for (CameraInfo cameraInfo : cameraInfos) {
+                        if (deviceId.equals(Camera2CameraInfo.from(cameraInfo).getCameraId())) {
+                            return Collections.singletonList(cameraInfo);
+                        }
                     }
+                    return Collections.emptyList();
+                });
+
+                return new CameraBindingPlan(directBuilder.build(), deviceId, deviceId, null, 1.0f, false);
+            }
+
+            if (config.isPhysicalDeviceSelectionEnabled()) {
+                PhysicalCameraBindingTarget physicalTarget = findPhysicalCameraBindingTarget(deviceId);
+                if (physicalTarget != null) {
+                    CameraSelector.Builder physicalBuilder = new CameraSelector.Builder()
+                        .requireLensFacing(physicalTarget.requiredFacing)
+                        .setPhysicalCameraId(deviceId)
+                        .addCameraFilter((cameraInfos) -> {
+                            for (CameraInfo cameraInfo : cameraInfos) {
+                                if (physicalTarget.logicalCameraId.equals(Camera2CameraInfo.from(cameraInfo).getCameraId())) {
+                                    return Collections.singletonList(cameraInfo);
+                                }
+                            }
+                            return Collections.emptyList();
+                        });
+
+                    return new CameraBindingPlan(
+                        physicalBuilder.build(),
+                        deviceId,
+                        physicalTarget.logicalCameraId,
+                        deviceId,
+                        getFallbackZoomForDeviceId(deviceId),
+                        true
+                    );
                 }
-                return Collections.emptyList();
-            });
-        } else {
-            String position = sessionConfig.getPosition();
-            int requiredFacing = "front".equals(position) ? CameraSelector.LENS_FACING_FRONT : CameraSelector.LENS_FACING_BACK;
-            builder.requireLensFacing(requiredFacing);
+
+                float fallbackZoom = getFallbackZoomForDeviceId(deviceId);
+                if (fallbackZoom != 1.0f) {
+                    CameraBindingPlan positionPlan = buildPositionPlan(position);
+                    return new CameraBindingPlan(
+                        positionPlan.selector,
+                        positionPlan.reportedDeviceId,
+                        positionPlan.logicalCameraId,
+                        null,
+                        fallbackZoom,
+                        false
+                    );
+                }
+            }
         }
-        return builder.build();
+
+        return buildPositionPlan(position);
+    }
+
+    private CameraBindingPlan buildLogicalFallbackPlan(CameraSessionConfiguration config, CameraBindingPlan failedPhysicalPlan) {
+        String fallbackPosition = config.getPosition();
+
+        if (failedPhysicalPlan.logicalCameraId != null) {
+            CameraInfo logicalCameraInfo = findAvailableCameraInfoById(failedPhysicalPlan.logicalCameraId);
+            if (logicalCameraInfo != null) {
+                fallbackPosition = isBackCamera(logicalCameraInfo) ? "rear" : "front";
+            }
+        }
+
+        CameraBindingPlan positionPlan = buildPositionPlan(fallbackPosition);
+        return new CameraBindingPlan(
+            positionPlan.selector,
+            positionPlan.reportedDeviceId,
+            positionPlan.logicalCameraId,
+            null,
+            failedPhysicalPlan.fallbackZoom,
+            false
+        );
+    }
+
+    private CameraBindingPlan buildPositionPlan(String position) {
+        int requiredFacing = "front".equals(position) ? CameraSelector.LENS_FACING_FRONT : CameraSelector.LENS_FACING_BACK;
+        CameraSelector selector = new CameraSelector.Builder().requireLensFacing(requiredFacing).build();
+        return new CameraBindingPlan(selector, null, null, null, 1.0f, false);
+    }
+
+    private CameraInfo findAvailableCameraInfoById(String deviceId) {
+        if (cameraProvider == null || deviceId == null || deviceId.isEmpty()) {
+            return null;
+        }
+
+        for (CameraInfo cameraInfo : cameraProvider.getAvailableCameraInfos()) {
+            if (deviceId.equals(Camera2CameraInfo.from(cameraInfo).getCameraId())) {
+                return cameraInfo;
+            }
+        }
+
+        return null;
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    private PhysicalCameraBindingTarget findPhysicalCameraBindingTarget(String physicalDeviceId) {
+        if (cameraProvider == null || physicalDeviceId == null || physicalDeviceId.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            return null;
+        }
+
+        CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        if (cameraManager == null) {
+            return null;
+        }
+
+        for (CameraInfo cameraInfo : cameraProvider.getAvailableCameraInfos()) {
+            String logicalCameraId = Camera2CameraInfo.from(cameraInfo).getCameraId();
+            try {
+                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(logicalCameraId);
+                if (characteristics.getPhysicalCameraIds().contains(physicalDeviceId)) {
+                    int requiredFacing = isBackCamera(cameraInfo) ? CameraSelector.LENS_FACING_BACK : CameraSelector.LENS_FACING_FRONT;
+                    return new PhysicalCameraBindingTarget(cameraInfo, logicalCameraId, requiredFacing);
+                }
+            } catch (CameraAccessException e) {
+                Log.w(TAG, "findPhysicalCameraBindingTarget: Failed to inspect logical camera " + logicalCameraId, e);
+            }
+        }
+
+        return null;
+    }
+
+    private app.capgo.capacitor.camera.preview.model.CameraDevice findEnumeratedDeviceById(String deviceId) {
+        if (deviceId == null || deviceId.isEmpty()) {
+            return null;
+        }
+
+        List<app.capgo.capacitor.camera.preview.model.CameraDevice> devices = getAvailableDevicesStatic(context);
+        for (app.capgo.capacitor.camera.preview.model.CameraDevice device : devices) {
+            if (deviceId.equals(device.getDeviceId())) {
+                return device;
+            }
+        }
+
+        return null;
+    }
+
+    private float getFallbackZoomForDeviceId(String deviceId) {
+        app.capgo.capacitor.camera.preview.model.CameraDevice device = findEnumeratedDeviceById(deviceId);
+        if (device == null) {
+            return 1.0f;
+        }
+
+        for (LensInfo lens : device.getLenses()) {
+            if ("ultraWide".equals(lens.getDeviceType())) {
+                return 0.5f;
+            }
+            if ("telephoto".equals(lens.getDeviceType())) {
+                return 2.0f;
+            }
+        }
+
+        return 1.0f;
+    }
+
+    private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
+        if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
+            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
+        } else {
+            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture);
+        }
+
+        CameraInfo cameraInfo = camera.getCameraInfo();
+        currentLogicalDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
+        currentPhysicalDeviceId = bindingPlan.physicalCameraId;
+        currentDeviceId = bindingPlan.reportedDeviceId != null ? bindingPlan.reportedDeviceId : currentLogicalDeviceId;
+
+        Log.d(
+            TAG,
+            "bindConfiguredUseCases: Camera successfully bound. reportedDeviceId=" +
+                currentDeviceId +
+                ", logicalCameraId=" +
+                currentLogicalDeviceId +
+                ", physicalCameraId=" +
+                currentPhysicalDeviceId
+        );
+    }
+
+    private void copyMutableSessionConfigState(CameraSessionConfiguration source, CameraSessionConfiguration target) {
+        target.setCentered(source.isCentered());
+        target.setTargetZoom(source.getTargetZoom());
+        target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
     }
 
     private static boolean isBackCamera(androidx.camera.core.CameraInfo cameraInfo) {
@@ -2715,53 +2949,60 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         mainExecutor.execute(() -> {
             try {
-                // Standard physical device selection logic...
-                List<CameraInfo> cameraInfos = cameraProvider.getAvailableCameraInfos();
+                CameraSessionConfiguration previousConfig = sessionConfig;
+                CameraInfo targetCameraInfo = findAvailableCameraInfoById(deviceId);
+                app.capgo.capacitor.camera.preview.model.CameraDevice enumeratedDevice = findEnumeratedDeviceById(deviceId);
 
-                CameraInfo targetCameraInfo = null;
-                for (CameraInfo cameraInfo : cameraInfos) {
-                    String id = Camera2CameraInfo.from(cameraInfo).getCameraId();
-                    if (deviceId.equals(id)) {
-                        targetCameraInfo = cameraInfo;
-                        break;
+                String position = enumeratedDevice != null ? enumeratedDevice.getPosition() : previousConfig.getPosition();
+                if (targetCameraInfo != null) {
+                    position = isBackCamera(targetCameraInfo) ? "rear" : "front";
+                } else if (!previousConfig.isPhysicalDeviceSelectionEnabled()) {
+                    Log.e(TAG, "switchToDevice: Could not find any CameraInfo matching deviceId: " + deviceId);
+                    return;
+                } else if (previousConfig.isPhysicalDeviceSelectionEnabled()) {
+                    PhysicalCameraBindingTarget physicalTarget = findPhysicalCameraBindingTarget(deviceId);
+                    if (physicalTarget != null) {
+                        position = physicalTarget.requiredFacing == CameraSelector.LENS_FACING_FRONT ? "front" : "rear";
+                    } else if (enumeratedDevice == null) {
+                        Log.e(TAG, "switchToDevice: Could not resolve deviceId: " + deviceId);
+                        return;
                     }
                 }
 
-                if (targetCameraInfo != null) {
-                    // Determine position from the target camera
-                    String position = isBackCamera(targetCameraInfo) ? "rear" : "front";
-                    boolean wasCentered = sessionConfig.isCentered();
-
-                    // Update sessionConfig with the new device ID
-                    sessionConfig = new CameraSessionConfiguration(
-                        deviceId,
-                        position,
-                        sessionConfig.getX(),
-                        sessionConfig.getY(),
-                        sessionConfig.getWidth(),
-                        sessionConfig.getHeight(),
-                        sessionConfig.getPaddingBottom(),
-                        sessionConfig.getToBack(),
-                        sessionConfig.getStoreToFile(),
-                        sessionConfig.getEnableOpacity(),
-                        sessionConfig.getDisableExifHeaderStripping(),
-                        sessionConfig.getDisableAudio(),
-                        sessionConfig.getZoomFactor(),
-                        sessionConfig.getAspectRatio(),
-                        sessionConfig.getAspectMode(),
-                        sessionConfig.getGridMode(),
-                        sessionConfig.getDisableFocusIndicator(),
-                        sessionConfig.isVideoModeEnabled(),
-                        sessionConfig.getVideoQuality()
-                    );
-
-                    sessionConfig.setCentered(wasCentered);
-
-                    Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
-                    bindCameraUseCases(); // Will now use deviceId from sessionConfig
+                CameraSessionConfiguration updatedConfig = new CameraSessionConfiguration(
+                    deviceId,
+                    position,
+                    previousConfig.getX(),
+                    previousConfig.getY(),
+                    previousConfig.getWidth(),
+                    previousConfig.getHeight(),
+                    previousConfig.getPaddingBottom(),
+                    previousConfig.getToBack(),
+                    previousConfig.getStoreToFile(),
+                    previousConfig.getEnableOpacity(),
+                    previousConfig.getDisableExifHeaderStripping(),
+                    previousConfig.getDisableAudio(),
+                    previousConfig.getZoomFactor(),
+                    previousConfig.getAspectRatio(),
+                    previousConfig.getAspectMode(),
+                    previousConfig.getGridMode(),
+                    previousConfig.getDisableFocusIndicator(),
+                    previousConfig.isVideoModeEnabled(),
+                    previousConfig.getVideoQuality()
+                );
+                copyMutableSessionConfigState(previousConfig, updatedConfig);
+                if (previousConfig.isPhysicalDeviceSelectionEnabled()) {
+                    updatedConfig.setTargetZoom(1.0f);
                 } else {
-                    Log.e(TAG, "switchToDevice: Could not find any CameraInfo matching deviceId: " + deviceId);
+                    float fallbackZoom = getFallbackZoomForDeviceId(deviceId);
+                    if (fallbackZoom != 1.0f) {
+                        updatedConfig.setTargetZoom(fallbackZoom);
+                    }
                 }
+                sessionConfig = updatedConfig;
+
+                Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
+                bindCameraUseCases();
             } catch (Exception e) {
                 Log.e(TAG, "switchToDevice: Error switching camera", e);
             }
@@ -2779,32 +3020,35 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         boolean wasCentered = sessionConfig.isCentered();
         Log.d(TAG, "flipCamera: Switching from " + currentPosition + " to " + newPosition);
 
+        CameraSessionConfiguration previousConfig = sessionConfig;
         sessionConfig = new CameraSessionConfiguration(
             null, // deviceId - clear device ID to force position-based selection
             newPosition, // position
-            sessionConfig.getX(), // x
-            sessionConfig.getY(), // y
-            sessionConfig.getWidth(), // width
-            sessionConfig.getHeight(), // height
-            sessionConfig.getPaddingBottom(), // paddingBottom
-            sessionConfig.isToBack(), // toBack
-            sessionConfig.isStoreToFile(), // storeToFile
-            sessionConfig.isEnableOpacity(), // enableOpacity
-            sessionConfig.isDisableExifHeaderStripping(), // disableExifHeaderStripping
-            sessionConfig.isDisableAudio(), // disableAudio
-            sessionConfig.getZoomFactor(), // zoomFactor
-            sessionConfig.getAspectRatio(), // aspectRatio
-            sessionConfig.getAspectMode(), // aspectMode
-            sessionConfig.getGridMode(), // gridMode
-            sessionConfig.getDisableFocusIndicator(), // disableFocusIndicator
-            sessionConfig.isVideoModeEnabled(), // enableVideoMode
-            sessionConfig.getVideoQuality() // videoQuality
+            previousConfig.getX(), // x
+            previousConfig.getY(), // y
+            previousConfig.getWidth(), // width
+            previousConfig.getHeight(), // height
+            previousConfig.getPaddingBottom(), // paddingBottom
+            previousConfig.isToBack(), // toBack
+            previousConfig.isStoreToFile(), // storeToFile
+            previousConfig.isEnableOpacity(), // enableOpacity
+            previousConfig.isDisableExifHeaderStripping(), // disableExifHeaderStripping
+            previousConfig.isDisableAudio(), // disableAudio
+            previousConfig.getZoomFactor(), // zoomFactor
+            previousConfig.getAspectRatio(), // aspectRatio
+            previousConfig.getAspectMode(), // aspectMode
+            previousConfig.getGridMode(), // gridMode
+            previousConfig.getDisableFocusIndicator(), // disableFocusIndicator
+            previousConfig.isVideoModeEnabled(), // enableVideoMode
+            previousConfig.getVideoQuality() // videoQuality
         );
-
+        copyMutableSessionConfigState(previousConfig, sessionConfig);
         sessionConfig.setCentered(wasCentered);
 
-        // Clear current device ID to force position-based selection
+        // Clear current device IDs to force position-based selection
         currentDeviceId = null;
+        currentPhysicalDeviceId = null;
+        currentLogicalDeviceId = null;
 
         // Camera operations must run on main thread
         cameraExecutor.execute(() -> {
@@ -2894,32 +3138,34 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
 
-        String currentGridMode = sessionConfig.getGridMode();
+        CameraSessionConfiguration previousConfig = sessionConfig;
+        String currentGridMode = previousConfig.getGridMode();
         Log.d(TAG, "Changing aspect ratio from " + currentAspectRatio + " to " + aspectRatio);
         Log.d(TAG, "Auto-centering will be applied (matching iOS behavior)");
 
         // Match iOS behavior: when aspect ratio changes, always auto-center
         sessionConfig = new CameraSessionConfiguration(
-            sessionConfig.getDeviceId(),
-            sessionConfig.getPosition(),
+            previousConfig.getDeviceId(),
+            previousConfig.getPosition(),
             -1, // Force auto-center X (iOS: self.posX = -1)
             -1, // Force auto-center Y (iOS: self.posY = -1)
-            sessionConfig.getWidth(),
-            sessionConfig.getHeight(),
-            sessionConfig.getPaddingBottom(),
-            sessionConfig.getToBack(),
-            sessionConfig.getStoreToFile(),
-            sessionConfig.getEnableOpacity(),
-            sessionConfig.getDisableExifHeaderStripping(),
-            sessionConfig.getDisableAudio(),
-            sessionConfig.getZoomFactor(),
+            previousConfig.getWidth(),
+            previousConfig.getHeight(),
+            previousConfig.getPaddingBottom(),
+            previousConfig.getToBack(),
+            previousConfig.getStoreToFile(),
+            previousConfig.getEnableOpacity(),
+            previousConfig.getDisableExifHeaderStripping(),
+            previousConfig.getDisableAudio(),
+            previousConfig.getZoomFactor(),
             aspectRatio,
-            sessionConfig.getAspectMode(),
+            previousConfig.getAspectMode(),
             currentGridMode,
-            sessionConfig.getDisableFocusIndicator(),
-            sessionConfig.isVideoModeEnabled(),
-            sessionConfig.getVideoQuality()
+            previousConfig.getDisableFocusIndicator(),
+            previousConfig.isVideoModeEnabled(),
+            previousConfig.getVideoQuality()
         );
+        copyMutableSessionConfigState(previousConfig, sessionConfig);
         sessionConfig.setCentered(true);
 
         // Update layout and rebind camera with new aspect ratio
@@ -2970,32 +3216,34 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
 
-        String currentGridMode = sessionConfig.getGridMode();
+        CameraSessionConfiguration previousConfig = sessionConfig;
+        String currentGridMode = previousConfig.getGridMode();
         Log.d(TAG, "Forcing aspect ratio recalculation for: " + aspectRatio);
         Log.d(TAG, "Auto-centering will be applied (matching iOS behavior)");
 
         // Match iOS behavior: when aspect ratio changes, always auto-center
         sessionConfig = new CameraSessionConfiguration(
-            sessionConfig.getDeviceId(),
-            sessionConfig.getPosition(),
+            previousConfig.getDeviceId(),
+            previousConfig.getPosition(),
             -1, // Force auto-center X (iOS: self.posX = -1)
             -1, // Force auto-center Y (iOS: self.posY = -1)
-            sessionConfig.getWidth(),
-            sessionConfig.getHeight(),
-            sessionConfig.getPaddingBottom(),
-            sessionConfig.getToBack(),
-            sessionConfig.getStoreToFile(),
-            sessionConfig.getEnableOpacity(),
-            sessionConfig.getDisableExifHeaderStripping(),
-            sessionConfig.getDisableAudio(),
-            sessionConfig.getZoomFactor(),
+            previousConfig.getWidth(),
+            previousConfig.getHeight(),
+            previousConfig.getPaddingBottom(),
+            previousConfig.getToBack(),
+            previousConfig.getStoreToFile(),
+            previousConfig.getEnableOpacity(),
+            previousConfig.getDisableExifHeaderStripping(),
+            previousConfig.getDisableAudio(),
+            previousConfig.getZoomFactor(),
             aspectRatio,
-            sessionConfig.getAspectMode(),
+            previousConfig.getAspectMode(),
             currentGridMode,
-            sessionConfig.getDisableFocusIndicator(),
-            sessionConfig.isVideoModeEnabled(),
-            sessionConfig.getVideoQuality()
+            previousConfig.getDisableFocusIndicator(),
+            previousConfig.isVideoModeEnabled(),
+            previousConfig.getVideoQuality()
         );
+        copyMutableSessionConfigState(previousConfig, sessionConfig);
         sessionConfig.setCentered(true);
 
         // Update layout and rebind camera with new aspect ratio
@@ -3038,27 +3286,29 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void setGridMode(String gridMode) {
         if (sessionConfig != null) {
             Log.d(TAG, "setGridMode: Changing grid mode to: " + gridMode);
+            CameraSessionConfiguration previousConfig = sessionConfig;
             sessionConfig = new CameraSessionConfiguration(
-                sessionConfig.getDeviceId(),
-                sessionConfig.getPosition(),
-                sessionConfig.getX(),
-                sessionConfig.getY(),
-                sessionConfig.getWidth(),
-                sessionConfig.getHeight(),
-                sessionConfig.getPaddingBottom(),
-                sessionConfig.getToBack(),
-                sessionConfig.getStoreToFile(),
-                sessionConfig.getEnableOpacity(),
-                sessionConfig.getDisableExifHeaderStripping(),
-                sessionConfig.getDisableAudio(),
-                sessionConfig.getZoomFactor(),
-                sessionConfig.getAspectRatio(),
-                sessionConfig.getAspectMode(),
+                previousConfig.getDeviceId(),
+                previousConfig.getPosition(),
+                previousConfig.getX(),
+                previousConfig.getY(),
+                previousConfig.getWidth(),
+                previousConfig.getHeight(),
+                previousConfig.getPaddingBottom(),
+                previousConfig.getToBack(),
+                previousConfig.getStoreToFile(),
+                previousConfig.getEnableOpacity(),
+                previousConfig.getDisableExifHeaderStripping(),
+                previousConfig.getDisableAudio(),
+                previousConfig.getZoomFactor(),
+                previousConfig.getAspectRatio(),
+                previousConfig.getAspectMode(),
                 gridMode,
-                sessionConfig.getDisableFocusIndicator(),
-                sessionConfig.isVideoModeEnabled(),
-                sessionConfig.getVideoQuality()
+                previousConfig.getDisableFocusIndicator(),
+                previousConfig.isVideoModeEnabled(),
+                previousConfig.getVideoQuality()
             );
+            copyMutableSessionConfigState(previousConfig, sessionConfig);
 
             // Update the grid overlay immediately
             if (gridOverlayView != null) {
@@ -3378,27 +3628,29 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         );
                     }
 
+                    CameraSessionConfiguration previousConfig = sessionConfig;
                     sessionConfig = new CameraSessionConfiguration(
-                        sessionConfig.getDeviceId(),
-                        sessionConfig.getPosition(),
+                        previousConfig.getDeviceId(),
+                        previousConfig.getPosition(),
                         params.leftMargin,
                         params.topMargin,
                         params.width,
                         params.height,
-                        sessionConfig.getPaddingBottom(),
-                        sessionConfig.getToBack(),
-                        sessionConfig.getStoreToFile(),
-                        sessionConfig.getEnableOpacity(),
-                        sessionConfig.getDisableExifHeaderStripping(),
-                        sessionConfig.getDisableAudio(),
-                        sessionConfig.getZoomFactor(),
+                        previousConfig.getPaddingBottom(),
+                        previousConfig.getToBack(),
+                        previousConfig.getStoreToFile(),
+                        previousConfig.getEnableOpacity(),
+                        previousConfig.getDisableExifHeaderStripping(),
+                        previousConfig.getDisableAudio(),
+                        previousConfig.getZoomFactor(),
                         calculatedAspectRatio,
-                        sessionConfig.getAspectMode(),
-                        sessionConfig.getGridMode(),
-                        sessionConfig.getDisableFocusIndicator(),
-                        sessionConfig.isVideoModeEnabled(),
-                        sessionConfig.getVideoQuality()
+                        previousConfig.getAspectMode(),
+                        previousConfig.getGridMode(),
+                        previousConfig.getDisableFocusIndicator(),
+                        previousConfig.isVideoModeEnabled(),
+                        previousConfig.getVideoQuality()
                     );
+                    copyMutableSessionConfigState(previousConfig, sessionConfig);
 
                     // If aspect ratio changed due to size update, rebind camera
                     if (isRunning && !Objects.equals(currentAspectRatio, calculatedAspectRatio)) {

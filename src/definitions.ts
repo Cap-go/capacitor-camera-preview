@@ -210,6 +210,13 @@ export interface CameraPreviewOptions {
    */
   deviceId?: string;
   /**
+   * On Android, attempts to bind a physical camera directly when `deviceId` refers to a physical lens.
+   * Disabled by default because OEM support is inconsistent; when false, Android keeps the current logical-camera fallback behavior.
+   * @default false
+   * @platform android
+   */
+  enablePhysicalDeviceSelection?: boolean;
+  /**
    * The initial zoom level when starting the camera preview.
    * If the requested zoom level is not available, the native plugin will reject.
    * @default 1.0
