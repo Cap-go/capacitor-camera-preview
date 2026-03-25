@@ -96,8 +96,10 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -152,6 +154,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final LifecycleRegistry lifecycleRegistry;
     private final Executor mainExecutor;
     private ExecutorService cameraExecutor;
+    private static final Map<String, app.capgo.capacitor.camera.preview.model.CameraDevice> enumeratedDeviceCache =
+        new ConcurrentHashMap<>();
+    private static final Object enumeratedDeviceCacheLock = new Object();
+    private static volatile boolean enumeratedDeviceCacheRefreshInProgress = false;
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
@@ -410,6 +416,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void startSession(CameraSessionConfiguration config) {
         this.sessionConfig = config;
         cameraExecutor = Executors.newSingleThreadExecutor();
+        requestEnumeratedDeviceCacheRefresh();
 
         // Reset cached orientation so we don't reuse stale values across sessions
         synchronized (accelerometerLock) {
@@ -1175,7 +1182,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         false
                     );
                 }
+
+                throw invalidDeviceId(deviceId);
             }
+
+            throw invalidDeviceId(deviceId);
         }
 
         return buildPositionPlan(position);
@@ -1208,6 +1219,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         return new CameraBindingPlan(selector, null, null, null, 1.0f, false);
     }
 
+    private IllegalArgumentException invalidDeviceId(String deviceId) {
+        return new IllegalArgumentException("Unknown or unsupported deviceId: " + deviceId);
+    }
+
     private CameraInfo findAvailableCameraInfoById(String deviceId) {
         if (cameraProvider == null || deviceId == null || deviceId.isEmpty()) {
             return null;
@@ -1224,7 +1239,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private PhysicalCameraBindingTarget findPhysicalCameraBindingTarget(String physicalDeviceId) {
-        if (cameraProvider == null || physicalDeviceId == null || physicalDeviceId.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        if (
+            cameraProvider == null ||
+            physicalDeviceId == null ||
+            physicalDeviceId.isEmpty() ||
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.P
+        ) {
             return null;
         }
 
@@ -1254,13 +1274,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return null;
         }
 
-        List<app.capgo.capacitor.camera.preview.model.CameraDevice> devices = getAvailableDevicesStatic(context);
-        for (app.capgo.capacitor.camera.preview.model.CameraDevice device : devices) {
-            if (deviceId.equals(device.getDeviceId())) {
-                return device;
-            }
+        app.capgo.capacitor.camera.preview.model.CameraDevice cachedDevice = enumeratedDeviceCache.get(deviceId);
+        if (cachedDevice != null) {
+            return cachedDevice;
         }
 
+        requestEnumeratedDeviceCacheRefresh();
         return null;
     }
 
@@ -1309,6 +1328,33 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         target.setCentered(source.isCentered());
         target.setTargetZoom(source.getTargetZoom());
         target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
+    }
+
+    private void requestEnumeratedDeviceCacheRefresh() {
+        synchronized (enumeratedDeviceCacheLock) {
+            if (enumeratedDeviceCacheRefreshInProgress) {
+                return;
+            }
+            enumeratedDeviceCacheRefreshInProgress = true;
+        }
+
+        Runnable refreshTask = () -> {
+            try {
+                getAvailableDevicesStatic(context);
+            } finally {
+                synchronized (enumeratedDeviceCacheLock) {
+                    enumeratedDeviceCacheRefreshInProgress = false;
+                }
+            }
+        };
+
+        if (cameraExecutor != null) {
+            cameraExecutor.execute(refreshTask);
+        } else {
+            Thread refreshThread = new Thread(refreshTask, "CameraPreview-DeviceCacheRefresh");
+            refreshThread.setDaemon(true);
+            refreshThread.start();
+        }
     }
 
     private static boolean isBackCamera(androidx.camera.core.CameraInfo cameraInfo) {
@@ -2343,10 +2389,18 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
 
             Log.d(TAG, "=== Enumeration Complete: " + devices.size() + " cameras ===");
+            updateEnumeratedDeviceCache(devices);
             return devices;
         } catch (Exception e) {
             Log.e(TAG, "getAvailableDevicesStatic: Error getting devices", e);
             return Collections.emptyList();
+        }
+    }
+
+    private static void updateEnumeratedDeviceCache(List<app.capgo.capacitor.camera.preview.model.CameraDevice> devices) {
+        enumeratedDeviceCache.clear();
+        for (app.capgo.capacitor.camera.preview.model.CameraDevice device : devices) {
+            enumeratedDeviceCache.put(device.getDeviceId(), device);
         }
     }
 
@@ -2991,14 +3045,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     previousConfig.getVideoQuality()
                 );
                 copyMutableSessionConfigState(previousConfig, updatedConfig);
-                if (previousConfig.isPhysicalDeviceSelectionEnabled()) {
-                    updatedConfig.setTargetZoom(1.0f);
-                } else {
-                    float fallbackZoom = getFallbackZoomForDeviceId(deviceId);
-                    if (fallbackZoom != 1.0f) {
-                        updatedConfig.setTargetZoom(fallbackZoom);
-                    }
-                }
+                updatedConfig.setTargetZoom(1.0f);
                 sessionConfig = updatedConfig;
 
                 Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
@@ -3051,10 +3098,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentLogicalDeviceId = null;
 
         // Camera operations must run on main thread
-        cameraExecutor.execute(() -> {
-            currentCameraSelector = buildCameraSelector();
-            bindCameraUseCases();
-        });
+        cameraExecutor.execute(this::bindCameraUseCases);
     }
 
     public void setOpacity(float opacity) {
