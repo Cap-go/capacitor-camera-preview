@@ -1212,6 +1212,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             print("[CameraPreview] captureImage callback received")
             DispatchQueue.main.async {
                 print("[CameraPreview] Processing capture on main thread")
+                // Ensure heading updates are stopped on all exit paths (error, guard failure, or success)
+                defer {
+                    if withExifLocation ?? false {
+                        self.locationManager?.stopUpdatingHeading()
+                        self.currentHeading = nil
+                    }
+                }
                 if let error = error {
                     print("[CameraPreview] Capture error: \(error.localizedDescription)")
                     call.reject(error.localizedDescription)
@@ -1230,12 +1237,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     print("[CameraPreview] Failed to create image data with EXIF")
                     call.reject("Failed to create image data with EXIF")
                     return
-                }
-
-                // Stop heading updates now that the heading has been captured
-                if withExifLocation ?? false {
-                    self.locationManager?.stopUpdatingHeading()
-                    self.currentHeading = nil
                 }
 
                 print("[CameraPreview] Image data created, size: \(imageDataWithExif.count) bytes")
