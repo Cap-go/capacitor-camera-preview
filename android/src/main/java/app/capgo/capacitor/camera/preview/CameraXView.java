@@ -211,6 +211,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    private static final class PhysicalDeviceMetadata {
+
+        private final String position;
+        private final float fallbackZoom;
+
+        private PhysicalDeviceMetadata(String position, float fallbackZoom) {
+            this.position = position;
+            this.fallbackZoom = fallbackZoom;
+        }
+    }
+
     private static final class CameraBindingPlan {
 
         private final CameraSelector selector;
@@ -1149,6 +1160,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
             if (config.isPhysicalDeviceSelectionEnabled()) {
                 PhysicalCameraBindingTarget physicalTarget = findPhysicalCameraBindingTarget(deviceId);
+                float fallbackZoom = getFallbackZoomForDeviceId(deviceId);
                 if (physicalTarget != null) {
                     CameraSelector.Builder physicalBuilder = new CameraSelector.Builder()
                         .requireLensFacing(physicalTarget.requiredFacing)
@@ -1167,14 +1179,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         deviceId,
                         physicalTarget.logicalCameraId,
                         deviceId,
-                        getFallbackZoomForDeviceId(deviceId),
+                        fallbackZoom,
                         true
                     );
                 }
 
-                float fallbackZoom = getFallbackZoomForDeviceId(deviceId);
-                if (fallbackZoom != 1.0f) {
-                    CameraBindingPlan positionPlan = buildPositionPlan(position);
+                String fallbackPosition = resolveFallbackPositionForDeviceId(deviceId);
+                if (fallbackPosition != null) {
+                    CameraBindingPlan positionPlan = buildPositionPlan(fallbackPosition);
                     return new CameraBindingPlan(
                         positionPlan.selector,
                         positionPlan.reportedDeviceId,
@@ -1271,6 +1283,37 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         return null;
     }
 
+    private PhysicalDeviceMetadata resolvePhysicalDeviceMetadata(String deviceId) {
+        if (deviceId == null || deviceId.isEmpty()) {
+            return null;
+        }
+
+        CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        if (cameraManager == null) {
+            return null;
+        }
+
+        try {
+            CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(deviceId);
+            Integer lensFacing = characteristics.get(CameraCharacteristics.LENS_FACING);
+            String position = lensFacing != null && lensFacing == CameraCharacteristics.LENS_FACING_FRONT ? "front" : "rear";
+            return new PhysicalDeviceMetadata(position, getFallbackZoomForCharacteristics(characteristics));
+        } catch (CameraAccessException | IllegalArgumentException e) {
+            Log.w(TAG, "resolvePhysicalDeviceMetadata: Failed to inspect camera " + deviceId, e);
+            return null;
+        }
+    }
+
+    private String resolveFallbackPositionForDeviceId(String deviceId) {
+        app.capgo.capacitor.camera.preview.model.CameraDevice device = findEnumeratedDeviceById(deviceId);
+        if (device != null) {
+            return device.getPosition();
+        }
+
+        PhysicalDeviceMetadata metadata = resolvePhysicalDeviceMetadata(deviceId);
+        return metadata != null ? metadata.position : null;
+    }
+
     private app.capgo.capacitor.camera.preview.model.CameraDevice findEnumeratedDeviceById(String deviceId) {
         if (deviceId == null || deviceId.isEmpty()) {
             return null;
@@ -1287,16 +1330,46 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private float getFallbackZoomForDeviceId(String deviceId) {
         app.capgo.capacitor.camera.preview.model.CameraDevice device = findEnumeratedDeviceById(deviceId);
-        if (device == null) {
-            return 1.0f;
+        if (device != null) {
+            for (LensInfo lens : device.getLenses()) {
+                if ("ultraWide".equals(lens.getDeviceType())) {
+                    return 0.5f;
+                }
+                if ("telephoto".equals(lens.getDeviceType())) {
+                    return 2.0f;
+                }
+            }
         }
 
-        for (LensInfo lens : device.getLenses()) {
-            if ("ultraWide".equals(lens.getDeviceType())) {
-                return 0.5f;
-            }
-            if ("telephoto".equals(lens.getDeviceType())) {
-                return 2.0f;
+        PhysicalDeviceMetadata metadata = resolvePhysicalDeviceMetadata(deviceId);
+        if (metadata != null) {
+            return metadata.fallbackZoom;
+        }
+
+        return 1.0f;
+    }
+
+    private float getFallbackZoomForCharacteristics(CameraCharacteristics characteristics) {
+        float[] focalLengths = characteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+        android.util.SizeF sensorSize = characteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+
+        if (focalLengths != null && focalLengths.length > 0) {
+            float focalLength = focalLengths[0];
+            if (sensorSize != null && sensorSize.getWidth() > 0) {
+                double fov = 2 * Math.toDegrees(Math.atan(sensorSize.getWidth() / (2 * focalLength)));
+                if (fov > 90) {
+                    return 0.5f;
+                }
+                if (fov < 40) {
+                    return 2.0f;
+                }
+            } else {
+                if (focalLength < 3.0f) {
+                    return 0.5f;
+                }
+                if (focalLength > 5.0f) {
+                    return 2.0f;
+                }
             }
         }
 
@@ -2484,6 +2557,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
 
             camera.getCameraControl().setZoomRatio(zoomRatio);
+            if (sessionConfig != null) {
+                sessionConfig.setTargetZoom(zoomRatio);
+            }
             // Note: autofocus is intentionally not triggered on zoom because it's done by CameraX
         } catch (Exception e) {
             Log.e(TAG, "Failed to set zoom: " + e.getMessage());
@@ -3009,6 +3085,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 CameraSessionConfiguration previousConfig = sessionConfig;
                 CameraInfo targetCameraInfo = findAvailableCameraInfoById(deviceId);
                 app.capgo.capacitor.camera.preview.model.CameraDevice enumeratedDevice = findEnumeratedDeviceById(deviceId);
+                PhysicalDeviceMetadata physicalMetadata = previousConfig.isPhysicalDeviceSelectionEnabled()
+                    ? resolvePhysicalDeviceMetadata(deviceId)
+                    : null;
 
                 String position = enumeratedDevice != null ? enumeratedDevice.getPosition() : previousConfig.getPosition();
                 if (targetCameraInfo != null) {
@@ -3020,6 +3099,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     PhysicalCameraBindingTarget physicalTarget = findPhysicalCameraBindingTarget(deviceId);
                     if (physicalTarget != null) {
                         position = physicalTarget.requiredFacing == CameraSelector.LENS_FACING_FRONT ? "front" : "rear";
+                    } else if (physicalMetadata != null) {
+                        position = physicalMetadata.position;
                     } else if (enumeratedDevice == null) {
                         Log.e(TAG, "switchToDevice: Could not resolve deviceId: " + deviceId);
                         return;
