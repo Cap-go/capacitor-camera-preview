@@ -1329,7 +1329,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 try {
                                     exifData.put("GPSImgDirection", String.valueOf(captureCompassHeading));
                                     exifData.put("GPSImgDirectionRef", "T");
-                                } catch (Exception ignore) {}
+                                } catch (Exception e) {
+                                    Log.d(TAG, "capturePhoto: Failed to update EXIF JSON with heading data", e);
+                                }
                             }
 
                             // Save to gallery asynchronously if requested, copy EXIF to file
