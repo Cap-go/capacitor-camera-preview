@@ -172,6 +172,29 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final Object accelerometerLock = new Object();
     private volatile int lastCaptureRotation = -1; // -1 unknown
 
+    // Compass heading (degrees, 0-360, true north); -1 means not yet available
+    private Sensor rotationVectorSensor;
+    private volatile float lastCompassHeading = -1f;
+
+    private final SensorEventListener rotationVectorListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event.sensor.getType() == Sensor.TYPE_ROTATION_VECTOR) {
+                float[] rotationMatrix = new float[9];
+                SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values);
+                float[] orientation = new float[3];
+                SensorManager.getOrientation(rotationMatrix, orientation);
+                float azimuthDeg = (float) Math.toDegrees(orientation[0]);
+                lastCompassHeading = (azimuthDeg + 360) % 360;
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // Not needed
+        }
+    };
+
     private final SensorEventListener accelerometerListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent event) {
@@ -382,10 +405,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (sensorManager == null) {
             sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+            rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         }
         if (accelerometer != null) {
             sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
         }
+        if (rotationVectorSensor != null) {
+            sensorManager.registerListener(rotationVectorListener, rotationVectorSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        }
+        lastCompassHeading = -1f;
         synchronized (operationLock) {
             activeOperations = 0;
             stopPending = false;
@@ -436,9 +464,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void performImmediateStop() {
         isRunning = false;
-        // Stop accelerometer
+        // Stop accelerometer and rotation vector sensor
         if (sensorManager != null && accelerometer != null) {
             sensorManager.unregisterListener(accelerometerListener);
+        }
+        if (sensorManager != null && rotationVectorSensor != null) {
+            sensorManager.unregisterListener(rotationVectorListener);
         }
         // Cancel any ongoing focus operation when stopping session
         if (currentFocusFuture != null && !currentFocusFuture.isDone()) {
@@ -1222,6 +1253,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             int finalWidthOut = -1;
                             int finalHeightOut = -1;
                             boolean transformedPixels = false;
+                            // Snapshot compass heading at capture time for EXIF injection
+                            final float captureCompassHeading = lastCompassHeading;
 
                             ExifInterface exifInterface = new ExifInterface(new ByteArrayInputStream(originalCaptureBytes));
                             // Build EXIF JSON from captured bytes (location applied by metadata if provided)
@@ -1288,6 +1321,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 Integer fW = (finalWidthOut > 0) ? finalWidthOut : null;
                                 Integer fH = (finalHeightOut > 0) ? finalHeightOut : null;
                                 bytes = injectExifInMemory(bytes, originalCaptureBytes, fW, fH);
+                            }
+
+                            // Inject GPS image direction (compass heading) when a location was requested
+                            if (location != null && captureCompassHeading >= 0) {
+                                bytes = injectGpsHeadingIntoExif(bytes, captureCompassHeading);
+                                try {
+                                    exifData.put("GPSImgDirection", String.valueOf(captureCompassHeading));
+                                    exifData.put("GPSImgDirectionRef", "T");
+                                } catch (Exception ignore) {}
                             }
 
                             // Save to gallery asynchronously if requested, copy EXIF to file
@@ -1621,6 +1663,44 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         } catch (Throwable t) {
             Log.w(TAG, "injectExifInMemory: Failed to write EXIF in memory", t);
             return targetJpeg; // Fallback: return original bytes
+        }
+    }
+
+    // Inject GPS image direction (compass heading) into a JPEG in memory using Apache Commons Imaging
+    private byte[] injectGpsHeadingIntoExif(byte[] jpeg, float headingDegrees) {
+        try {
+            org.apache.commons.imaging.formats.jpeg.JpegImageMetadata jpegMetadata =
+                (org.apache.commons.imaging.formats.jpeg.JpegImageMetadata) org.apache.commons.imaging.Imaging.getMetadata(jpeg);
+            org.apache.commons.imaging.formats.tiff.TiffImageMetadata exif = jpegMetadata != null ? jpegMetadata.getExif() : null;
+
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet = exif != null
+                ? exif.getOutputSet()
+                : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
+
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory gpsDir = outputSet.getOrCreateGPSDirectory();
+
+            gpsDir.removeField(org.apache.commons.imaging.formats.tiff.constants.GpsTagConstants.GPS_TAG_GPS_IMG_DIRECTION_REF);
+            gpsDir.add(
+                org.apache.commons.imaging.formats.tiff.constants.GpsTagConstants.GPS_TAG_GPS_IMG_DIRECTION_REF,
+                org.apache.commons.imaging.formats.tiff.constants.GpsTagConstants.GPS_TAG_GPS_IMG_DIRECTION_REF_VALUE_TRUE_NORTH
+            );
+
+            gpsDir.removeField(org.apache.commons.imaging.formats.tiff.constants.GpsTagConstants.GPS_TAG_GPS_IMG_DIRECTION);
+            gpsDir.add(
+                org.apache.commons.imaging.formats.tiff.constants.GpsTagConstants.GPS_TAG_GPS_IMG_DIRECTION,
+                org.apache.commons.imaging.common.RationalNumber.valueOf(headingDegrees)
+            );
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            new org.apache.commons.imaging.formats.jpeg.exif.ExifRewriter().updateExifMetadataLossless(
+                new java.io.ByteArrayInputStream(jpeg),
+                out,
+                outputSet
+            );
+            return out.toByteArray();
+        } catch (Throwable t) {
+            Log.w(TAG, "injectGpsHeadingIntoExif: Failed to inject heading EXIF", t);
+            return jpeg;
         }
     }
 
