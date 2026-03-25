@@ -154,7 +154,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final LifecycleRegistry lifecycleRegistry;
     private final Executor mainExecutor;
     private ExecutorService cameraExecutor;
-    private static final Map<String, app.capgo.capacitor.camera.preview.model.CameraDevice> enumeratedDeviceCache =
+    private static volatile Map<String, app.capgo.capacitor.camera.preview.model.CameraDevice> enumeratedDeviceCache =
         new ConcurrentHashMap<>();
     private static final Object enumeratedDeviceCacheLock = new Object();
     private static volatile boolean enumeratedDeviceCacheRefreshInProgress = false;
@@ -1049,7 +1049,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
 
                 // Set initial zoom if specified, prioritizing targetZoom over default zoomFactor
-                float initialZoom = bindingPlan.fallbackZoom != 1.0f && sessionConfig.getTargetZoom() == 1.0f
+                float initialZoom = !bindingPlan.usesPhysicalSelection &&
+                    bindingPlan.fallbackZoom != 1.0f &&
+                    sessionConfig.getTargetZoom() == 1.0f
                     ? bindingPlan.fallbackZoom
                     : (sessionConfig.getTargetZoom() != 1.0f ? sessionConfig.getTargetZoom() : sessionConfig.getZoomFactor());
                 if (initialZoom != 1.0f) {
@@ -2398,10 +2400,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private static void updateEnumeratedDeviceCache(List<app.capgo.capacitor.camera.preview.model.CameraDevice> devices) {
-        enumeratedDeviceCache.clear();
+        Map<String, app.capgo.capacitor.camera.preview.model.CameraDevice> newCache = new ConcurrentHashMap<>();
         for (app.capgo.capacitor.camera.preview.model.CameraDevice device : devices) {
-            enumeratedDeviceCache.put(device.getDeviceId(), device);
+            newCache.put(device.getDeviceId(), device);
         }
+        enumeratedDeviceCache = newCache;
     }
 
     public static ZoomFactors getZoomFactorsStatic() {
@@ -3090,6 +3093,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             previousConfig.getVideoQuality() // videoQuality
         );
         copyMutableSessionConfigState(previousConfig, sessionConfig);
+        sessionConfig.setTargetZoom(1.0f);
         sessionConfig.setCentered(wasCentered);
 
         // Clear current device IDs to force position-based selection
@@ -3097,8 +3101,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentPhysicalDeviceId = null;
         currentLogicalDeviceId = null;
 
-        // Camera operations must run on main thread
-        cameraExecutor.execute(this::bindCameraUseCases);
+        // Rebind camera with the new position
+        bindCameraUseCases();
     }
 
     public void setOpacity(float opacity) {
