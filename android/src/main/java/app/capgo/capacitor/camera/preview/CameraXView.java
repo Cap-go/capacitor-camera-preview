@@ -1679,7 +1679,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 ? exif.getOutputSet()
                 : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
 
-            org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory gpsDir = outputSet.getOrCreateGPSDirectory();
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory gpsDir = outputSet.getOrCreateGpsDirectory();
 
             gpsDir.removeField(org.apache.commons.imaging.formats.tiff.constants.GpsTagConstants.GPS_TAG_GPS_IMG_DIRECTION_REF);
             gpsDir.add(
