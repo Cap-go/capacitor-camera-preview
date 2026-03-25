@@ -103,6 +103,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import org.json.JSONObject;
 
 public class CameraXView implements LifecycleOwner, LifecycleObserver {
@@ -1158,9 +1159,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 return new CameraBindingPlan(directBuilder.build(), deviceId, deviceId, null, 1.0f, false);
             }
 
+            CameraBindingPlan logicalFallbackPlan = buildLogicalFallbackPlanForDeviceId(deviceId);
             if (config.isPhysicalDeviceSelectionEnabled()) {
                 PhysicalCameraBindingTarget physicalTarget = findPhysicalCameraBindingTarget(deviceId);
-                float fallbackZoom = getFallbackZoomForDeviceId(deviceId);
                 if (physicalTarget != null) {
                     CameraSelector.Builder physicalBuilder = new CameraSelector.Builder()
                         .requireLensFacing(physicalTarget.requiredFacing)
@@ -1179,25 +1180,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         deviceId,
                         physicalTarget.logicalCameraId,
                         deviceId,
-                        fallbackZoom,
+                        logicalFallbackPlan != null ? logicalFallbackPlan.fallbackZoom : getFallbackZoomForDeviceId(deviceId),
                         true
                     );
                 }
+            }
 
-                String fallbackPosition = resolveFallbackPositionForDeviceId(deviceId);
-                if (fallbackPosition != null) {
-                    CameraBindingPlan positionPlan = buildPositionPlan(fallbackPosition);
-                    return new CameraBindingPlan(
-                        positionPlan.selector,
-                        positionPlan.reportedDeviceId,
-                        positionPlan.logicalCameraId,
-                        null,
-                        fallbackZoom,
-                        false
-                    );
-                }
-
-                throw invalidDeviceId(deviceId);
+            if (logicalFallbackPlan != null) {
+                return logicalFallbackPlan;
             }
 
             throw invalidDeviceId(deviceId);
@@ -1223,6 +1213,23 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             positionPlan.logicalCameraId,
             null,
             failedPhysicalPlan.fallbackZoom,
+            false
+        );
+    }
+
+    private CameraBindingPlan buildLogicalFallbackPlanForDeviceId(String deviceId) {
+        String fallbackPosition = resolveFallbackPositionForDeviceId(deviceId);
+        if (fallbackPosition == null) {
+            return null;
+        }
+
+        CameraBindingPlan positionPlan = buildPositionPlan(fallbackPosition);
+        return new CameraBindingPlan(
+            positionPlan.selector,
+            positionPlan.reportedDeviceId,
+            positionPlan.logicalCameraId,
+            null,
+            getFallbackZoomForDeviceId(deviceId),
             false
         );
     }
@@ -1423,12 +1430,24 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
         };
 
-        if (cameraExecutor != null) {
-            cameraExecutor.execute(refreshTask);
-        } else {
+        if (cameraExecutor != null && !cameraExecutor.isShutdown()) {
+            try {
+                cameraExecutor.execute(refreshTask);
+                return;
+            } catch (RejectedExecutionException e) {
+                Log.w(TAG, "requestEnumeratedDeviceCacheRefresh: cameraExecutor rejected refresh task", e);
+            }
+        }
+
+        try {
             Thread refreshThread = new Thread(refreshTask, "CameraPreview-DeviceCacheRefresh");
             refreshThread.setDaemon(true);
             refreshThread.start();
+        } catch (RuntimeException e) {
+            synchronized (enumeratedDeviceCacheLock) {
+                enumeratedDeviceCacheRefreshInProgress = false;
+            }
+            throw e;
         }
     }
 
@@ -3084,27 +3103,21 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             try {
                 CameraSessionConfiguration previousConfig = sessionConfig;
                 CameraInfo targetCameraInfo = findAvailableCameraInfoById(deviceId);
-                app.capgo.capacitor.camera.preview.model.CameraDevice enumeratedDevice = findEnumeratedDeviceById(deviceId);
-                PhysicalDeviceMetadata physicalMetadata = previousConfig.isPhysicalDeviceSelectionEnabled()
-                    ? resolvePhysicalDeviceMetadata(deviceId)
-                    : null;
-
-                String position = enumeratedDevice != null ? enumeratedDevice.getPosition() : previousConfig.getPosition();
+                String fallbackPosition = resolveFallbackPositionForDeviceId(deviceId);
+                String position = fallbackPosition != null ? fallbackPosition : previousConfig.getPosition();
                 if (targetCameraInfo != null) {
                     position = isBackCamera(targetCameraInfo) ? "rear" : "front";
-                } else if (!previousConfig.isPhysicalDeviceSelectionEnabled()) {
-                    Log.e(TAG, "switchToDevice: Could not find any CameraInfo matching deviceId: " + deviceId);
-                    return;
                 } else if (previousConfig.isPhysicalDeviceSelectionEnabled()) {
                     PhysicalCameraBindingTarget physicalTarget = findPhysicalCameraBindingTarget(deviceId);
                     if (physicalTarget != null) {
                         position = physicalTarget.requiredFacing == CameraSelector.LENS_FACING_FRONT ? "front" : "rear";
-                    } else if (physicalMetadata != null) {
-                        position = physicalMetadata.position;
-                    } else if (enumeratedDevice == null) {
+                    } else if (fallbackPosition == null) {
                         Log.e(TAG, "switchToDevice: Could not resolve deviceId: " + deviceId);
                         return;
                     }
+                } else if (fallbackPosition == null) {
+                    Log.e(TAG, "switchToDevice: Could not find any CameraInfo matching deviceId: " + deviceId);
+                    return;
                 }
 
                 CameraSessionConfiguration updatedConfig = new CameraSessionConfiguration(
