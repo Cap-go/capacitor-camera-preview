@@ -1209,7 +1209,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         CameraBindingPlan positionPlan = buildPositionPlan(fallbackPosition);
         return new CameraBindingPlan(
             positionPlan.selector,
-            positionPlan.reportedDeviceId,
+            failedPhysicalPlan.reportedDeviceId,
             positionPlan.logicalCameraId,
             null,
             failedPhysicalPlan.fallbackZoom,
@@ -1226,7 +1226,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         CameraBindingPlan positionPlan = buildPositionPlan(fallbackPosition);
         return new CameraBindingPlan(
             positionPlan.selector,
-            positionPlan.reportedDeviceId,
+            deviceId,
             positionPlan.logicalCameraId,
             null,
             getFallbackZoomForDeviceId(deviceId),
