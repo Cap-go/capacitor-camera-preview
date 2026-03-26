@@ -34,7 +34,7 @@ extension UIWindow {
  */
 @objc(CameraPreview)
 public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
-    private let pluginVersion: String = "8.1.4"
+    private let pluginVersion: String = "8.2.0"
     public let identifier = "CameraPreviewPlugin"
     public let jsName = "CameraPreview"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -100,6 +100,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     var disableFocusIndicator: Bool = false
     var locationManager: CLLocationManager?
     var currentLocation: CLLocation?
+    var currentHeading: CLHeading?
     private var aspectRatio: String?
     private var aspectMode: String = "contain"
     private var gridMode: String = "none"
@@ -1211,6 +1212,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             print("[CameraPreview] captureImage callback received")
             DispatchQueue.main.async {
                 print("[CameraPreview] Processing capture on main thread")
+                // Ensure heading updates are stopped on all exit paths (error, guard failure, or success)
+                defer {
+                    if withExifLocation ?? false {
+                        self.locationManager?.stopUpdatingHeading()
+                        self.currentHeading = nil
+                    }
+                }
                 if let error = error {
                     print("[CameraPreview] Capture error: \(error.localizedDescription)")
                     call.reject(error.localizedDescription)
@@ -1222,6 +1230,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                         from: image,
                         quality: Int(quality),
                         location: withExifLocation ? self.currentLocation : nil,
+                        heading: withExifLocation ? self.currentHeading : nil,
                         originalPhotoData: originalPhotoData
                       )
                 else {
@@ -1358,7 +1367,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    private func createImageDataWithExif(from image: UIImage, quality: Int, location: CLLocation?, originalPhotoData: Data?) -> Data? {
+    private func createImageDataWithExif(from image: UIImage, quality: Int, location: CLLocation?, heading: CLHeading?, originalPhotoData: Data?) -> Data? {
         guard let jpegDataAtQuality = image.jpegData(compressionQuality: CGFloat(Double(quality) / 100.0)) else {
             return nil
         }
@@ -1387,7 +1396,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
             formatter.timeZone = TimeZone(abbreviation: "UTC")
 
-            let gpsDict: [String: Any] = [
+            var gpsDict: [String: Any] = [
                 kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
                 kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
                 kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
@@ -1396,6 +1405,21 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 kCGImagePropertyGPSAltitude as String: location.altitude,
                 kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
             ]
+
+            // Add image direction (compass heading) when available
+            if let heading = heading {
+                let directionDegrees: Double
+                let directionRef: String
+                if heading.trueHeading >= 0 {
+                    directionDegrees = heading.trueHeading
+                    directionRef = "T"
+                } else {
+                    directionDegrees = heading.magneticHeading
+                    directionRef = "M"
+                }
+                gpsDict[kCGImagePropertyGPSImgDirection as String] = directionDegrees
+                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = directionRef
+            }
 
             finalProperties[kCGImagePropertyGPSDictionary as String] = gpsDict
         }
@@ -1836,9 +1860,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     private func getCurrentLocation(completion: @escaping (CLLocation?) -> Void) {
         print("[CameraPreview] getCurrentLocation called")
+        self.currentHeading = nil
         self.locationCompletion = completion
         self.locationManager?.startUpdatingLocation()
         print("[CameraPreview] Started updating location")
+        if CLLocationManager.headingAvailable() {
+            self.locationManager?.startUpdatingHeading()
+            print("[CameraPreview] Started updating heading")
+        }
     }
 
     private var locationCompletion: ((CLLocation?) -> Void)?
@@ -1853,6 +1882,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             locationCompletion = nil
         } else {
             print("[CameraPreview] No location completion handler found")
+        }
+    }
+
+    public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        print("[CameraPreview] locationManager didUpdateHeading: trueHeading=\(newHeading.trueHeading), magneticHeading=\(newHeading.magneticHeading), accuracy=\(newHeading.headingAccuracy)")
+        if newHeading.headingAccuracy >= 0 {
+            self.currentHeading = newHeading
         }
     }
 
