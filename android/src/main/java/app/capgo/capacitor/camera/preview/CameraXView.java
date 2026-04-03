@@ -435,6 +435,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     return;
                 }
             }
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                return;
+            }
             lifecycleRegistry.setCurrentState(Lifecycle.State.STARTED);
             if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
                 return;
