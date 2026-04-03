@@ -394,34 +394,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public void startSession(CameraSessionConfiguration config) {
-        this.sessionConfig = config;
-        cameraExecutor = Executors.newSingleThreadExecutor();
-
-        // Reset cached orientation so we don't reuse stale values across sessions
-        synchronized (accelerometerLock) {
-            lastAccelerometerValues[0] = 0f;
-            lastAccelerometerValues[1] = 0f;
-            lastAccelerometerValues[2] = 0f;
-        }
-        lastCaptureRotation = -1;
-
-        // Start accelerometer for orientation detection regardless of lock
-        if (sensorManager == null) {
-            sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-        }
-        if (accelerometer != null) {
-            sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
-        }
-        if (rotationVectorSensor != null) {
-            sensorManager.registerListener(rotationVectorListener, rotationVectorSensor, SensorManager.SENSOR_DELAY_NORMAL);
-        }
-        lastCompassHeading = -1f;
-        synchronized (operationLock) {
-            activeOperations = 0;
-            stopPending = false;
-        }
         mainExecutor.execute(() -> {
             // Stop may run first (e.g. activity pause) and move the registry to DESTROYED while this
             // runnable is still queued — never transition backward from DESTROYED.
@@ -477,6 +449,35 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     listener.onCameraStartError("Camera start aborted: stop requested");
                 }
                 return;
+            }
+
+            this.sessionConfig = config;
+            cameraExecutor = Executors.newSingleThreadExecutor();
+
+            // Reset cached orientation so we don't reuse stale values across sessions
+            synchronized (accelerometerLock) {
+                lastAccelerometerValues[0] = 0f;
+                lastAccelerometerValues[1] = 0f;
+                lastAccelerometerValues[2] = 0f;
+            }
+            lastCaptureRotation = -1;
+
+            // Start accelerometer for orientation detection regardless of lock
+            if (sensorManager == null) {
+                sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+                accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+                rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+            }
+            if (accelerometer != null) {
+                sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
+            }
+            if (rotationVectorSensor != null) {
+                sensorManager.registerListener(rotationVectorListener, rotationVectorSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            }
+            lastCompassHeading = -1f;
+            synchronized (operationLock) {
+                activeOperations = 0;
+                stopPending = false;
             }
             setupCamera();
         });
