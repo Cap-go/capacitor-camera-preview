@@ -268,7 +268,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         this.lifecycleRegistry = new LifecycleRegistry(this);
         this.mainExecutor = ContextCompat.getMainExecutor(context);
 
-        mainExecutor.execute(() -> lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED));
+        mainExecutor.execute(() -> {
+            if (lifecycleRegistry.getCurrentState() != Lifecycle.State.DESTROYED) {
+                lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
+            }
+        });
     }
 
     @NonNull
@@ -419,7 +423,22 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             stopPending = false;
         }
         mainExecutor.execute(() -> {
+            // Stop may run first (e.g. activity pause) and move the registry to DESTROYED while this
+            // runnable is still queued — never transition backward from DESTROYED.
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                return;
+            }
+            Lifecycle.State state = lifecycleRegistry.getCurrentState();
+            if (state == Lifecycle.State.INITIALIZED) {
+                lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
+                if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                    return;
+                }
+            }
             lifecycleRegistry.setCurrentState(Lifecycle.State.STARTED);
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                return;
+            }
             setupCamera();
         });
     }
@@ -483,7 +502,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 if (cameraProvider != null) {
                     cameraProvider.unbindAll();
                 }
-                lifecycleRegistry.setCurrentState(Lifecycle.State.DESTROYED);
                 if (cameraExecutor != null) {
                     cameraExecutor.shutdown();
                 }
@@ -527,7 +545,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         cameraProviderFuture.addListener(
             () -> {
                 try {
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                        return;
+                    }
                     cameraProvider = cameraProviderFuture.get();
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                        return;
+                    }
                     setupPreviewView();
                     bindCameraUseCases();
                 } catch (Exception e) {
