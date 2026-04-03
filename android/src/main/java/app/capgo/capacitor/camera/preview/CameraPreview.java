@@ -298,8 +298,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("Camera is not running");
             return;
         }
+        bridge.saveCall(call);
+        cameraStartCallbackId = call.getCallbackId();
         cameraXView.flipCamera();
-        call.resolve();
     }
 
     @SuppressLint("MissingPermission")

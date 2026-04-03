@@ -150,7 +150,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final LifecycleRegistry lifecycleRegistry;
     private final Executor mainExecutor;
     private ExecutorService cameraExecutor;
-    private boolean isRunning = false;
+    private volatile boolean isRunning = false;
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
