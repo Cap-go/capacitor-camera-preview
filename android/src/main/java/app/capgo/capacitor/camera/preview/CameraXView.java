@@ -425,21 +425,57 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         mainExecutor.execute(() -> {
             // Stop may run first (e.g. activity pause) and move the registry to DESTROYED while this
             // runnable is still queued — never transition backward from DESTROYED.
-            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                }
+                return;
+            }
+            if (stopRequested) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: stop requested");
+                }
                 return;
             }
             Lifecycle.State state = lifecycleRegistry.getCurrentState();
             if (state == Lifecycle.State.INITIALIZED) {
                 lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
-                if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                    if (listener != null) {
+                        listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                    }
+                    return;
+                }
+                if (stopRequested) {
+                    if (listener != null) {
+                        listener.onCameraStartError("Camera start aborted: stop requested");
+                    }
                     return;
                 }
             }
-            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                }
+                return;
+            }
+            if (stopRequested) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: stop requested");
+                }
                 return;
             }
             lifecycleRegistry.setCurrentState(Lifecycle.State.STARTED);
-            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                }
+                return;
+            }
+            if (stopRequested) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: stop requested");
+                }
                 return;
             }
             setupCamera();
@@ -548,11 +584,29 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         cameraProviderFuture.addListener(
             () -> {
                 try {
-                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: lifecycle destroyed (before provider)");
+                        }
+                        return;
+                    }
+                    if (stopRequested) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: stop requested (before provider)");
+                        }
                         return;
                     }
                     cameraProvider = cameraProviderFuture.get();
-                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED || stopRequested) {
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: lifecycle destroyed (after provider)");
+                        }
+                        return;
+                    }
+                    if (stopRequested) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: stop requested (after provider)");
+                        }
                         return;
                     }
                     setupPreviewView();
