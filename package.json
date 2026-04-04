@@ -5,7 +5,7 @@
   "license": "MPL-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Cap-go/capacitor-camera-preview"
+    "url": "git+https://github.com/Cap-go/capacitor-camera-preview.git"
   },
   "bugs": {
     "url": "https://github.com/Cap-go/capacitor-camera-preview/issues"
