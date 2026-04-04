@@ -327,7 +327,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         this.lifecycleRegistry = new LifecycleRegistry(this);
         this.mainExecutor = ContextCompat.getMainExecutor(context);
 
-        mainExecutor.execute(() -> lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED));
+        mainExecutor.execute(() -> {
+            if (lifecycleRegistry.getCurrentState() != Lifecycle.State.DESTROYED) {
+                lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
+            }
+        });
     }
 
     @NonNull
@@ -449,37 +453,92 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public void startSession(CameraSessionConfiguration config) {
-        this.sessionConfig = config;
-        cameraExecutor = Executors.newSingleThreadExecutor();
-        requestEnumeratedDeviceCacheRefresh();
-
-        // Reset cached orientation so we don't reuse stale values across sessions
-        synchronized (accelerometerLock) {
-            lastAccelerometerValues[0] = 0f;
-            lastAccelerometerValues[1] = 0f;
-            lastAccelerometerValues[2] = 0f;
-        }
-        lastCaptureRotation = -1;
-
-        // Start accelerometer for orientation detection regardless of lock
-        if (sensorManager == null) {
-            sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
-            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-        }
-        if (accelerometer != null) {
-            sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
-        }
-        if (rotationVectorSensor != null) {
-            sensorManager.registerListener(rotationVectorListener, rotationVectorSensor, SensorManager.SENSOR_DELAY_NORMAL);
-        }
-        lastCompassHeading = -1f;
-        synchronized (operationLock) {
-            activeOperations = 0;
-            stopPending = false;
-        }
         mainExecutor.execute(() -> {
+            // Stop may run first (e.g. activity pause) and move the registry to DESTROYED while this
+            // runnable is still queued — never transition backward from DESTROYED.
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                }
+                return;
+            }
+            if (stopRequested) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: stop requested");
+                }
+                return;
+            }
+            Lifecycle.State state = lifecycleRegistry.getCurrentState();
+            if (state == Lifecycle.State.INITIALIZED) {
+                lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
+                if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                    if (listener != null) {
+                        listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                    }
+                    return;
+                }
+                if (stopRequested) {
+                    if (listener != null) {
+                        listener.onCameraStartError("Camera start aborted: stop requested");
+                    }
+                    return;
+                }
+            }
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                }
+                return;
+            }
+            if (stopRequested) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: stop requested");
+                }
+                return;
+            }
             lifecycleRegistry.setCurrentState(Lifecycle.State.STARTED);
+            if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                }
+                return;
+            }
+            if (stopRequested) {
+                if (listener != null) {
+                    listener.onCameraStartError("Camera start aborted: stop requested");
+                }
+                return;
+            }
+
+            this.sessionConfig = config;
+            cameraExecutor = Executors.newSingleThreadExecutor();
+            requestEnumeratedDeviceCacheRefresh();
+
+            // Reset cached orientation so we don't reuse stale values across sessions
+            synchronized (accelerometerLock) {
+                lastAccelerometerValues[0] = 0f;
+                lastAccelerometerValues[1] = 0f;
+                lastAccelerometerValues[2] = 0f;
+            }
+            lastCaptureRotation = -1;
+
+            // Start accelerometer for orientation detection regardless of lock
+            if (sensorManager == null) {
+                sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
+                accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+                rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+            }
+            if (accelerometer != null) {
+                sensorManager.registerListener(accelerometerListener, accelerometer, SensorManager.SENSOR_DELAY_UI);
+            }
+            if (rotationVectorSensor != null) {
+                sensorManager.registerListener(rotationVectorListener, rotationVectorSensor, SensorManager.SENSOR_DELAY_NORMAL);
+            }
+            lastCompassHeading = -1f;
+            synchronized (operationLock) {
+                activeOperations = 0;
+                stopPending = false;
+            }
             setupCamera();
         });
     }
@@ -546,7 +605,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 if (cameraProvider != null) {
                     cameraProvider.unbindAll();
                 }
-                lifecycleRegistry.setCurrentState(Lifecycle.State.DESTROYED);
                 if (cameraExecutor != null) {
                     cameraExecutor.shutdown();
                 }
@@ -590,7 +648,31 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         cameraProviderFuture.addListener(
             () -> {
                 try {
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: lifecycle destroyed (before provider)");
+                        }
+                        return;
+                    }
+                    if (stopRequested) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: stop requested (before provider)");
+                        }
+                        return;
+                    }
                     cameraProvider = cameraProviderFuture.get();
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: lifecycle destroyed (after provider)");
+                        }
+                        return;
+                    }
+                    if (stopRequested) {
+                        if (listener != null) {
+                            listener.onCameraStartError("Camera binding cancelled: stop requested (after provider)");
+                        }
+                        return;
+                    }
                     setupPreviewView();
                     bindCameraUseCases();
                 } catch (Exception e) {

@@ -680,7 +680,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     });
   }
 
-  async startRecordVideo(_options: CameraPreviewOptions): Promise<any> {
+  async startRecordVideo(options: CameraPreviewOptions): Promise<any> {
+    void options;
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (!video?.srcObject) {
       throw new Error('camera is not running');
