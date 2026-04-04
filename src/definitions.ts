@@ -669,7 +669,8 @@ export interface CameraPreviewPlugin {
   setDeviceId(options: { deviceId: string }): Promise<void>;
 
   /**
-   * Gets the ID of the currently active camera device.
+   * Gets the ID of the camera device that is currently bound.
+   * On Android, if a physical-lens request falls back to a logical camera, this returns the bound logical camera ID.
    *
    * @returns {Promise<{ deviceId: string }>} A promise that resolves with the current device ID.
    * @since 7.5.0

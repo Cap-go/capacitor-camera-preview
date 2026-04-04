@@ -98,6 +98,7 @@ export class CameraViewPage implements OnInit {
   protected position = model<CameraPosition>('rear');
   protected quality = model<number>(85);
   protected useTripleCameraIfAvailable = model<boolean>(false);
+  protected enablePhysicalDeviceSelection = model<boolean>(false);
   protected initialZoomFactor = model<number>(1.0);
 
   // Preview settings
@@ -345,6 +346,7 @@ export class CameraViewPage implements OnInit {
         aspectRatio:
           this.aspectRatio() === 'custom' ? undefined : this.aspectRatio(),
         useTripleCameraIfAvailable: this.useTripleCameraIfAvailable(),
+        enablePhysicalDeviceSelection: this.enablePhysicalDeviceSelection(),
         initialZoomFactor: this.initialZoomFactor(),
         pictureFormat: this.pictureFormat(),
         pictureQuality: this.pictureQuality(),

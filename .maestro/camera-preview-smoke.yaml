@@ -1,0 +1,28 @@
+appId: app.capgo.camera.preview
+---
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+      microphone: allow
+- assertVisible: "Camera Preview"
+- assertVisible: "Enable Physical Camera Selection (Android)"
+- tapOn: "Enable Physical Camera Selection (Android)"
+- tapOn:
+    text: "Start Camera with Current Settings"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Status:"
+    timeout: 15000
+- tapOn: "Refresh device info"
+- tapOn: "Run feature diagnostics"
+- assertVisible: "=== Camera Modal Test Results ==="
+- assertVisible: "Physical selection enabled: true"
+- tapOn: "Flip camera"
+- extendedWaitUntil:
+    visible: "Status:"
+    timeout: 10000
+- tapOn: "Refresh device info"
+- tapOn: "Zoom in"
+- tapOn: "Close camera modal"
+- assertVisible: "Camera Preview"

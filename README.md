@@ -809,7 +809,8 @@ Switches the active camera to the one with the specified `deviceId`.
 getDeviceId() => Promise<{ deviceId: string; }>
 ```
 
-Gets the ID of the currently active camera device.
+Gets the ID of the camera device that is currently bound.
+On Android, if a physical-lens request falls back to a logical camera, this returns the bound logical camera ID.
 
 **Returns:** <code>Promise&lt;{ deviceId: string; }&gt;</code>
 

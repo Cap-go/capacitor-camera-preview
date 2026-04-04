@@ -1424,11 +1424,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         CameraInfo cameraInfo = camera.getCameraInfo();
         currentLogicalDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
         currentPhysicalDeviceId = bindingPlan.physicalCameraId;
-        currentDeviceId = bindingPlan.reportedDeviceId != null ? bindingPlan.reportedDeviceId : currentLogicalDeviceId;
+        currentDeviceId = currentPhysicalDeviceId != null ? currentPhysicalDeviceId : currentLogicalDeviceId;
 
         Log.d(
             TAG,
-            "bindConfiguredUseCases: Camera successfully bound. reportedDeviceId=" +
+            "bindConfiguredUseCases: Camera successfully bound. activeDeviceId=" +
                 currentDeviceId +
                 ", logicalCameraId=" +
                 currentLogicalDeviceId +

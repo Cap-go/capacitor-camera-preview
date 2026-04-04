@@ -3,6 +3,10 @@ apply plugin: 'com.android.application'
 android {
     namespace = "app.capgo.camera.preview"
     compileSdk = rootProject.ext.compileSdkVersion
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
     defaultConfig {
         applicationId = "app.capgo.camera.preview"
         minSdkVersion = rootProject.ext.minSdkVersion
