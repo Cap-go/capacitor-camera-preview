@@ -26,6 +26,7 @@ public class CameraSessionConfiguration {
     private float targetZoom = 1.0f;
     private boolean isCentered = false;
     private final String videoQuality;
+    private boolean enablePhysicalDeviceSelection = false;
 
     public CameraSessionConfiguration(
         String deviceId,
@@ -143,6 +144,18 @@ public class CameraSessionConfiguration {
 
     public String getVideoQuality() {
         return videoQuality;
+    }
+
+    public boolean isPhysicalDeviceSelectionEnabled() {
+        return enablePhysicalDeviceSelection;
+    }
+
+    public boolean getEnablePhysicalDeviceSelection() {
+        return enablePhysicalDeviceSelection;
+    }
+
+    public void setEnablePhysicalDeviceSelection(boolean enablePhysicalDeviceSelection) {
+        this.enablePhysicalDeviceSelection = enablePhysicalDeviceSelection;
     }
 
     // Additional getters with "get" prefix for compatibility

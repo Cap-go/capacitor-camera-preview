@@ -905,6 +905,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         //noinspection DataFlowIssue
         final boolean disableFocusIndicator = call.getBoolean("disableFocusIndicator", false);
         final boolean enableVideoMode = Boolean.TRUE.equals(call.getBoolean("enableVideoMode", false));
+        final boolean enablePhysicalDeviceSelection = Boolean.TRUE.equals(call.getBoolean("enablePhysicalDeviceSelection", false));
         final String videoQuality = call.getString("videoQuality", "high");
 
         // Check for conflict between aspectRatio and size
@@ -914,8 +915,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
 
         float targetZoom = initialZoomLevel;
-        // Check if the selected device is a physical ultra-wide
-        if (originalDeviceId != null) {
+        if (!enablePhysicalDeviceSelection && originalDeviceId != null) {
             List<CameraDevice> devices = CameraXView.getAvailableDevicesStatic(getContext());
             for (CameraDevice device : devices) {
                 if (originalDeviceId.equals(device.getDeviceId()) && !device.isLogical()) {
@@ -923,13 +923,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         if ("ultraWide".equals(lens.getDeviceType())) {
                             Log.d("CameraPreview", "Ultra-wide lens selected. Targeting 0.5x zoom on logical camera.");
                             targetZoom = 0.5f;
-                            // Force the use of the logical camera by clearing the specific deviceId
+                            // Preserve existing default behavior unless the new Android flag is explicitly enabled.
                             deviceId = null;
                             break;
                         }
                     }
                 }
-                if (deviceId == null) break; // Exit outer loop once we've made our decision
+                if (deviceId == null) break;
             }
         }
 
@@ -1211,6 +1211,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 );
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);
+                config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
 
                 bridge.saveCall(call);
                 cameraStartCallbackId = call.getCallbackId();

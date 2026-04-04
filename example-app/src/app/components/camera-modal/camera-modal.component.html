@@ -166,25 +166,25 @@
     vertical="center"
   >
     <!-- Control Actions -->
-    <ion-fab-button (click)="close()" size="small">
+    <ion-fab-button (click)="close()" size="small" aria-label="Close camera modal">
       <ion-icon name="close-outline"></ion-icon>
     </ion-fab-button>
 
-    <ion-fab-button (click)="testLensInfo()" size="small">
+    <ion-fab-button (click)="testLensInfo()" size="small" aria-label="Run lens info diagnostics">
       <ion-icon name="camera-outline"></ion-icon>
     </ion-fab-button>
 
-    <ion-fab-button (click)="testAllFeatures()" size="small">
+    <ion-fab-button (click)="testAllFeatures()" size="small" aria-label="Run feature diagnostics">
       <ion-icon name="bug-outline"></ion-icon>
     </ion-fab-button>
 
-    <ion-fab-button (click)="refreshDeviceInfo()" size="small">
+    <ion-fab-button (click)="refreshDeviceInfo()" size="small" aria-label="Refresh device info">
       <ion-icon name="refresh-outline"></ion-icon>
     </ion-fab-button>
 
     <!-- Camera Actions -->
     @if (cameraStarted()) {
-      <ion-fab-button (click)="nextFlashMode()" size="small">
+      <ion-fab-button (click)="nextFlashMode()" size="small" aria-label="Cycle flash mode">
         @let fm = flashMode();
         @if (fm === "off") {
           <ion-icon name="flash-off" size="small"></ion-icon>
@@ -198,11 +198,11 @@
         }
       </ion-fab-button>
 
-      <ion-fab-button size="small" (click)="flipCamera()">
+      <ion-fab-button size="small" (click)="flipCamera()" aria-label="Flip camera">
         <ion-icon name="camera-reverse"></ion-icon>
       </ion-fab-button>
 
-      <ion-fab-button [disabled]="!canZoomIn()" size="small" (click)="zoomIn()">
+      <ion-fab-button [disabled]="!canZoomIn()" size="small" (click)="zoomIn()" aria-label="Zoom in">
         <ion-icon name="add"></ion-icon>
       </ion-fab-button>
 
@@ -210,6 +210,7 @@
         [disabled]="!canZoomOut()"
         size="small"
         (click)="zoomOut()"
+        aria-label="Zoom out"
       >
         <ion-icon name="remove"></ion-icon>
       </ion-fab-button>
@@ -219,6 +220,7 @@
         (click)="toggleGridMode()"
         size="small"
         [class.grid-active]="currentGridMode() !== 'none'"
+        aria-label="Toggle grid mode"
       >
         @if (currentGridMode() === "none") {
           <ion-icon name="grid-outline"></ion-icon>
@@ -231,7 +233,7 @@
         }
       </ion-fab-button>
 
-      <ion-fab-button size="small" (click)="toggleOverlay()">
+      <ion-fab-button size="small" (click)="toggleOverlay()" aria-label="Toggle overlay">
         @if (showOverlay()) {
           <ion-icon name="eye-off-outline"></ion-icon>
         } @else {
@@ -247,7 +249,7 @@
     horizontal="start"
     vertical="top"
   >
-    <ion-fab-button (click)="toggleAspectRatio()" size="small">
+    <ion-fab-button (click)="toggleAspectRatio()" size="small" aria-label="Toggle aspect ratio">
       <ion-icon name="scan-outline"></ion-icon>
       <span>{{ displayAspectRatio() }}</span>
     </ion-fab-button>
@@ -263,11 +265,11 @@
       vertical="center"
     >
       @if (!isRecording()) {
-        <ion-fab-button (click)="startRecording()" color="danger" size="small">
+        <ion-fab-button (click)="startRecording()" color="danger" size="small" aria-label="Start video recording">
           <ion-icon name="videocam"></ion-icon>
         </ion-fab-button>
       } @else {
-        <ion-fab-button (click)="stopRecording()" color="dark" size="small">
+        <ion-fab-button (click)="stopRecording()" color="dark" size="small" aria-label="Stop video recording">
           <ion-icon name="stop"></ion-icon>
         </ion-fab-button>
       }
@@ -279,7 +281,7 @@
       horizontal="center"
       vertical="bottom"
     >
-      <ion-fab-button (click)="capturePhoto()" [disabled]="isCapturingPhoto()">
+      <ion-fab-button (click)="capturePhoto()" [disabled]="isCapturingPhoto()" aria-label="Capture photo">
         @if (isCapturingPhoto()) {
           <ion-spinner></ion-spinner>
         } @else {
@@ -321,7 +323,7 @@
     horizontal="start"
     vertical="bottom"
   >
-    <ion-fab-button (click)="togglePreviewSize()" size="small">
+    <ion-fab-button (click)="togglePreviewSize()" size="small" aria-label="Toggle preview size">
       <ion-icon name="resize-outline"></ion-icon>
       <span>{{ isHalfSize() ? "Extend" : "Small" }}</span>
     </ion-fab-button>

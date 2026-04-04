@@ -74,6 +74,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly position = input<CameraPosition>('rear');
   public readonly quality = input<number>(85);
   public readonly useTripleCameraIfAvailable = input<boolean>(false);
+  public readonly enablePhysicalDeviceSelection = input<boolean>(false);
   public readonly initialZoomFactor = input<number>(1.0);
   public readonly x = input<number | null>(null);
   public readonly y = input<number | null>(null);
@@ -295,6 +296,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       storeToFile: true,
       disableFocusIndicator: false,
       enableVideoMode: true,
+      enablePhysicalDeviceSelection: this.enablePhysicalDeviceSelection(),
     };
 
     // Only add x and y if they are not null
@@ -733,6 +735,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       // Test current device ID
       const currentId = await this.#cameraViewService.getDeviceId();
       results += `\n✓ Current device: ${currentId}`;
+      results += `\n✓ Physical selection enabled: ${this.enablePhysicalDeviceSelection()}`;
 
       // Test zoom capabilities and lens info
       const zoomData = await this.#cameraViewService.getZoom();
@@ -826,6 +829,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
         storeToFile: true,
         enableVideoMode: true,
         disableFocusIndicator: false,
+        enablePhysicalDeviceSelection: this.enablePhysicalDeviceSelection(),
       };
 
       // Start recording

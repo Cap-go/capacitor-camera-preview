@@ -138,6 +138,17 @@
             Use Triple Camera (iPhone Pro only)
           </ion-checkbox>
         </ion-item>
+
+        <ion-item>
+          <ion-checkbox
+            [(ngModel)]="enablePhysicalDeviceSelection"
+            color="primary"
+            justify="space-between"
+            aria-label="Enable physical camera selection"
+          >
+            Enable Physical Camera Selection (Android)
+          </ion-checkbox>
+        </ion-item>
       </ion-list>
 
       <ion-card>
@@ -589,7 +600,12 @@
         </ion-item>
       </ion-list>
 
-      <ion-button (click)="startCamera()" expand="block" size="large">
+      <ion-button
+        (click)="startCamera()"
+        expand="block"
+        size="large"
+        aria-label="Start camera with current settings"
+      >
         <ion-icon name="camera-outline" slot="start" />
         Start Camera with Current Settings
       </ion-button>
