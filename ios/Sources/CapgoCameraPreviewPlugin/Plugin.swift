@@ -915,22 +915,24 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
 
-                // Preserve aspect ratio if it was set
-                if let aspectRatio = self.cameraController.requestedAspectRatio,
-                   let previewLayer = self.cameraController.previewLayer {
-                    // Use the calculateAspectRatioFrame method from CameraController
-                    let frame = self.cameraController.calculateAspectRatioFrame(for: aspectRatio, in: self.previewView.bounds)
-                    previewLayer.frame = frame
+                // Preserve aspect ratio if it was set (unless cover mode is requested)
+                if let previewLayer = self.cameraController.previewLayer {
+                    if self.cameraController.requestedAspectMode == "cover" {
+                        previewLayer.frame = self.previewView.bounds
+                    } else if let aspectRatio = self.cameraController.requestedAspectRatio {
+                        let frame = self.cameraController.calculateAspectRatioFrame(for: aspectRatio, in: self.previewView.bounds)
+                        previewLayer.frame = frame
+                    } else {
+                        // No aspect ratio set, use full bounds
+                        previewLayer.frame = self.previewView.bounds
+                    }
+
                     // Set videoGravity based on aspectMode
                     previewLayer.videoGravity = self.cameraController.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
-
                     // Keep grid overlay in sync with preview if it exists
-                    self.cameraController.gridOverlayView?.frame = frame
-                } else {
-                    // No aspect ratio set, use full bounds
-                    self.cameraController.previewLayer?.frame = self.previewView.bounds
-                    // Set videoGravity based on aspectMode
-                    self.cameraController.previewLayer?.videoGravity = self.cameraController.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
+                    if let gridOverlay = self.cameraController.gridOverlayView {
+                        gridOverlay.frame = previewLayer.frame
+                    }
                 }
 
                 CATransaction.commit()

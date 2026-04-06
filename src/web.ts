@@ -304,113 +304,139 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       id: container.id,
     });
 
+    const containerWidth = container.offsetWidth || window.innerWidth;
+    const containerHeight = container.offsetHeight || window.innerHeight;
+
     // Now adjust video element size based on camera's native aspect ratio
-    if (!options.width && !options.height && !options.aspectRatio) {
-      // No size specified, fit camera view within container bounds
-      const containerWidth = container.offsetWidth || window.innerWidth;
-      const containerHeight = container.offsetHeight || window.innerHeight;
+    if (!options.width && !options.height) {
+      if (aspectMode === 'cover') {
+        // Fill the container and rely on object-fit: cover to crop
+        const targetWidth = containerWidth;
+        const targetHeight = containerHeight;
 
-      // Calculate dimensions that fit within container while maintaining camera aspect ratio
-      let targetWidth, targetHeight;
+        this.videoElement.width = targetWidth;
+        this.videoElement.height = targetHeight;
+        this.videoElement.style.width = `${targetWidth}px`;
+        this.videoElement.style.height = `${targetHeight}px`;
 
-      // Try fitting to container width first
-      targetWidth = containerWidth;
-      targetHeight = targetWidth / cameraAspectRatio;
-
-      // If height exceeds container, fit to height instead
-      if (targetHeight > containerHeight) {
-        targetHeight = containerHeight;
-        targetWidth = targetHeight * cameraAspectRatio;
-      }
-
-      console.log('Video element dimensions:', {
-        width: targetWidth,
-        height: targetHeight,
-        container: { width: containerWidth, height: containerHeight },
-      });
-
-      this.videoElement.width = targetWidth;
-      this.videoElement.height = targetHeight;
-      this.videoElement.style.width = `${targetWidth}px`;
-      this.videoElement.style.height = `${targetHeight}px`;
-
-      // Center the video element within its parent container
-      if (needsCenterX || options.x === undefined) {
-        const x = Math.round((containerWidth - targetWidth) / 2);
-        this.videoElement.style.left = `${x}px`;
-      }
-      if (needsCenterY || options.y === undefined) {
-        let y: number;
-        switch (positioning) {
-          case 'top':
-            y = 0;
-            break;
-          case 'bottom':
-            y = window.innerHeight - targetHeight;
-            break;
-          case 'center':
-          default:
-            y = Math.round((window.innerHeight - targetHeight) / 2);
-            break;
+        if (needsCenterX || options.x === undefined) {
+          const x = Math.round((containerWidth - targetWidth) / 2);
+          this.videoElement.style.left = `${x}px`;
         }
-        this.videoElement.style.setProperty('top', `${y}px`, 'important');
-        // Force a style recalculation
-        this.videoElement.offsetHeight;
-        console.log('Positioning video:', {
-          positioning,
-          viewportHeight: window.innerHeight,
-          targetHeight,
-          calculatedY: y,
-          actualTop: this.videoElement.style.top,
-          position: this.videoElement.style.position,
+        if (needsCenterY || options.y === undefined) {
+          let y: number;
+          switch (positioning) {
+            case 'top':
+              y = 0;
+              break;
+            case 'bottom':
+              y = containerHeight - targetHeight;
+              break;
+            case 'center':
+            default:
+              y = Math.round((containerHeight - targetHeight) / 2);
+              break;
+          }
+          this.videoElement.style.setProperty('top', `${y}px`, 'important');
+        }
+      } else if (!options.aspectRatio) {
+        // No size specified, fit camera view within container bounds
+        // Calculate dimensions that fit within container while maintaining camera aspect ratio
+        let targetWidth = containerWidth;
+        let targetHeight = targetWidth / cameraAspectRatio;
+
+        // If height exceeds container, fit to height instead
+        if (targetHeight > containerHeight) {
+          targetHeight = containerHeight;
+          targetWidth = targetHeight * cameraAspectRatio;
+        }
+
+        console.log('Video element dimensions:', {
+          width: targetWidth,
+          height: targetHeight,
+          container: { width: containerWidth, height: containerHeight },
         });
-      }
-    } else if (effectiveAspectRatio && !options.width && !options.height) {
-      // Aspect ratio specified but no size
-      const [widthRatio, heightRatio] = effectiveAspectRatio.split(':').map(Number);
-      const targetRatio = widthRatio / heightRatio;
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
 
-      let targetWidth, targetHeight;
+        this.videoElement.width = targetWidth;
+        this.videoElement.height = targetHeight;
+        this.videoElement.style.width = `${targetWidth}px`;
+        this.videoElement.style.height = `${targetHeight}px`;
 
-      // Try fitting to viewport width first
-      targetWidth = viewportWidth;
-      targetHeight = targetWidth / targetRatio;
-
-      // If height exceeds viewport, fit to height instead
-      if (targetHeight > viewportHeight) {
-        targetHeight = viewportHeight;
-        targetWidth = targetHeight * targetRatio;
-      }
-
-      this.videoElement.width = targetWidth;
-      this.videoElement.height = targetHeight;
-      this.videoElement.style.width = `${targetWidth}px`;
-      this.videoElement.style.height = `${targetHeight}px`;
-
-      // Center the video element within its parent container
-      if (needsCenterX || options.x === undefined) {
-        const parentWidth = container.offsetWidth || viewportWidth;
-        const x = Math.round((parentWidth - targetWidth) / 2);
-        this.videoElement.style.left = `${x}px`;
-      }
-      if (needsCenterY || options.y === undefined) {
-        const parentHeight = container.offsetHeight || viewportHeight;
-        let y: number;
-        switch (positioning) {
-          case 'top':
-            y = 0;
-            break;
-          case 'bottom':
-            y = parentHeight - targetHeight;
-            break;
-          case 'center':
-          default:
-            y = Math.round((parentHeight - targetHeight) / 2);
-            break;
+        // Center the video element within its parent container
+        if (needsCenterX || options.x === undefined) {
+          const x = Math.round((containerWidth - targetWidth) / 2);
+          this.videoElement.style.left = `${x}px`;
         }
-        this.videoElement.style.top = `${y}px`;
+        if (needsCenterY || options.y === undefined) {
+          let y: number;
+          switch (positioning) {
+            case 'top':
+              y = 0;
+              break;
+            case 'bottom':
+              y = window.innerHeight - targetHeight;
+              break;
+            case 'center':
+            default:
+              y = Math.round((window.innerHeight - targetHeight) / 2);
+              break;
+          }
+          this.videoElement.style.setProperty('top', `${y}px`, 'important');
+          // Force a style recalculation
+          this.videoElement.offsetHeight;
+          console.log('Positioning video:', {
+            positioning,
+            viewportHeight: window.innerHeight,
+            targetHeight,
+            calculatedY: y,
+            actualTop: this.videoElement.style.top,
+            position: this.videoElement.style.position,
+          });
+        }
+      } else if (effectiveAspectRatio) {
+        // Aspect ratio specified but no size
+        const [widthRatio, heightRatio] = effectiveAspectRatio.split(':').map(Number);
+        const targetRatio = widthRatio / heightRatio;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        let targetWidth = viewportWidth;
+        let targetHeight = targetWidth / targetRatio;
+
+        // If height exceeds viewport, fit to height instead
+        if (targetHeight > viewportHeight) {
+          targetHeight = viewportHeight;
+          targetWidth = targetHeight * targetRatio;
+        }
+
+        this.videoElement.width = targetWidth;
+        this.videoElement.height = targetHeight;
+        this.videoElement.style.width = `${targetWidth}px`;
+        this.videoElement.style.height = `${targetHeight}px`;
+
+        // Center the video element within its parent container
+        if (needsCenterX || options.x === undefined) {
+          const parentWidth = container.offsetWidth || viewportWidth;
+          const x = Math.round((parentWidth - targetWidth) / 2);
+          this.videoElement.style.left = `${x}px`;
+        }
+        if (needsCenterY || options.y === undefined) {
+          const parentHeight = container.offsetHeight || viewportHeight;
+          let y: number;
+          switch (positioning) {
+            case 'top':
+              y = 0;
+              break;
+            case 'bottom':
+              y = parentHeight - targetHeight;
+              break;
+            case 'center':
+            default:
+              y = Math.round((parentHeight - targetHeight) / 2);
+              break;
+          }
+          this.videoElement.style.top = `${y}px`;
+        }
       }
     }
 

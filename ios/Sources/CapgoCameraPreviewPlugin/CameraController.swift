@@ -616,16 +616,17 @@ extension CameraController {
             guard let self = self, let previewLayer = self.previewLayer else { return }
             if let superlayer = previewLayer.superlayer {
                 let bounds = superlayer.bounds
-                if let aspect = aspectRatio {
+                if self.requestedAspectMode == "cover" {
+                    previewLayer.frame = bounds
+                } else if let aspect = aspectRatio {
                     let frame = self.calculateAspectRatioFrame(for: aspect, in: bounds)
                     previewLayer.frame = frame
-                    // Set videoGravity based on aspectMode
-                    previewLayer.videoGravity = self.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
                 } else {
                     previewLayer.frame = bounds
-                    // Set videoGravity based on aspectMode
-                    previewLayer.videoGravity = self.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
                 }
+
+                // Set videoGravity based on aspectMode
+                previewLayer.videoGravity = self.requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
 
                 // Keep grid overlay in sync with preview
                 self.gridOverlayView?.frame = previewLayer.frame
@@ -771,19 +772,20 @@ extension CameraController {
         // Start with zero alpha for smooth fade-in
         previewLayer.opacity = 0
 
-        // Configure video gravity and frame based on aspect ratio
-        if let aspectRatio = requestedAspectRatio {
-            // Calculate the frame based on requested aspect ratio
+        // Configure video gravity and frame based on aspect ratio and aspect mode
+        if requestedAspectMode == "cover" {
+            // Fill the entire view and let videoGravity crop as needed
+            previewLayer.frame = view.bounds
+        } else if let aspectRatio = requestedAspectRatio {
+            // Calculate the frame based on requested aspect ratio for contain behavior
             let frame = calculateAspectRatioFrame(for: aspectRatio, in: view.bounds)
             previewLayer.frame = frame
-            // Set videoGravity based on aspectMode
-            previewLayer.videoGravity = requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
         } else {
             // No specific aspect ratio requested - fill the entire view
             previewLayer.frame = view.bounds
-            // Set videoGravity based on aspectMode
-            previewLayer.videoGravity = requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
         }
+        // Set videoGravity based on aspectMode
+        previewLayer.videoGravity = requestedAspectMode == "cover" ? .resizeAspectFill : .resizeAspect
         print("[CameraPreview] ⏱ Layer configuration took \(CFAbsoluteTimeGetCurrent() - configStartTime) seconds")
 
         let insertStartTime = CFAbsoluteTimeGetCurrent()
