@@ -15,6 +15,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.net.Uri;
+import android.os.Build;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -46,6 +47,7 @@ import com.getcapacitor.annotation.PermissionCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.json.JSONObject;
 
@@ -132,6 +134,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private String lastOrientationStr = "unknown";
     private boolean lastDisableAudio = true;
     private Drawable originalWindowBackground;
+    private Float originalWebViewAlpha;
+    private Drawable originalWebViewParentBackground;
     private boolean isCameraPermissionDialogShowing = false;
 
     @PluginMethod
@@ -428,6 +432,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     } catch (Exception ignored) {}
                     originalWindowBackground = null;
                 }
+                restoreWebViewVisualState();
                 call.resolve();
             });
     }
@@ -1479,6 +1484,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (cameraXView == source) {
             cameraXView = null;
         }
+        restoreWebViewVisualState();
 
         PluginCall queuedCall = null;
         synchronized (pendingStartLock) {
@@ -1519,6 +1525,80 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return false;
     }
 
+    private boolean isMiuiDevice() {
+        String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER.toLowerCase(Locale.US) : "";
+        String brand = Build.BRAND != null ? Build.BRAND.toLowerCase(Locale.US) : "";
+        return manufacturer.contains("xiaomi") || brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco");
+    }
+
+    private void applyTransparentBackgroundsForToBack() {
+        if (!isToBackMode()) {
+            return;
+        }
+        Activity activity = getActivity();
+        WebView webView = getBridge().getWebView();
+        if (activity == null || webView == null) {
+            return;
+        }
+
+        if (originalWebViewAlpha == null) {
+            originalWebViewAlpha = webView.getAlpha();
+        }
+
+        final ViewGroup webViewParent = (ViewGroup) webView.getParent();
+        if (webViewParent != null && originalWebViewParentBackground == null) {
+            originalWebViewParentBackground = webViewParent.getBackground();
+        }
+
+        Runnable apply = () -> {
+            try {
+                activity.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                if (webViewParent != null) {
+                    webViewParent.setBackgroundColor(Color.TRANSPARENT);
+                }
+                // Keep a tiny alpha on MIUI/Xiaomi devices to avoid compositor bugs that treat
+                // fully transparent layers as black.
+                webView.setBackgroundColor(Color.argb(1, 255, 255, 255));
+                webView.setAlpha(isMiuiDevice() ? 0.99f : (originalWebViewAlpha != null ? originalWebViewAlpha : 1f));
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to set backgrounds to transparent", e);
+            }
+        };
+
+        activity.runOnUiThread(() -> {
+            apply.run();
+            if (isMiuiDevice()) {
+                webView.postDelayed(apply, 50);
+                webView.postDelayed(apply, 250);
+            }
+        });
+    }
+
+    private void restoreWebViewVisualState() {
+        Activity activity = getActivity();
+        WebView webView = getBridge().getWebView();
+        final Float alphaToRestore = originalWebViewAlpha;
+        final Drawable parentBackground = originalWebViewParentBackground;
+        originalWebViewAlpha = null;
+        originalWebViewParentBackground = null;
+
+        if (activity == null || webView == null) {
+            return;
+        }
+
+        final ViewGroup webViewParent = (ViewGroup) webView.getParent();
+        activity.runOnUiThread(() -> {
+            try {
+                if (alphaToRestore != null) {
+                    webView.setAlpha(alphaToRestore);
+                }
+                if (webViewParent != null && parentBackground != null) {
+                    webViewParent.setBackground(parentBackground);
+                }
+            } catch (Exception ignored) {}
+        });
+    }
+
     @Override
     public void onCameraStarted(int width, int height, int x, int y) {
         // Always transition window and WebView backgrounds to transparent when the camera starts,
@@ -1529,22 +1609,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         // window and WebView stay black after every background/foreground transition.
         // Both backgrounds are set together in the same UI thread operation to avoid race
         // conditions and compositor layering issues.
-        if (isToBackMode()) {
-            getBridge()
-                .getActivity()
-                .runOnUiThread(() -> {
-                    try {
-                        // Set window background to transparent
-                        getBridge().getActivity().getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                        // Set webview background to almost-transparent for MIUI compatibility
-                        // Use alpha=1 instead of 0 to work around MIUI/Xiaomi rendering issues
-                        // where Color.TRANSPARENT (alpha=0) is not rendered correctly
-                        getBridge().getWebView().setBackgroundColor(Color.argb(1, 255, 255, 255));
-                    } catch (Exception e) {
-                        Log.w(TAG, "Failed to set backgrounds to transparent", e);
-                    }
-                });
-        }
+        applyTransparentBackgroundsForToBack();
 
         PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
         if (call != null) {
@@ -1735,6 +1800,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     });
             }
         }
+        restoreWebViewVisualState();
     }
 
     @PluginMethod
