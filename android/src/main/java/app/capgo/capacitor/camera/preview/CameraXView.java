@@ -807,7 +807,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         int width = sessionConfig.getWidth();
         int height = sessionConfig.getHeight();
         String aspectRatio = sessionConfig.getAspectRatio();
-        String aspectMode = sessionConfig.getAspectMode();
 
         // Get comprehensive display information
         int screenWidthPx, screenHeightPx;
