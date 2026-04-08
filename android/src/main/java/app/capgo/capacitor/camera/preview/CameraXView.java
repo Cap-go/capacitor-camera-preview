@@ -877,7 +877,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         );
 
         // Apply aspect ratio if specified
-        if (aspectRatio != null && !aspectRatio.isEmpty() && sessionConfig.isCentered() && !"cover".equals(aspectMode)) {
+        if (aspectRatio != null && !aspectRatio.isEmpty() && sessionConfig.isCentered()) {
             String[] ratios = aspectRatio.split(":");
             if (ratios.length == 2) {
                 try {
