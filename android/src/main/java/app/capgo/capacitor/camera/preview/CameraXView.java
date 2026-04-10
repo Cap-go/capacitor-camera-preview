@@ -807,7 +807,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         int width = sessionConfig.getWidth();
         int height = sessionConfig.getHeight();
         String aspectRatio = sessionConfig.getAspectRatio();
-        String aspectMode = sessionConfig.getAspectMode();
 
         // Get comprehensive display information
         int screenWidthPx, screenHeightPx;
@@ -877,7 +876,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         );
 
         // Apply aspect ratio if specified
-        if (aspectRatio != null && !aspectRatio.isEmpty() && sessionConfig.isCentered() && !"cover".equals(aspectMode)) {
+        if (aspectRatio != null && !aspectRatio.isEmpty() && sessionConfig.isCentered()) {
             String[] ratios = aspectRatio.split(":");
             if (ratios.length == 2) {
                 try {
