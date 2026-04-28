@@ -1947,23 +1947,21 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     private func isPortrait() -> Bool {
-        let orientation = UIDevice.current.orientation
-        if orientation.isValidInterfaceOrientation {
-            return orientation.isPortrait
-        } else {
-            let interfaceOrientation: UIInterfaceOrientation? = {
-                if Thread.isMainThread {
-                    return (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
-                } else {
-                    var value: UIInterfaceOrientation?
-                    DispatchQueue.main.sync {
-                        value = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
-                    }
-                    return value
+        let interfaceOrientation: UIInterfaceOrientation? = {
+            let lookup: () -> UIInterfaceOrientation? = {
+                return (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
+            }
+            if Thread.isMainThread {
+                return lookup()
+            } else {
+                var value: UIInterfaceOrientation?
+                DispatchQueue.main.sync {
+                    value = lookup()
                 }
-            }()
-            return interfaceOrientation?.isPortrait ?? false
-        }
+                return value
+            }
+        }()
+        return interfaceOrientation?.isPortrait ?? true
     }
 
     private func calculateCameraFrame(xPosition: CGFloat? = nil, yPosition: CGFloat? = nil, width: CGFloat? = nil, height: CGFloat? = nil, aspectRatio: String? = nil) -> CGRect {
