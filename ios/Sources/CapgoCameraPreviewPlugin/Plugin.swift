@@ -1949,7 +1949,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func isPortrait() -> Bool {
         let interfaceOrientation: UIInterfaceOrientation? = {
             let lookup: () -> UIInterfaceOrientation? = {
-                return (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.interfaceOrientation
+                let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                let activeScene = scenes.first { $0.activationState == .foregroundActive }
+                return (activeScene ?? scenes.first)?.interfaceOrientation
             }
             if Thread.isMainThread {
                 return lookup()
