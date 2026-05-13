@@ -3,6 +3,7 @@ import type { PermissionState } from '@capacitor/core';
 
 import type {
   CameraDevice,
+  CameraPreviewAspectRatio,
   CameraOpacityOptions,
   CameraPreviewFlashMode,
   CameraPreviewOptions,
@@ -35,6 +36,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private orientationListenerBound = false;
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: BlobPart[] = [];
+  private currentAspectRatio: CameraPreviewAspectRatio = '4:3';
 
   constructor() {
     super();
@@ -222,6 +224,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     // Default to 4:3 if no aspect ratio or size specified
     const useDefaultAspectRatio = !options.aspectRatio && !options.width && !options.height;
     const effectiveAspectRatio = options.aspectRatio || (useDefaultAspectRatio ? '4:3' : null);
+    this.currentAspectRatio = effectiveAspectRatio || '4:3';
 
     if (options.width) {
       this.videoElement.width = options.width;
@@ -395,18 +398,27 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         }
       } else if (effectiveAspectRatio) {
         // Aspect ratio specified but no size
-        const [widthRatio, heightRatio] = effectiveAspectRatio.split(':').map(Number);
-        const targetRatio = widthRatio / heightRatio;
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
 
-        let targetWidth = viewportWidth;
-        let targetHeight = targetWidth / targetRatio;
+        let targetWidth: number;
+        let targetHeight: number;
 
-        // If height exceeds viewport, fit to height instead
-        if (targetHeight > viewportHeight) {
-          targetHeight = viewportHeight;
-          targetWidth = targetHeight * targetRatio;
+        if (effectiveAspectRatio === 'fill') {
+          targetWidth = containerWidth;
+          targetHeight = containerHeight;
+        } else {
+          const [widthRatio, heightRatio] = effectiveAspectRatio.split(':').map(Number);
+          const targetRatio = widthRatio / heightRatio;
+
+          targetWidth = viewportWidth;
+          targetHeight = targetWidth / targetRatio;
+
+          // If height exceeds viewport, fit to height instead
+          if (targetHeight > viewportHeight) {
+            targetHeight = viewportHeight;
+            targetWidth = targetHeight * targetRatio;
+          }
         }
 
         this.videoElement.width = targetWidth;
@@ -1050,10 +1062,14 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     }
   }
 
-  async getAspectRatio(): Promise<{ aspectRatio: '4:3' | '16:9' }> {
+  async getAspectRatio(): Promise<{ aspectRatio: CameraPreviewAspectRatio }> {
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (!video) {
       throw new Error('camera is not running');
+    }
+
+    if (this.currentAspectRatio === 'fill') {
+      return { aspectRatio: 'fill' };
     }
 
     const width = video.offsetWidth;
@@ -1074,7 +1090,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     return { aspectRatio: '4:3' };
   }
 
-  async setAspectRatio(options: { aspectRatio: '4:3' | '16:9'; x?: number; y?: number }): Promise<{
+  async setAspectRatio(options: { aspectRatio: CameraPreviewAspectRatio; x?: number; y?: number }): Promise<{
     width: number;
     height: number;
     x: number;
@@ -1083,6 +1099,32 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (!video) {
       throw new Error('camera is not running');
+    }
+
+    this.currentAspectRatio = options.aspectRatio;
+
+    if (options.aspectRatio === 'fill') {
+      const parent = video.parentElement || document.body;
+      const targetWidth = parent.clientWidth || window.innerWidth;
+      const targetHeight = parent.clientHeight || window.innerHeight;
+      const x = options.x ?? 0;
+      const y = options.y ?? 0;
+
+      video.style.width = `${targetWidth}px`;
+      video.style.height = `${targetHeight}px`;
+      video.style.left = `${x}px`;
+      video.style.top = `${y}px`;
+      video.style.position = 'absolute';
+
+      const offsetX = targetWidth / 8;
+      const offsetY = targetHeight / 8;
+
+      return {
+        width: Math.round(targetWidth),
+        height: Math.round(targetHeight),
+        x: Math.round(x + offsetX),
+        y: Math.round(y + offsetY),
+      };
     }
 
     if (options.aspectRatio) {

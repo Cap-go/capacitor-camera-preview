@@ -466,14 +466,14 @@ Gets the flash modes supported by the active camera.
 ### setAspectRatio(...)
 
 ```typescript
-setAspectRatio(options: { aspectRatio: '4:3' | '16:9'; x?: number; y?: number; }) => Promise<{ width: number; height: number; x: number; y: number; }>
+setAspectRatio(options: { aspectRatio: '4:3' | '16:9' | 'fill'; x?: number; y?: number; }) => Promise<{ width: number; height: number; x: number; y: number; }>
 ```
 
 Set the aspect ratio of the camera preview.
 
 | Param         | Type                                                                   | Description                                                                                                                                                                                                                                                                                                           |
 | ------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`options`** | <code>{ aspectRatio: '4:3' \| '16:9'; x?: number; y?: number; }</code> | - The desired aspect ratio and optional position. - aspectRatio: The desired aspect ratio ('4:3' or '16:9') - x: Optional x coordinate for positioning. If not provided, view will be auto-centered horizontally. - y: Optional y coordinate for positioning. If not provided, view will be auto-centered vertically. |
+| **`options`** | <code>{ aspectRatio: '4:3' \| '16:9' \| 'fill'; x?: number; y?: number; }</code> | - The desired aspect ratio and optional position. - aspectRatio: The desired aspect ratio ('4:3', '16:9', or 'fill') - x: Optional x coordinate for positioning. If not provided, view will be auto-centered horizontally. - y: Optional y coordinate for positioning. If not provided, view will be auto-centered vertically. |
 
 **Returns:** <code>Promise&lt;{ width: number; height: number; x: number; y: number; }&gt;</code>
 
@@ -485,12 +485,12 @@ Set the aspect ratio of the camera preview.
 ### getAspectRatio()
 
 ```typescript
-getAspectRatio() => Promise<{ aspectRatio: '4:3' | '16:9'; }>
+getAspectRatio() => Promise<{ aspectRatio: '4:3' | '16:9' | 'fill'; }>
 ```
 
 Gets the current aspect ratio of the camera preview.
 
-**Returns:** <code>Promise&lt;{ aspectRatio: '4:3' | '16:9'; }&gt;</code>
+**Returns:** <code>Promise&lt;{ aspectRatio: '4:3' | '16:9' | 'fill'; }&gt;</code>
 
 **Since:** 7.5.0
 
@@ -1080,7 +1080,7 @@ Defines the configuration options for starting the camera preview.
 | **`height`**                        | <code>number</code>                                             | The height of the preview in pixels. Defaults to the screen height.                                                                                                                                                                 |                        |        |
 | **`x`**                             | <code>number</code>                                             | The horizontal origin of the preview, in pixels.                                                                                                                                                                                    |                        |        |
 | **`y`**                             | <code>number</code>                                             | The vertical origin of the preview, in pixels.                                                                                                                                                                                      |                        |        |
-| **`aspectRatio`**                   | <code>'4:3' \| '16:9'</code>                                    | The aspect ratio of the camera preview, '4:3' or '16:9' or 'fill'. Cannot be set if width or height is provided, otherwise the call will be rejected. Use setPreviewSize to adjust size after starting.                             |                        | 2.0.0  |
+| **`aspectRatio`**                   | <code>'4:3' \| '16:9' \| 'fill'</code>                           | The aspect ratio of the camera preview, '4:3' or '16:9' or 'fill'. Cannot be set if width or height is provided, otherwise the call will be rejected. Use setPreviewSize to adjust size after starting.                             |                        | 2.0.0  |
 | **`aspectMode`**                    | <code>'cover' \| 'contain'</code>                               | Controls how the camera preview fills the available space. - 'contain': Fits the entire preview within the space, may show letterboxing (default). - 'cover': Fills the entire space, may crop edges of the preview.                | <code>"contain"</code> |        |
 | **`gridMode`**                      | <code><a href="#gridmode">GridMode</a></code>                   | The grid overlay to display on the camera preview.                                                                                                                                                                                  | <code>"none"</code>    | 2.1.0  |
 | **`includeSafeAreaInsets`**         | <code>boolean</code>                                            | Adjusts the y-position to account for safe areas (e.g., notches).                                                                                                                                                                   | <code>false</code>     |        |
