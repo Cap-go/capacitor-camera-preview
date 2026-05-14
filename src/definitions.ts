@@ -8,6 +8,8 @@ export type GridMode = 'none' | '3x3' | '4x4';
 
 export type CameraPositioning = 'center' | 'top' | 'bottom';
 
+export type CameraPreviewAspectRatio = '4:3' | '16:9' | 'fill';
+
 export interface CameraPermissionStatus {
   camera: PermissionState;
   microphone?: PermissionState;
@@ -125,7 +127,7 @@ export interface CameraPreviewOptions {
    *
    * @since 2.0.0
    */
-  aspectRatio?: '4:3' | '16:9';
+  aspectRatio?: CameraPreviewAspectRatio;
   /**
    * Controls how the camera preview fills the available space.
    * - 'contain': Fits the entire preview within the space, may show letterboxing (default).
@@ -465,15 +467,15 @@ export interface CameraPreviewPlugin {
   /**
    * Set the aspect ratio of the camera preview.
    *
-   * @param {{ aspectRatio: '4:3' | '16:9'; x?: number; y?: number }} options - The desired aspect ratio and optional position.
-   *   - aspectRatio: The desired aspect ratio ('4:3' or '16:9')
+   * @param {{ aspectRatio: CameraPreviewAspectRatio; x?: number; y?: number }} options - The desired aspect ratio and optional position.
+   *   - aspectRatio: The desired aspect ratio ('4:3', '16:9', or 'fill')
    *   - x: Optional x coordinate for positioning. If not provided, view will be auto-centered horizontally.
    *   - y: Optional y coordinate for positioning. If not provided, view will be auto-centered vertically.
    * @returns {Promise<{ width: number; height: number; x: number; y: number }>} A promise that resolves with the actual preview dimensions and position.
    * @since 7.5.0
    * @platform android, ios
    */
-  setAspectRatio(options: { aspectRatio: '4:3' | '16:9'; x?: number; y?: number }): Promise<{
+  setAspectRatio(options: { aspectRatio: CameraPreviewAspectRatio; x?: number; y?: number }): Promise<{
     width: number;
     height: number;
     x: number;
@@ -483,11 +485,11 @@ export interface CameraPreviewPlugin {
   /**
    * Gets the current aspect ratio of the camera preview.
    *
-   * @returns {Promise<{ aspectRatio: '4:3' | '16:9' }>} A promise that resolves with the current aspect ratio.
+   * @returns {Promise<{ aspectRatio: CameraPreviewAspectRatio }>} A promise that resolves with the current aspect ratio.
    * @since 7.5.0
    * @platform android, ios
    */
-  getAspectRatio(): Promise<{ aspectRatio: '4:3' | '16:9' }>;
+  getAspectRatio(): Promise<{ aspectRatio: CameraPreviewAspectRatio }>;
 
   /**
    * Sets the grid mode of the camera preview overlay.

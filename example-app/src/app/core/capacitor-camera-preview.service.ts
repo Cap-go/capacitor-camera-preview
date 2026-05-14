@@ -4,6 +4,7 @@ import {
   CameraPreview,
   CameraPreviewOptions,
   CameraPreviewPictureOptions,
+  CameraPreviewAspectRatio,
   ExifData,
   FlashMode,
   LensInfo,
@@ -186,7 +187,7 @@ export class CapacitorCameraViewService {
   }
 
   async setAspectRatio(
-    aspectRatio: '4:3' | '16:9',
+    aspectRatio: CameraPreviewAspectRatio,
     x?: number,
     y?: number,
   ): Promise<{
@@ -203,7 +204,7 @@ export class CapacitorCameraViewService {
     return CameraPreview.setAspectRatio(options);
   }
 
-  async getAspectRatio(): Promise<{ aspectRatio: '4:3' | '16:9' }> {
+  async getAspectRatio(): Promise<{ aspectRatio: CameraPreviewAspectRatio }> {
     return CameraPreview.getAspectRatio();
   }
 
