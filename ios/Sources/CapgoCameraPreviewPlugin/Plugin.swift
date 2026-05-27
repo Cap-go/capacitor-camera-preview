@@ -1,3 +1,4 @@
+// swiftlint:disable file_length type_body_length cyclomatic_complexity function_body_length
 import Foundation
 import AVFoundation
 import Photos
@@ -43,6 +44,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "capture", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "captureSample", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startBarcodeScanner", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopBarcodeScanner", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedFlashModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getHorizontalFov", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise),
@@ -108,6 +111,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var permissionCallID: String?
     private var waitingForLocation: Bool = false
     private var isPresentingPermissionAlert: Bool = false
+    private var pendingStartBarcodeScannerOptions: (formats: [String], detectionInterval: Int)?
+    private var hasResolvedStartCall: Bool = false
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
@@ -709,6 +714,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         self.isInitializing = true
+        self.hasResolvedStartCall = false
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -759,6 +765,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Default to high if not provided
         let videoQuality = call.getString("videoQuality") ?? "high"
+        self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
 
@@ -768,6 +775,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let hasHeight = call.getInt("height") != nil
 
         if hasAspectRatio && (hasWidth || hasHeight) {
+            self.pendingStartBarcodeScannerOptions = nil
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
             return
         }
@@ -785,6 +793,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     print(error)
                     DispatchQueue.main.async {
                         self.isInitializing = false
+                        self.pendingStartBarcodeScannerOptions = nil
                         call.reject(error.localizedDescription)
                     }
                     return
@@ -807,6 +816,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let handleDenied: (AVAuthorizationStatus) -> Void = { _ in
             DispatchQueue.main.async {
                 self.isInitializing = false
+                self.pendingStartBarcodeScannerOptions = nil
                 call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied")
             }
         }
@@ -880,7 +890,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
                 returnedObject["x"] = self.previewView.frame.origin.x as any JSValue
                 returnedObject["y"] = self.previewView.frame.origin.y as any JSValue
-                call.resolve(returnedObject)
+                self.resolveStartCall(call, returnedObject: returnedObject)
             }
         }
 
@@ -892,9 +902,44 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
                 returnedObject["x"] = self.previewView.frame.origin.x as any JSValue
                 returnedObject["y"] = self.previewView.frame.origin.y as any JSValue
-                call.resolve(returnedObject)
+                self.resolveStartCall(call, returnedObject: returnedObject)
             }
         }
+    }
+
+    private func barcodeScannerStartOptions(from call: CAPPluginCall) -> (formats: [String], detectionInterval: Int)? {
+        if call.getBool("barcodeScanner") == true {
+            return (formats: [], detectionInterval: 500)
+        }
+
+        guard let options = call.getObject("barcodeScanner") else {
+            return nil
+        }
+
+        let formats = options["formats"] as? [String] ?? []
+        let detectionInterval = (options["detectionInterval"] as? Int) ?? (options["detectionInterval"] as? NSNumber)?.intValue ?? 500
+        return (formats: formats, detectionInterval: detectionInterval)
+    }
+
+    private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
+        guard !hasResolvedStartCall else { return }
+        hasResolvedStartCall = true
+        cameraController.firstFrameReadyCallback = nil
+
+        if let options = pendingStartBarcodeScannerOptions {
+            do {
+                try self.cameraController.startBarcodeScanner(formats: options.formats, detectionIntervalMs: options.detectionInterval) { [weak self] barcodes in
+                    self?.notifyListeners("barcodeScanned", data: ["barcodes": barcodes])
+                }
+            } catch {
+                self.pendingStartBarcodeScannerOptions = nil
+                call.reject("Failed to start barcode scanner: \(error.localizedDescription)")
+                return
+            }
+            self.pendingStartBarcodeScannerOptions = nil
+        }
+
+        call.resolve(returnedObject)
     }
 
     @objc func flip(_ call: CAPPluginCall) {
@@ -1476,6 +1521,30 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             }
         }
+    }
+
+    @objc func startBarcodeScanner(_ call: CAPPluginCall) {
+        guard self.isInitialized else {
+            call.reject("Camera is not running")
+            return
+        }
+
+        let formats = call.getArray("formats") as? [String] ?? []
+        let detectionInterval = call.getInt("detectionInterval") ?? 500
+
+        do {
+            try self.cameraController.startBarcodeScanner(formats: formats, detectionIntervalMs: detectionInterval) { [weak self] barcodes in
+                self?.notifyListeners("barcodeScanned", data: ["barcodes": barcodes])
+            }
+            call.resolve()
+        } catch {
+            call.reject("Failed to start barcode scanner: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func stopBarcodeScanner(_ call: CAPPluginCall) {
+        self.cameraController.stopBarcodeScanner()
+        call.resolve()
     }
 
     @objc func getSupportedFlashModes(_ call: CAPPluginCall) {

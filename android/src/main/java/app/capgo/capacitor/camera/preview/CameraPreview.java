@@ -46,9 +46,11 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 @CapacitorPlugin(
@@ -137,6 +139,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private Float originalWebViewAlpha;
     private Drawable originalWebViewParentBackground;
     private boolean isCameraPermissionDialogShowing = false;
+    private boolean pendingStartBarcodeScanner = false;
+    private List<String> pendingStartBarcodeFormats = new ArrayList<>();
+    private int pendingStartBarcodeDetectionInterval = 500;
 
     @PluginMethod
     public void getExposureModes(PluginCall call) {
@@ -391,6 +396,95 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         sampleCallbackId = call.getCallbackId();
         Integer quality = Objects.requireNonNull(call.getInt("quality", 85));
         cameraXView.captureSample(quality);
+    }
+
+    @PluginMethod
+    public void startBarcodeScanner(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+
+        List<String> formats = getStringArray(call, "formats");
+        Integer detectionInterval = call.getInt("detectionInterval", 500);
+        cameraXView.startBarcodeScanner(
+            formats,
+            detectionInterval != null ? detectionInterval : 500,
+            new CameraXView.BarcodeScannerStartCallback() {
+                @Override
+                public void onStarted() {
+                    call.resolve();
+                }
+
+                @Override
+                public void onError(String message) {
+                    call.reject(message);
+                }
+            }
+        );
+    }
+
+    @PluginMethod
+    public void stopBarcodeScanner(PluginCall call) {
+        if (cameraXView != null) {
+            cameraXView.stopBarcodeScanner();
+        }
+        call.resolve();
+    }
+
+    private List<String> getStringArray(PluginCall call, String key) {
+        List<String> result = new ArrayList<>();
+        JSArray array = call.getArray(key);
+        if (array == null) {
+            return result;
+        }
+
+        for (int i = 0; i < array.length(); i++) {
+            String value = array.optString(i, null);
+            if (value != null && !value.isEmpty()) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
+
+    private List<String> getStringArray(JSONObject object, String key) {
+        List<String> result = new ArrayList<>();
+        JSONArray array = object.optJSONArray(key);
+        if (array == null) {
+            return result;
+        }
+
+        for (int i = 0; i < array.length(); i++) {
+            String value = array.optString(i, null);
+            if (value != null && !value.isEmpty()) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
+
+    private JSONObject getStartBarcodeScannerOptions(PluginCall call) {
+        Object barcodeScanner = call.getData().opt("barcodeScanner");
+        if (Boolean.TRUE.equals(barcodeScanner)) {
+            return new JSONObject();
+        }
+        if (barcodeScanner instanceof JSONObject) {
+            return (JSONObject) barcodeScanner;
+        }
+        return null;
+    }
+
+    private void setPendingStartBarcodeScanner(JSONObject options) {
+        pendingStartBarcodeScanner = options != null;
+        pendingStartBarcodeFormats = options != null ? getStringArray(options, "formats") : new ArrayList<>();
+        pendingStartBarcodeDetectionInterval = options != null ? options.optInt("detectionInterval", 500) : 500;
+    }
+
+    private void resetPendingStartBarcodeScanner() {
+        pendingStartBarcodeScanner = false;
+        pendingStartBarcodeFormats = new ArrayList<>();
+        pendingStartBarcodeDetectionInterval = 500;
     }
 
     @PluginMethod
@@ -912,6 +1006,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean enableVideoMode = Boolean.TRUE.equals(call.getBoolean("enableVideoMode", false));
         final boolean enablePhysicalDeviceSelection = Boolean.TRUE.equals(call.getBoolean("enablePhysicalDeviceSelection", false));
         final String videoQuality = call.getString("videoQuality", "high");
+        final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
 
         // Check for conflict between aspectRatio and size
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
@@ -1217,6 +1312,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
+                setPendingStartBarcodeScanner(barcodeScannerOptions);
 
                 bridge.saveCall(call);
                 cameraStartCallbackId = call.getCallbackId();
@@ -1741,10 +1837,43 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     ")"
             );
 
-            call.resolve(result);
-            bridge.releaseCall(call);
-            cameraStartCallbackId = null; // Prevent re-use
+            if (pendingStartBarcodeScanner && cameraXView != null) {
+                List<String> formats = new ArrayList<>(pendingStartBarcodeFormats);
+                int detectionInterval = pendingStartBarcodeDetectionInterval;
+                cameraXView.startBarcodeScanner(
+                    formats,
+                    detectionInterval,
+                    new CameraXView.BarcodeScannerStartCallback() {
+                        @Override
+                        public void onStarted() {
+                            resolveCameraStartCall(call, result);
+                        }
+
+                        @Override
+                        public void onError(String message) {
+                            rejectCameraStartCall(call, message);
+                        }
+                    }
+                );
+                return;
+            }
+
+            resolveCameraStartCall(call, result);
         }
+    }
+
+    private void resolveCameraStartCall(PluginCall call, JSObject result) {
+        call.resolve(result);
+        bridge.releaseCall(call);
+        cameraStartCallbackId = null; // Prevent re-use
+        resetPendingStartBarcodeScanner();
+    }
+
+    private void rejectCameraStartCall(PluginCall call, String message) {
+        call.reject(message);
+        bridge.releaseCall(call);
+        cameraStartCallbackId = null;
+        resetPendingStartBarcodeScanner();
     }
 
     @Override
@@ -1774,12 +1903,27 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     @Override
+    public void onBarcodesScanned(org.json.JSONArray barcodes) {
+        JSObject data = new JSObject();
+        data.put("barcodes", barcodes);
+        notifyListeners("barcodeScanned", data);
+    }
+
+    @Override
+    public void onBarcodeScanError(String message) {
+        JSObject data = new JSObject();
+        data.put("message", message);
+        notifyListeners("barcodeScanError", data);
+    }
+
+    @Override
     public void onCameraStartError(String message) {
         PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
         if (call != null) {
             call.reject(message);
             bridge.releaseCall(call);
             cameraStartCallbackId = null;
+            resetPendingStartBarcodeScanner();
         }
 
         // Restore original window background on error to prevent black screen

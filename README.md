@@ -175,6 +175,30 @@ Example app (Ionic):
 - EV controls (+/−) are placed in a top‑right floating action bar, outside the preview area.
 
 
+## Barcode scanning
+
+Barcode scanning reuses the active camera preview, so the preview can still sit behind the WebView while your HTML overlay stays interactive.
+
+```ts
+import { CameraPreview } from '@capgo/camera-preview';
+
+await CameraPreview.addListener('barcodeScanned', ({ barcodes }) => {
+  console.log('Barcodes:', barcodes);
+});
+
+await CameraPreview.start({
+  position: 'rear',
+  toBack: true,
+  barcodeScanner: {
+    formats: ['qr_code'],
+    detectionInterval: 500,
+  },
+});
+```
+
+Use `barcodeScanner: true` to scan all supported formats. You can also call `startBarcodeScanner()` and `stopBarcodeScanner()` after the preview is running to scan only during a specific flow.
+
+
 ## Documentation
 
 The most complete doc is available here: https://capgo.app/docs/plugins/camera-preview/
@@ -322,6 +346,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`stop(...)`](#stop)
 * [`capture(...)`](#capture)
 * [`captureSample(...)`](#capturesample)
+* [`startBarcodeScanner(...)`](#startbarcodescanner)
+* [`stopBarcodeScanner()`](#stopbarcodescanner)
 * [`getSupportedFlashModes()`](#getsupportedflashmodes)
 * [`setAspectRatio(...)`](#setaspectratio)
 * [`getAspectRatio()`](#getaspectratio)
@@ -350,6 +376,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setFocus(...)`](#setfocus)
 * [`addListener('screenResize', ...)`](#addlistenerscreenresize-)
 * [`addListener('orientationChange', ...)`](#addlistenerorientationchange-)
+* [`addListener('barcodeScanned', ...)`](#addlistenerbarcodescanned-)
+* [`addListener('barcodeScanError', ...)`](#addlistenerbarcodescanerror-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -444,6 +472,42 @@ Captures a single frame from the camera preview stream.
 **Returns:** <code>Promise&lt;{ value: string; }&gt;</code>
 
 **Since:** 0.0.1
+
+--------------------
+
+
+### startBarcodeScanner(...)
+
+```typescript
+startBarcodeScanner(options?: BarcodeScannerOptions | undefined) => Promise<void>
+```
+
+Starts barcode scanning on the active camera preview.
+
+The scanner reuses the current camera session and emits `barcodeScanned` events.
+Call `stopBarcodeScanner()` when scanning is no longer needed.
+
+Android uses the lightweight Google Play Services ML Kit model. If the model is not installed yet,
+first scans may return no result until Google Play Services finishes downloading it.
+
+| Param         | Type                                                                    |
+| ------------- | ----------------------------------------------------------------------- |
+| **`options`** | <code><a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> |
+
+**Since:** 8.8.0
+
+--------------------
+
+
+### stopBarcodeScanner()
+
+```typescript
+stopBarcodeScanner() => Promise<void>
+```
+
+Stops barcode scanning while keeping the camera preview running.
+
+**Since:** 8.8.0
 
 --------------------
 
@@ -913,6 +977,46 @@ Adds a listener for orientation change events.
 --------------------
 
 
+### addListener('barcodeScanned', ...)
+
+```typescript
+addListener(eventName: 'barcodeScanned', listenerFunc: (data: BarcodeScannedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for barcode scan results.
+
+| Param              | Type                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'barcodeScanned'</code>                                                          |
+| **`listenerFunc`** | <code>(data: <a href="#barcodescannedevent">BarcodeScannedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.8.0
+
+--------------------
+
+
+### addListener('barcodeScanError', ...)
+
+```typescript
+addListener(eventName: 'barcodeScanError', listenerFunc: (data: BarcodeScanErrorEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for non-fatal barcode scanner errors.
+
+| Param              | Type                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| **`eventName`**    | <code>'barcodeScanError'</code>                                                            |
+| **`listenerFunc`** | <code>(data: <a href="#barcodescanerrorevent">BarcodeScanErrorEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.8.0
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -1072,35 +1176,44 @@ Get the native Capacitor plugin version
 
 Defines the configuration options for starting the camera preview.
 
-| Prop                                | Type                                                                          | Description                                                                                                                                                                                                                         | Default                | Since  |
-| ----------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------ |
-| **`parent`**                        | <code>string</code>                                                           | The parent element to attach the video preview to.                                                                                                                                                                                  |                        |        |
-| **`className`**                     | <code>string</code>                                                           | A CSS class name to add to the preview element.                                                                                                                                                                                     |                        |        |
-| **`width`**                         | <code>number</code>                                                           | The width of the preview in pixels. Defaults to the screen width.                                                                                                                                                                   |                        |        |
-| **`height`**                        | <code>number</code>                                                           | The height of the preview in pixels. Defaults to the screen height.                                                                                                                                                                 |                        |        |
-| **`x`**                             | <code>number</code>                                                           | The horizontal origin of the preview, in pixels.                                                                                                                                                                                    |                        |        |
-| **`y`**                             | <code>number</code>                                                           | The vertical origin of the preview, in pixels.                                                                                                                                                                                      |                        |        |
-| **`aspectRatio`**                   | <code><a href="#camerapreviewaspectratio">CameraPreviewAspectRatio</a></code> | The aspect ratio of the camera preview, '4:3' or '16:9' or 'fill'. Cannot be set if width or height is provided, otherwise the call will be rejected. Use setPreviewSize to adjust size after starting.                             |                        | 2.0.0  |
-| **`aspectMode`**                    | <code>'cover' \| 'contain'</code>                                             | Controls how the camera preview fills the available space. - 'contain': Fits the entire preview within the space, may show letterboxing (default). - 'cover': Fills the entire space, may crop edges of the preview.                | <code>"contain"</code> |        |
-| **`gridMode`**                      | <code><a href="#gridmode">GridMode</a></code>                                 | The grid overlay to display on the camera preview.                                                                                                                                                                                  | <code>"none"</code>    | 2.1.0  |
-| **`includeSafeAreaInsets`**         | <code>boolean</code>                                                          | Adjusts the y-position to account for safe areas (e.g., notches).                                                                                                                                                                   | <code>false</code>     |        |
-| **`toBack`**                        | <code>boolean</code>                                                          | If true, places the preview behind the webview.                                                                                                                                                                                     | <code>true</code>      |        |
-| **`paddingBottom`**                 | <code>number</code>                                                           | Bottom padding for the preview, in pixels.                                                                                                                                                                                          |                        |        |
-| **`rotateWhenOrientationChanged`**  | <code>boolean</code>                                                          | Whether to rotate the preview when the device orientation changes.                                                                                                                                                                  | <code>true</code>      |        |
-| **`position`**                      | <code>string</code>                                                           | The camera to use.                                                                                                                                                                                                                  | <code>"rear"</code>    |        |
-| **`storeToFile`**                   | <code>boolean</code>                                                          | If true, saves the captured image to a file and returns the file path. If false, returns a base64 encoded string.                                                                                                                   | <code>false</code>     |        |
-| **`disableExifHeaderStripping`**    | <code>boolean</code>                                                          | If true, prevents the plugin from rotating the image based on EXIF data.                                                                                                                                                            | <code>false</code>     |        |
-| **`disableAudio`**                  | <code>boolean</code>                                                          | If true, disables the audio stream, preventing audio permission requests.                                                                                                                                                           | <code>true</code>      |        |
-| **`lockAndroidOrientation`**        | <code>boolean</code>                                                          | If true, locks the device orientation while the camera is active.                                                                                                                                                                   | <code>false</code>     |        |
-| **`enableOpacity`**                 | <code>boolean</code>                                                          | If true, allows the camera preview's opacity to be changed.                                                                                                                                                                         | <code>false</code>     |        |
-| **`disableFocusIndicator`**         | <code>boolean</code>                                                          | If true, disables the visual focus indicator when tapping to focus.                                                                                                                                                                 | <code>false</code>     |        |
-| **`deviceId`**                      | <code>string</code>                                                           | The `deviceId` of the camera to use. If provided, `position` is ignored.                                                                                                                                                            |                        |        |
-| **`enablePhysicalDeviceSelection`** | <code>boolean</code>                                                          | On Android, attempts to bind a physical camera directly when `deviceId` refers to a physical lens. Disabled by default because OEM support is inconsistent; when false, Android keeps the current logical-camera fallback behavior. | <code>false</code>     |        |
-| **`initialZoomLevel`**              | <code>number</code>                                                           | The initial zoom level when starting the camera preview. If the requested zoom level is not available, the native plugin will reject.                                                                                               | <code>1.0</code>       | 2.2.0  |
-| **`positioning`**                   | <code><a href="#camerapositioning">CameraPositioning</a></code>               | The vertical positioning of the camera preview.                                                                                                                                                                                     | <code>"center"</code>  | 2.3.0  |
-| **`enableVideoMode`**               | <code>boolean</code>                                                          | If true, enables video capture capabilities when the camera starts.                                                                                                                                                                 | <code>false</code>     | 7.11.0 |
-| **`force`**                         | <code>boolean</code>                                                          | If true, forces the camera to start/restart even if it's already running or busy. This will kill the current camera session and start a new one, ignoring all state checks.                                                         | <code>false</code>     |        |
-| **`videoQuality`**                  | <code>'low' \| 'medium' \| 'high'</code>                                      | Sets the quality of video for recording. Options: 'low', 'medium', 'high'                                                                                                                                                           | <code>"high"</code>    |        |
+| Prop                                | Type                                                                               | Description                                                                                                                                                                                                                         | Default                | Since  |
+| ----------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------ |
+| **`parent`**                        | <code>string</code>                                                                | The parent element to attach the video preview to.                                                                                                                                                                                  |                        |        |
+| **`className`**                     | <code>string</code>                                                                | A CSS class name to add to the preview element.                                                                                                                                                                                     |                        |        |
+| **`width`**                         | <code>number</code>                                                                | The width of the preview in pixels. Defaults to the screen width.                                                                                                                                                                   |                        |        |
+| **`height`**                        | <code>number</code>                                                                | The height of the preview in pixels. Defaults to the screen height.                                                                                                                                                                 |                        |        |
+| **`x`**                             | <code>number</code>                                                                | The horizontal origin of the preview, in pixels.                                                                                                                                                                                    |                        |        |
+| **`y`**                             | <code>number</code>                                                                | The vertical origin of the preview, in pixels.                                                                                                                                                                                      |                        |        |
+| **`aspectRatio`**                   | <code><a href="#camerapreviewaspectratio">CameraPreviewAspectRatio</a></code>      | The aspect ratio of the camera preview, '4:3' or '16:9' or 'fill'. Cannot be set if width or height is provided, otherwise the call will be rejected. Use setPreviewSize to adjust size after starting.                             |                        | 2.0.0  |
+| **`aspectMode`**                    | <code>'cover' \| 'contain'</code>                                                  | Controls how the camera preview fills the available space. - 'contain': Fits the entire preview within the space, may show letterboxing (default). - 'cover': Fills the entire space, may crop edges of the preview.                | <code>"contain"</code> |        |
+| **`gridMode`**                      | <code><a href="#gridmode">GridMode</a></code>                                      | The grid overlay to display on the camera preview.                                                                                                                                                                                  | <code>"none"</code>    | 2.1.0  |
+| **`includeSafeAreaInsets`**         | <code>boolean</code>                                                               | Adjusts the y-position to account for safe areas (e.g., notches).                                                                                                                                                                   | <code>false</code>     |        |
+| **`toBack`**                        | <code>boolean</code>                                                               | If true, places the preview behind the webview.                                                                                                                                                                                     | <code>true</code>      |        |
+| **`paddingBottom`**                 | <code>number</code>                                                                | Bottom padding for the preview, in pixels.                                                                                                                                                                                          |                        |        |
+| **`rotateWhenOrientationChanged`**  | <code>boolean</code>                                                               | Whether to rotate the preview when the device orientation changes.                                                                                                                                                                  | <code>true</code>      |        |
+| **`position`**                      | <code>string</code>                                                                | The camera to use.                                                                                                                                                                                                                  | <code>"rear"</code>    |        |
+| **`storeToFile`**                   | <code>boolean</code>                                                               | If true, saves the captured image to a file and returns the file path. If false, returns a base64 encoded string.                                                                                                                   | <code>false</code>     |        |
+| **`disableExifHeaderStripping`**    | <code>boolean</code>                                                               | If true, prevents the plugin from rotating the image based on EXIF data.                                                                                                                                                            | <code>false</code>     |        |
+| **`disableAudio`**                  | <code>boolean</code>                                                               | If true, disables the audio stream, preventing audio permission requests.                                                                                                                                                           | <code>true</code>      |        |
+| **`lockAndroidOrientation`**        | <code>boolean</code>                                                               | If true, locks the device orientation while the camera is active.                                                                                                                                                                   | <code>false</code>     |        |
+| **`enableOpacity`**                 | <code>boolean</code>                                                               | If true, allows the camera preview's opacity to be changed.                                                                                                                                                                         | <code>false</code>     |        |
+| **`disableFocusIndicator`**         | <code>boolean</code>                                                               | If true, disables the visual focus indicator when tapping to focus.                                                                                                                                                                 | <code>false</code>     |        |
+| **`deviceId`**                      | <code>string</code>                                                                | The `deviceId` of the camera to use. If provided, `position` is ignored.                                                                                                                                                            |                        |        |
+| **`enablePhysicalDeviceSelection`** | <code>boolean</code>                                                               | On Android, attempts to bind a physical camera directly when `deviceId` refers to a physical lens. Disabled by default because OEM support is inconsistent; when false, Android keeps the current logical-camera fallback behavior. | <code>false</code>     |        |
+| **`initialZoomLevel`**              | <code>number</code>                                                                | The initial zoom level when starting the camera preview. If the requested zoom level is not available, the native plugin will reject.                                                                                               | <code>1.0</code>       | 2.2.0  |
+| **`positioning`**                   | <code><a href="#camerapositioning">CameraPositioning</a></code>                    | The vertical positioning of the camera preview.                                                                                                                                                                                     | <code>"center"</code>  | 2.3.0  |
+| **`enableVideoMode`**               | <code>boolean</code>                                                               | If true, enables video capture capabilities when the camera starts.                                                                                                                                                                 | <code>false</code>     | 7.11.0 |
+| **`force`**                         | <code>boolean</code>                                                               | If true, forces the camera to start/restart even if it's already running or busy. This will kill the current camera session and start a new one, ignoring all state checks.                                                         | <code>false</code>     |        |
+| **`videoQuality`**                  | <code>'low' \| 'medium' \| 'high'</code>                                           | Sets the quality of video for recording. Options: 'low', 'medium', 'high'                                                                                                                                                           | <code>"high"</code>    |        |
+| **`barcodeScanner`**                | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                               |                        | 8.8.0  |
+
+
+#### BarcodeScannerOptions
+
+| Prop                    | Type                                | Description                                                                                                                               | Default          |
+| ----------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| **`formats`**           | <code>BarcodeScannerFormat[]</code> | Restricts detection to the given formats. Leaving this empty scans all supported formats. Restricting formats can improve scanning speed. |                  |
+| **`detectionInterval`** | <code>number</code>                 | Minimum delay between native scan attempts in milliseconds. Lower values scan more often but use more CPU.                                | <code>500</code> |
 
 
 #### ExifData
@@ -1231,6 +1344,30 @@ Represents the detailed information of the currently active lens.
 | **`remove`** | <code>() =&gt; Promise&lt;void&gt;</code> |
 
 
+#### BarcodeScannedEvent
+
+| Prop           | Type                             | Description                              |
+| -------------- | -------------------------------- | ---------------------------------------- |
+| **`barcodes`** | <code>BarcodeScanResult[]</code> | Barcodes decoded from the current frame. |
+
+
+#### BarcodeScanResult
+
+| Prop               | Type                                                    | Description                                              |
+| ------------------ | ------------------------------------------------------- | -------------------------------------------------------- |
+| **`value`**        | <code>string</code>                                     | Decoded barcode value.                                   |
+| **`format`**       | <code><a href="#barcodeformat">BarcodeFormat</a></code> | Barcode format.                                          |
+| **`displayValue`** | <code>string</code>                                     | Human-readable value when the platform exposes one.      |
+| **`rawBytes`**     | <code>string</code>                                     | Base64-encoded raw bytes when the platform exposes them. |
+
+
+#### BarcodeScanErrorEvent
+
+| Prop          | Type                | Description                   |
+| ------------- | ------------------- | ----------------------------- |
+| **`message`** | <code>string</code> | Native scanner error message. |
+
+
 #### SafeAreaInsets
 
 Represents safe area insets for devices.
@@ -1264,6 +1401,11 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 #### CameraPositioning
 
 <code>'center' | 'top' | 'bottom'</code>
+
+
+#### BarcodeScannerFormat
+
+<code>'aztec' | 'codabar' | 'code_39' | 'code_93' | 'code_128' | 'data_matrix' | 'ean_8' | 'ean_13' | 'itf' | 'pdf417' | 'qr_code' | 'upc_a' | 'upc_e'</code>
 
 
 #### PictureFormat
@@ -1301,6 +1443,11 @@ From T, pick a set of properties whose keys are in the union K
 Canonical device orientation values across platforms.
 
 <code>'portrait' | 'landscape-left' | 'landscape-right' | 'portrait-upside-down' | 'unknown'</code>
+
+
+#### BarcodeFormat
+
+<code><a href="#barcodescannerformat">BarcodeScannerFormat</a> | 'unknown'</code>
 
 
 #### ExposureMode

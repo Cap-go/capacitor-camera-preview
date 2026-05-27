@@ -22,9 +22,11 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.location.Location;
+import android.media.Image;
 import android.media.MediaScannerConnection;
 import android.os.Build;
 import android.os.Environment;
+import android.os.SystemClock;
 import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -47,9 +49,11 @@ import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExperimentalGetImage;
 import androidx.camera.core.ExposureState;
 import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.FocusMeteringResult;
+import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
@@ -83,6 +87,11 @@ import app.capgo.capacitor.camera.preview.model.CameraSessionConfiguration;
 import app.capgo.capacitor.camera.preview.model.LensInfo;
 import app.capgo.capacitor.camera.preview.model.ZoomFactors;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.mlkit.vision.barcode.BarcodeScanner;
+import com.google.mlkit.vision.barcode.BarcodeScannerOptions;
+import com.google.mlkit.vision.barcode.BarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.common.InputImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -104,6 +113,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class CameraXView implements LifecycleOwner, LifecycleObserver {
@@ -116,9 +126,16 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         void onPictureTakenError(String message);
         void onSampleTaken(String result);
         void onSampleTakenError(String message);
+        void onBarcodesScanned(JSONArray barcodes);
+        void onBarcodeScanError(String message);
         void onCameraStarted(int width, int height, int x, int y);
         void onCameraStartError(String message);
         void onCameraStopped(CameraXView source);
+    }
+
+    public interface BarcodeScannerStartCallback {
+        void onStarted();
+        void onError(String message);
     }
 
     public interface VideoRecordingCallback {
@@ -130,6 +147,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Camera camera;
     private ImageCapture imageCapture;
     private ImageCapture sampleImageCapture;
+    private ImageAnalysis barcodeAnalysis;
+    private BarcodeScanner barcodeScanner;
     private VideoCapture<Recorder> videoCapture;
     private Recording currentRecording;
     private File currentVideoFile;
@@ -168,6 +187,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private volatile boolean isCapturingPhoto = false;
     private volatile boolean stopRequested = false;
     private volatile boolean previewDetachedOnDeferredStop = false;
+    private volatile boolean isBarcodeScannerActive = false;
+    private volatile boolean isBarcodeFrameProcessing = false;
+    private volatile long lastBarcodeFrameAtMs = 0L;
+    private volatile long barcodeDetectionIntervalMs = 500L;
 
     // Operation coordination (acts like a semaphore to prevent stop during active ops)
     private final Object operationLock = new Object();
@@ -601,6 +624,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         mainExecutor.execute(() -> {
             try {
+                stopBarcodeScannerInternal(false);
                 lifecycleRegistry.setCurrentState(Lifecycle.State.DESTROYED);
                 if (cameraProvider != null) {
                     cameraProvider.unbindAll();
@@ -1517,6 +1541,262 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 ", physicalCameraId=" +
                 currentPhysicalDeviceId
         );
+    }
+
+    public void startBarcodeScanner(List<String> formats, int detectionIntervalMs, BarcodeScannerStartCallback callback) {
+        if (!isRunning || cameraProvider == null || currentCameraSelector == null || cameraExecutor == null) {
+            callback.onError("Camera is not running");
+            return;
+        }
+
+        mainExecutor.execute(() -> {
+            try {
+                stopBarcodeScannerInternal(true);
+                barcodeScanner = createBarcodeScanner(formats);
+                barcodeDetectionIntervalMs = Math.max(100L, detectionIntervalMs);
+                lastBarcodeFrameAtMs = 0L;
+                isBarcodeFrameProcessing = false;
+                isBarcodeScannerActive = true;
+
+                ResolutionSelector barcodeResolutionSelector = new ResolutionSelector.Builder()
+                    .setResolutionStrategy(
+                        new ResolutionStrategy(new Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
+                    )
+                    .build();
+
+                barcodeAnalysis = new ImageAnalysis.Builder()
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                    .setResolutionSelector(barcodeResolutionSelector)
+                    .build();
+                barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
+
+                cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
+                callback.onStarted();
+            } catch (Exception e) {
+                stopBarcodeScannerInternal(true);
+                callback.onError("Failed to start barcode scanner: " + e.getMessage());
+            }
+        });
+    }
+
+    public void stopBarcodeScanner() {
+        mainExecutor.execute(() -> stopBarcodeScannerInternal(true));
+    }
+
+    private void stopBarcodeScannerInternal(boolean unbindAnalysis) {
+        isBarcodeScannerActive = false;
+        isBarcodeFrameProcessing = false;
+        lastBarcodeFrameAtMs = 0L;
+
+        if (barcodeAnalysis != null) {
+            barcodeAnalysis.clearAnalyzer();
+            if (unbindAnalysis && cameraProvider != null) {
+                try {
+                    cameraProvider.unbind(barcodeAnalysis);
+                } catch (Exception e) {
+                    Log.w(TAG, "stopBarcodeScannerInternal: failed to unbind barcode analysis", e);
+                }
+            }
+            barcodeAnalysis = null;
+        }
+
+        if (barcodeScanner != null) {
+            try {
+                barcodeScanner.close();
+            } catch (Exception e) {
+                Log.w(TAG, "stopBarcodeScannerInternal: failed to close scanner", e);
+            }
+            barcodeScanner = null;
+        }
+    }
+
+    private BarcodeScanner createBarcodeScanner(List<String> formats) {
+        if (formats == null || formats.isEmpty()) {
+            return BarcodeScanning.getClient();
+        }
+
+        int[] mlKitFormats = toMlKitBarcodeFormats(formats);
+        if (mlKitFormats.length == 0) {
+            throw new IllegalArgumentException("No supported barcode formats requested");
+        }
+
+        BarcodeScannerOptions.Builder builder = new BarcodeScannerOptions.Builder();
+        int[] extraFormats = Arrays.copyOfRange(mlKitFormats, 1, mlKitFormats.length);
+        builder.setBarcodeFormats(mlKitFormats[0], extraFormats);
+        return BarcodeScanning.getClient(builder.build());
+    }
+
+    private int[] toMlKitBarcodeFormats(List<String> formats) {
+        if (formats == null || formats.isEmpty()) {
+            return new int[0];
+        }
+
+        List<Integer> mappedFormats = new ArrayList<>();
+        for (String format : formats) {
+            int mappedFormat = toMlKitBarcodeFormat(format);
+            if (mappedFormat != -1 && !mappedFormats.contains(mappedFormat)) {
+                mappedFormats.add(mappedFormat);
+            }
+        }
+
+        int[] result = new int[mappedFormats.size()];
+        for (int i = 0; i < mappedFormats.size(); i++) {
+            result[i] = mappedFormats.get(i);
+        }
+        return result;
+    }
+
+    private int toMlKitBarcodeFormat(String format) {
+        if (format == null) {
+            return -1;
+        }
+
+        switch (format) {
+            case "aztec":
+                return Barcode.FORMAT_AZTEC;
+            case "codabar":
+                return Barcode.FORMAT_CODABAR;
+            case "code_39":
+                return Barcode.FORMAT_CODE_39;
+            case "code_93":
+                return Barcode.FORMAT_CODE_93;
+            case "code_128":
+                return Barcode.FORMAT_CODE_128;
+            case "data_matrix":
+                return Barcode.FORMAT_DATA_MATRIX;
+            case "ean_8":
+                return Barcode.FORMAT_EAN_8;
+            case "ean_13":
+                return Barcode.FORMAT_EAN_13;
+            case "itf":
+                return Barcode.FORMAT_ITF;
+            case "pdf417":
+                return Barcode.FORMAT_PDF417;
+            case "qr_code":
+                return Barcode.FORMAT_QR_CODE;
+            case "upc_a":
+                return Barcode.FORMAT_UPC_A;
+            case "upc_e":
+                return Barcode.FORMAT_UPC_E;
+            default:
+                return -1;
+        }
+    }
+
+    @OptIn(markerClass = ExperimentalGetImage.class)
+    private void analyzeBarcodeImage(@NonNull ImageProxy imageProxy) {
+        BarcodeScanner scanner = barcodeScanner;
+        long now = SystemClock.elapsedRealtime();
+
+        if (
+            !isBarcodeScannerActive ||
+            scanner == null ||
+            isBarcodeFrameProcessing ||
+            now - lastBarcodeFrameAtMs < barcodeDetectionIntervalMs
+        ) {
+            imageProxy.close();
+            return;
+        }
+
+        Image mediaImage = imageProxy.getImage();
+        if (mediaImage == null) {
+            imageProxy.close();
+            return;
+        }
+
+        isBarcodeFrameProcessing = true;
+        lastBarcodeFrameAtMs = now;
+
+        InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+        scanner
+            .process(image)
+            .addOnSuccessListener((barcodes) -> {
+                if (!isBarcodeScannerActive || barcodes.isEmpty() || listener == null) {
+                    return;
+                }
+
+                JSONArray result = new JSONArray();
+                for (Barcode barcode : barcodes) {
+                    JSONObject barcodeJson = barcodeToJson(barcode);
+                    if (barcodeJson != null) {
+                        result.put(barcodeJson);
+                    }
+                }
+
+                if (result.length() > 0) {
+                    listener.onBarcodesScanned(result);
+                }
+            })
+            .addOnFailureListener((e) -> {
+                if (isBarcodeScannerActive && listener != null) {
+                    listener.onBarcodeScanError("Barcode scan failed: " + e.getMessage());
+                }
+            })
+            .addOnCompleteListener((task) -> {
+                isBarcodeFrameProcessing = false;
+                imageProxy.close();
+            });
+    }
+
+    private JSONObject barcodeToJson(Barcode barcode) {
+        String value = barcode.getRawValue();
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+
+        JSONObject barcodeJson = new JSONObject();
+        try {
+            barcodeJson.put("value", value);
+            barcodeJson.put("format", fromMlKitBarcodeFormat(barcode.getFormat()));
+
+            String displayValue = barcode.getDisplayValue();
+            if (displayValue != null) {
+                barcodeJson.put("displayValue", displayValue);
+            }
+
+            byte[] rawBytes = barcode.getRawBytes();
+            if (rawBytes != null && rawBytes.length > 0) {
+                barcodeJson.put("rawBytes", Base64.encodeToString(rawBytes, Base64.NO_WRAP));
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "barcodeToJson: failed to serialize barcode", e);
+            return null;
+        }
+
+        return barcodeJson;
+    }
+
+    private String fromMlKitBarcodeFormat(int format) {
+        switch (format) {
+            case Barcode.FORMAT_AZTEC:
+                return "aztec";
+            case Barcode.FORMAT_CODABAR:
+                return "codabar";
+            case Barcode.FORMAT_CODE_39:
+                return "code_39";
+            case Barcode.FORMAT_CODE_93:
+                return "code_93";
+            case Barcode.FORMAT_CODE_128:
+                return "code_128";
+            case Barcode.FORMAT_DATA_MATRIX:
+                return "data_matrix";
+            case Barcode.FORMAT_EAN_8:
+                return "ean_8";
+            case Barcode.FORMAT_EAN_13:
+                return "ean_13";
+            case Barcode.FORMAT_ITF:
+                return "itf";
+            case Barcode.FORMAT_PDF417:
+                return "pdf417";
+            case Barcode.FORMAT_QR_CODE:
+                return "qr_code";
+            case Barcode.FORMAT_UPC_A:
+                return "upc_a";
+            case Barcode.FORMAT_UPC_E:
+                return "upc_e";
+            default:
+                return "unknown";
+        }
     }
 
     private void copyMutableSessionConfigState(CameraSessionConfiguration source, CameraSessionConfiguration target) {
