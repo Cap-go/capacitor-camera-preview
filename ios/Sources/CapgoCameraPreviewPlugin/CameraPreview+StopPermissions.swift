@@ -99,7 +99,6 @@ extension CameraPreview {
 
             // Remove notification observers regardless
             NotificationCenter.default.removeObserver(self)
-            NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
             if self.isGeneratingDeviceOrientationNotifications {
                 UIDevice.current.endGeneratingDeviceOrientationNotifications()
                 self.isGeneratingDeviceOrientationNotifications = false

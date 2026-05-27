@@ -93,16 +93,16 @@ extension CameraPreview {
         let quality = call.getFloat("quality", 85)
         let saveToGallery = call.getBool("saveToGallery", false)
         let withExifLocation = call.getBool("withExifLocation", false)
-        let embedTimestamp = call.getBool("embedTimestamp", false) ?? false
-        let embedLocationRequested = call.getBool("embedLocation", false) ?? false
-        let effectiveEmbedLocation = (withExifLocation ?? false) && embedLocationRequested
+        let embedTimestamp = call.getBool("embedTimestamp", false)
+        let embedLocationRequested = call.getBool("embedLocation", false)
+        let effectiveEmbedLocation = withExifLocation && embedLocationRequested
         let width = call.getInt("width")
         let height = call.getInt("height")
         let photoQualityPrioritization = call.getString("photoQualityPrioritization", "speed")
 
         print("[CameraPreview] Raw parameter values - width: \(String(describing: width)), height: \(String(describing: height))")
 
-        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1)")
+        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1)")
         print("[CameraPreview] Current location: \(self.currentLocation?.description ?? "nil")")
         // Safely read frame from main thread for logging
         let (previewWidth, previewHeight): (CGFloat, CGFloat) = {
@@ -119,14 +119,14 @@ extension CameraPreview {
         }()
         print("[CameraPreview] Preview dimensions: \(previewWidth)x\(previewHeight)")
 
-        let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
+        let gpsForThisCapture = withExifLocation ? self.currentLocation : nil
         self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
             DispatchQueue.main.async {
                 print("[CameraPreview] Processing capture on main thread")
                 // Ensure heading updates are stopped on all exit paths (error, guard failure, or success)
                 defer {
-                    if withExifLocation ?? false {
+                    if withExifLocation {
                         self.locationManager?.stopUpdatingHeading()
                         self.currentHeading = nil
                     }
@@ -375,9 +375,14 @@ extension CameraPreview {
                 }
                 call.resolve(["value": imageBase64])
             } else {
+                guard let imageData = imageData else {
+                    call.reject("Failed to encode image")
+                    return
+                }
+
                 do {
                     let fileUrl = self.getTempFilePath()
-                    try imageData?.write(to: fileUrl)
+                    try imageData.write(to: fileUrl)
                     call.resolve(["value": fileUrl.absoluteString])
                 } catch {
                     call.reject("Error writing image to file")

@@ -185,15 +185,12 @@ extension UIImage {
         case .down, .downMirrored:
             transform = transform.translatedBy(x: size.width, y: size.height)
             transform = transform.rotated(by: CGFloat.pi)
-            print("down")
         case .left, .leftMirrored:
             transform = transform.translatedBy(x: size.width, y: 0)
             transform = transform.rotated(by: CGFloat.pi / 2.0)
-            print("left")
         case .right, .rightMirrored:
             transform = transform.translatedBy(x: 0, y: size.height)
             transform = transform.rotated(by: CGFloat.pi / -2.0)
-            print("right")
         case .up, .upMirrored:
             break
         @unknown default:
@@ -203,11 +200,11 @@ extension UIImage {
         // Flip image one more time if needed to, this is to prevent flipped image
         switch imageOrientation {
         case .upMirrored, .downMirrored:
-            _ = transform.translatedBy(x: size.width, y: 0)
-            _ = transform.scaledBy(x: -1, y: 1)
+            transform = transform.translatedBy(x: size.width, y: 0)
+            transform = transform.scaledBy(x: -1, y: 1)
         case .leftMirrored, .rightMirrored:
-            _ = transform.translatedBy(x: size.height, y: 0)
-            _ = transform.scaledBy(x: -1, y: 1)
+            transform = transform.translatedBy(x: size.height, y: 0)
+            transform = transform.scaledBy(x: -1, y: 1)
         case .up, .down, .left, .right:
             break
         @unknown default:
@@ -227,17 +224,21 @@ extension UIImage {
             }
         }
         guard let newCGImage = ctx.makeImage() else { return nil }
-        return UIImage.init(cgImage: newCGImage, scale: 1, orientation: .up)
+        return UIImage(cgImage: newCGImage, scale: 1, orientation: .up)
     }
 }
 
 extension CameraController: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        let completion = self.videoRecordingCompletion
+        self.videoRecordingCompletion = nil
+
         if let error = error {
             print("Error recording movie: \(error.localizedDescription)")
+            completion?(nil, error)
         } else {
             print("Movie recorded successfully: \(outputFileURL)")
-            // You can save the file to the library, upload it, etc.
+            completion?(outputFileURL, nil)
         }
     }
 }

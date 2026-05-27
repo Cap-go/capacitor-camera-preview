@@ -125,11 +125,15 @@ extension CameraController {
             self.currentCameraPosition = .rear
         }
         // (Lightweight focus config; non-fatal on failure)
-        try? targetDevice.lockForConfiguration()
-        if targetDevice.isFocusModeSupported(.continuousAutoFocus) {
-            targetDevice.focusMode = .continuousAutoFocus
+        do {
+            try targetDevice.lockForConfiguration()
+            defer { targetDevice.unlockForConfiguration() }
+            if targetDevice.isFocusModeSupported(.continuousAutoFocus) {
+                targetDevice.focusMode = .continuousAutoFocus
+            }
+        } catch {
+            print("[CameraPreview] Could not configure focus for switched camera: \(error)")
         }
-        targetDevice.unlockForConfiguration()
 
         // Restore audio input if it existed
         if let audioInput = existingAudioInput, captureSession.canAddInput(audioInput) {

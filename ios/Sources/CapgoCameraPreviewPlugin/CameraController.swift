@@ -14,8 +14,10 @@ class CameraController: NSObject {
                 case .landscapeLeft: orientation = .landscapeLeft
                 case .landscapeRight: orientation = .landscapeRight
                 case .portraitUpsideDown: orientation = .portraitUpsideDown
-                case .unknown: fallthrough
-                @unknown default: orientation = .portrait
+                case .unknown:
+                    orientation = .portrait
+                @unknown default:
+                    orientation = .portrait
                 }
             }
         } else {
@@ -27,8 +29,10 @@ class CameraController: NSObject {
                     case .landscapeLeft: orientation = .landscapeLeft
                     case .landscapeRight: orientation = .landscapeRight
                     case .portraitUpsideDown: orientation = .portraitUpsideDown
-                    case .unknown: fallthrough
-                    @unknown default: orientation = .portrait
+                    case .unknown:
+                        orientation = .portrait
+                    @unknown default:
+                        orientation = .portrait
                     }
                 }
                 semaphore.signal()
@@ -139,6 +143,7 @@ class CameraController: NSObject {
     var lastCaptureOrientation: AVCaptureVideoOrientation?
 
     var videoFileURL: URL?
+    var videoRecordingCompletion: ((URL?, Error?) -> Void)?
     let saneMaxZoomFactor: CGFloat = 25.5
 
     var videoQuality: String = "high"

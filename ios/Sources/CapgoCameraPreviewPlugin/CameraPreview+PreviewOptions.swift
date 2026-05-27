@@ -41,19 +41,9 @@ extension CameraPreview {
         let paddingBottom = self.paddingBottom ?? 0
         let isPortrait = self.isPortrait()
 
-        // Calculate available space
-        let availableWidth: CGFloat
-        let availableHeight: CGFloat
-
-        if self.posX == -1 || self.posY == -1 {
-            // Auto-centering mode - use full dimensions
-            availableWidth = webViewWidth
-            availableHeight = webViewHeight - paddingBottom
-        } else {
-            // Manual positioning - calculate remaining space
-            availableWidth = webViewWidth - (self.posX ?? 0)
-            availableHeight = webViewHeight - (self.posY ?? 0) - paddingBottom
-        }
+        // Auto-centering mode - use full dimensions
+        let availableWidth = webViewWidth
+        let availableHeight = webViewHeight - paddingBottom
 
         // Parse aspect ratio - convert to portrait orientation for camera use
         // Use the centralized calculation method
@@ -102,9 +92,8 @@ extension CameraPreview {
             } else {
                 self.cameraController.addGridOverlay(to: self.previewView, gridMode: gridMode)
             }
+            call.resolve()
         }
-
-        call.resolve()
     }
 
     @objc func getGridMode(_ call: CAPPluginCall) {

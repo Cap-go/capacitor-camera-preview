@@ -84,7 +84,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     // Camera state tracking
     var isInitializing: Bool = false
     var isInitialized: Bool = false
-    var backgroundSession: AVCaptureSession?
     var isGeneratingDeviceOrientationNotifications: Bool = false
 
     var previewView: UIView!

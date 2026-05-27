@@ -8,18 +8,7 @@ import UIKit
 
 extension CameraController {
     func getSupportedFlashModes() throws -> [String] {
-        var currentCamera: AVCaptureDevice?
-        switch currentCameraPosition {
-        case .front:
-            currentCamera = self.frontCamera!
-        case .rear:
-            currentCamera = self.rearCamera!
-        default: break
-        }
-
-        guard
-            let device = currentCamera
-        else {
+        guard let device = currentCaptureDevice() else {
             throw CameraControllerError.noCamerasAvailable
         }
 
@@ -40,8 +29,8 @@ extension CameraController {
                     flashModeValue = "auto"
                 default: break
                 }
-                if flashModeValue != nil {
-                    supportedFlashModesAsStrings.append(flashModeValue!)
+                if let flashModeValue = flashModeValue {
+                    supportedFlashModesAsStrings.append(flashModeValue)
                 }
             }
         }
@@ -53,18 +42,7 @@ extension CameraController {
     }
 
     func getHorizontalFov() throws -> Float {
-        var currentCamera: AVCaptureDevice?
-        switch currentCameraPosition {
-        case .front:
-            currentCamera = self.frontCamera!
-        case .rear:
-            currentCamera = self.rearCamera!
-        default: break
-        }
-
-        guard
-            let device = currentCamera
-        else {
+        guard let device = currentCaptureDevice() else {
             throw CameraControllerError.noCamerasAvailable
         }
 
@@ -80,16 +58,7 @@ extension CameraController {
     }
 
     func setFlashMode(flashMode: AVCaptureDevice.FlashMode) throws {
-        var currentCamera: AVCaptureDevice?
-        switch currentCameraPosition {
-        case .front:
-            currentCamera = self.frontCamera!
-        case .rear:
-            currentCamera = self.rearCamera!
-        default: break
-        }
-
-        guard let device = currentCamera else {
+        guard let device = currentCaptureDevice() else {
             throw CameraControllerError.noCamerasAvailable
         }
 
@@ -99,6 +68,7 @@ extension CameraController {
         if supportedFlashModes.contains(flashMode) {
             do {
                 try device.lockForConfiguration()
+                defer { device.unlockForConfiguration() }
 
                 if device.hasTorch && device.isTorchAvailable && device.torchMode == AVCaptureDevice.TorchMode.on {
                     device.torchMode = AVCaptureDevice.TorchMode.off
@@ -107,8 +77,6 @@ extension CameraController {
                 let photoSettings = AVCapturePhotoSettings()
                 photoSettings.flashMode = flashMode
                 self.photoOutput?.photoSettingsForSceneMonitoring = photoSettings
-
-                device.unlockForConfiguration()
             } catch {
                 throw CameraControllerError.invalidOperation
             }
@@ -118,17 +86,8 @@ extension CameraController {
     }
 
     func setTorchMode() throws {
-        var currentCamera: AVCaptureDevice?
-        switch currentCameraPosition {
-        case .front:
-            currentCamera = self.frontCamera!
-        case .rear:
-            currentCamera = self.rearCamera!
-        default: break
-        }
-
         guard
-            let device = currentCamera,
+            let device = currentCaptureDevice(),
             device.hasTorch,
             device.isTorchAvailable
         else {
@@ -137,6 +96,8 @@ extension CameraController {
 
         do {
             try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+
             if device.isTorchModeSupported(AVCaptureDevice.TorchMode.on) {
                 device.torchMode = AVCaptureDevice.TorchMode.on
             } else if device.isTorchModeSupported(AVCaptureDevice.TorchMode.auto) {
@@ -144,7 +105,6 @@ extension CameraController {
             } else {
                 device.torchMode = AVCaptureDevice.TorchMode.off
             }
-            device.unlockForConfiguration()
         } catch {
             throw CameraControllerError.invalidOperation
         }

@@ -84,10 +84,12 @@ extension CameraController {
             return
         }
 
-        // Stop recording video
-        fileVideoOutput.stopRecording()
+        guard fileVideoOutput.isRecording else {
+            completion(self.videoFileURL, nil)
+            return
+        }
 
-        // Return the video file URL in the completion handler
-        completion(self.videoFileURL, nil)
+        self.videoRecordingCompletion = completion
+        fileVideoOutput.stopRecording()
     }
 }

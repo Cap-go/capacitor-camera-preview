@@ -43,7 +43,7 @@ extension CameraController {
                         case .portraitUpsideDown:
                             connection.videoOrientation = .portraitUpsideDown
                         case .unknown:
-                            fallthrough
+                            connection.videoOrientation = .portrait
                         @unknown default:
                             connection.videoOrientation = .portrait
                         }
@@ -62,7 +62,7 @@ extension CameraController {
                             case .portraitUpsideDown:
                                 connection.videoOrientation = .portraitUpsideDown
                             case .unknown:
-                                fallthrough
+                                connection.videoOrientation = .portrait
                             @unknown default:
                                 connection.videoOrientation = .portrait
                             }

@@ -36,13 +36,6 @@ extension CameraController {
         // Store all discovered devices for fast lookup later
         self.allDiscoveredDevices = cameras
 
-        // Log all found devices for debugging
-
-        for camera in cameras {
-            _ = camera.isVirtualDevice ? camera.constituentDevices.count : 1
-
-        }
-
         // Set front camera (usually just one option)
         self.frontCamera = cameras.first(where: { $0.position == .front })
 

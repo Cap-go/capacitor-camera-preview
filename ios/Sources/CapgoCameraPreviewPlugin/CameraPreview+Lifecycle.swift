@@ -9,6 +9,12 @@ import UIKit
 
 extension CameraPreview {
     @objc func start(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.startOnMain(call)
+        }
+    }
+
+    func startOnMain(_ call: CAPPluginCall) {
         logStartSettings(call)
 
         let force = call.getBool("force") ?? false
@@ -99,7 +105,7 @@ extension CameraPreview {
             return
         }
 
-        DispatchQueue.main.sync {
+        let teardown = {
             self.cameraController.removeGridOverlay()
             if let previewView = self.previewView {
                 previewView.removeFromSuperview()
@@ -114,9 +120,15 @@ extension CameraPreview {
             self.cameraController.stopRequestedAfterCapture = false
             self.cameraController.cleanup()
             NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
-            stopOrientationNotificationsIfNeeded()
+            self.stopOrientationNotificationsIfNeeded()
             self.isInitialized = false
             self.isInitializing = false
+        }
+
+        if Thread.isMainThread {
+            teardown()
+        } else {
+            DispatchQueue.main.sync(execute: teardown)
         }
     }
 
@@ -251,22 +263,32 @@ extension CameraPreview {
                                     handleDenied: @escaping (AVAuthorizationStatus) -> Void) {
         let authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
 
+        let startOnMain = {
+            DispatchQueue.main.async(execute: beginStart)
+        }
+
         switch authorizationStatus {
         case .authorized:
-            beginStart()
+            startOnMain()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
-                if granted {
-                    beginStart()
-                } else {
-                    let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
-                    handleDenied(currentStatus)
+                DispatchQueue.main.async {
+                    if granted {
+                        beginStart()
+                    } else {
+                        let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
+                        handleDenied(currentStatus)
+                    }
                 }
             }
         case .denied, .restricted:
-            handleDenied(authorizationStatus)
+            DispatchQueue.main.async {
+                handleDenied(authorizationStatus)
+            }
         @unknown default:
-            handleDenied(authorizationStatus)
+            DispatchQueue.main.async {
+                handleDenied(authorizationStatus)
+            }
         }
     }
     func completeStartCamera(call: CAPPluginCall) {
@@ -297,10 +319,7 @@ extension CameraPreview {
             self.cameraController.addGridOverlay(to: self.previewView, gridMode: self.gridMode)
         }
 
-        // Setup observers for device rotation and app state changes
-        if self.rotateWhenOrientationChanged == true {
-            NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
-        }
+        // Setup observers for app state changes
         NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
 

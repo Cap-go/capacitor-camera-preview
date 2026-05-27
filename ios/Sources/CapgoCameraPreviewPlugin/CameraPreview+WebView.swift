@@ -64,8 +64,6 @@ extension CameraPreview {
 
         // Now make the changes asynchronously on main thread
         DispatchQueue.main.async {
-            _ = CFAbsoluteTimeGetCurrent()
-
             // Define a recursive function to traverse the view hierarchy
             func makeSubviewsTransparent(_ view: UIView) {
                 // Set the background color to clear
@@ -180,7 +178,7 @@ extension CameraPreview {
         case .denied, .restricted:
             return "denied"
         case .notDetermined:
-            fallthrough
+            return "prompt"
         @unknown default:
             return "prompt"
         }
@@ -192,7 +190,7 @@ extension CameraPreview {
         case .denied:
             return "denied"
         case .undetermined:
-            fallthrough
+            return "prompt"
         @unknown default:
             return "prompt"
         }
