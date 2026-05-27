@@ -743,6 +743,10 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         if (barcodes.length > 0) {
           this.notifyListeners('barcodeScanned', { barcodes });
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Barcode detection failed:', error);
+        this.notifyListeners('barcodeScanError', { message });
       } finally {
         this.barcodeScannerBusy = false;
       }

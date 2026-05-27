@@ -112,6 +112,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var waitingForLocation: Bool = false
     private var isPresentingPermissionAlert: Bool = false
     private var pendingStartBarcodeScannerOptions: (formats: [String], detectionInterval: Int)?
+    private var hasResolvedStartCall: Bool = false
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
@@ -713,6 +714,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         self.isInitializing = true
+        self.hasResolvedStartCall = false
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -920,6 +922,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
+        guard !hasResolvedStartCall else { return }
+        hasResolvedStartCall = true
+        cameraController.firstFrameReadyCallback = nil
+
         if let options = pendingStartBarcodeScannerOptions {
             do {
                 try self.cameraController.startBarcodeScanner(formats: options.formats, detectionIntervalMs: options.detectionInterval) { [weak self] barcodes in

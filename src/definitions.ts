@@ -844,7 +844,7 @@ export interface CameraPreviewPlugin {
    * Adds a listener for non-fatal barcode scanner errors.
    *
    * @since 8.8.0
-   * @platform android
+   * @platform android, web
    */
   addListener(
     eventName: 'barcodeScanError',

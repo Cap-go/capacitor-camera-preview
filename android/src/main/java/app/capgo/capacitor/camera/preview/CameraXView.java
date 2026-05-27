@@ -1543,7 +1543,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         );
     }
 
-    @SuppressWarnings("deprecation")
     public void startBarcodeScanner(List<String> formats, int detectionIntervalMs, BarcodeScannerStartCallback callback) {
         if (!isRunning || cameraProvider == null || currentCameraSelector == null || cameraExecutor == null) {
             callback.onError("Camera is not running");
@@ -1559,9 +1558,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 isBarcodeFrameProcessing = false;
                 isBarcodeScannerActive = true;
 
+                ResolutionSelector barcodeResolutionSelector = new ResolutionSelector.Builder()
+                    .setResolutionStrategy(
+                        new ResolutionStrategy(new Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
+                    )
+                    .build();
+
                 barcodeAnalysis = new ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setTargetResolution(new Size(1280, 720))
+                    .setResolutionSelector(barcodeResolutionSelector)
                     .build();
                 barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
 
@@ -1606,11 +1611,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private BarcodeScanner createBarcodeScanner(List<String> formats) {
-        int[] mlKitFormats = toMlKitBarcodeFormats(formats);
-        if ((formats == null || formats.isEmpty()) && mlKitFormats.length == 0) {
+        if (formats == null || formats.isEmpty()) {
             return BarcodeScanning.getClient();
         }
 
+        int[] mlKitFormats = toMlKitBarcodeFormats(formats);
         if (mlKitFormats.length == 0) {
             throw new IllegalArgumentException("No supported barcode formats requested");
         }
