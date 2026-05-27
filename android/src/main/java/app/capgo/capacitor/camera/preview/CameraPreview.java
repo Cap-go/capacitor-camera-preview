@@ -133,6 +133,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private int lastOrientation = Configuration.ORIENTATION_UNDEFINED;
     private String lastOrientationStr = "unknown";
     private boolean lastDisableAudio = true;
+    private boolean lastIncludeSafeAreaInsets = false;
     private Drawable originalWindowBackground;
     private Float originalWebViewAlpha;
     private Drawable originalWebViewParentBackground;
@@ -901,6 +902,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean lockOrientation = Boolean.TRUE.equals(call.getBoolean("lockAndroidOrientation", false));
         final boolean disableAudio = Boolean.TRUE.equals(call.getBoolean("disableAudio", true));
         this.lastDisableAudio = disableAudio;
+        final boolean includeSafeAreaInsets = Boolean.TRUE.equals(call.getBoolean("includeSafeAreaInsets", false));
+        this.lastIncludeSafeAreaInsets = includeSafeAreaInsets;
         final String aspectRatio = call.getString("aspectRatio", "4:3");
         final String aspectMode = call.getString("aspectMode", "contain");
         final String gridMode = call.getString("gridMode", "none");
@@ -989,6 +992,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 // we need to add that offset when placing native views
                 int webViewTopInset = webViewLocationOnScreen[1];
                 boolean isEdgeToEdgeActive = webViewLocationOnScreen[1] > 0;
+                int safeAreaTopInsetPx = includeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
 
                 // Log all the positioning information for debugging
                 Log.d("CameraPreview", "WebView Position Debug:");
@@ -1044,6 +1048,10 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
                 Log.d("CameraPreview", "  - Using webViewTopInset: " + webViewTopInset);
                 Log.d("CameraPreview", "  - isEdgeToEdgeActive: " + isEdgeToEdgeActive);
+                Log.d(
+                    "CameraPreview",
+                    "  - includeSafeAreaInsets: " + includeSafeAreaInsets + " (safeAreaTopInsetPx=" + safeAreaTopInsetPx + ")"
+                );
 
                 // Calculate position - center if x or y is -1
                 int computedX;
@@ -1162,6 +1170,17 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                             " = " +
                             computedY +
                             (isEdgeToEdgeActive ? " (adjusted for edge-to-edge)" : "")
+                    );
+                }
+
+                // Capacitor 8 edge-to-edge: WebView can be at y=0 while JS layout is below system bars.
+                // If requested, apply the top system inset only when the WebView itself isn't already offset.
+                if (!isEdgeToEdgeActive && includeSafeAreaInsets && safeAreaTopInsetPx > 0) {
+                    int before = computedY;
+                    computedY += safeAreaTopInsetPx;
+                    Log.d(
+                        "CameraPreview",
+                        "Safe-area adjustment: computedY " + before + " + safeAreaTopInsetPx " + safeAreaTopInsetPx + " = " + computedY
                     );
                 }
 
@@ -1288,6 +1307,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
         // Get current preview bounds before rotation
         int[] oldBounds = cameraXView.getCurrentPreviewBounds();
+        if (lastIncludeSafeAreaInsets) {
+            int[] location = new int[2];
+            webView.getLocationOnScreen(location);
+            boolean isWebViewOffset = location[1] > 0;
+            if (!isWebViewOffset) {
+                int safeAreaTopInsetPx = getSafeAreaTopInsetPx();
+                if (safeAreaTopInsetPx > 0) {
+                    int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / density);
+                    oldBounds[1] = Math.max(0, oldBounds[1] - safeAreaTopInsetLogical);
+                }
+            }
+        }
         Log.d(
             TAG,
             "Current preview bounds before rotation: x=" +
@@ -1338,6 +1369,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 // Force aspect ratio recalculation on orientation change
                 cameraXView.forceAspectRatioRecalculation(ar, null, null, () -> {
                     int[] bounds = cameraXView.getCurrentPreviewBounds();
+                    if (lastIncludeSafeAreaInsets) {
+                        int[] location = new int[2];
+                        webView.getLocationOnScreen(location);
+                        boolean isWebViewOffset = location[1] > 0;
+                        if (!isWebViewOffset) {
+                            int safeAreaTopInsetPx = getSafeAreaTopInsetPx();
+                            if (safeAreaTopInsetPx > 0) {
+                                int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / density);
+                                bounds[1] = Math.max(0, bounds[1] - safeAreaTopInsetLogical);
+                            }
+                        }
+                    }
                     Log.d(
                         TAG,
                         "New bounds after orientation change: x=" +
@@ -1630,14 +1673,25 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 isEdgeToEdgeActive = webViewTopInset > 0;
             }
 
-            // Only convert to relative position if edge-to-edge is active
-            int relativeY = isEdgeToEdgeActive ? (y - webViewTopInset) : y;
+            int safeAreaTopInsetPx = lastIncludeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
+
+            // Only convert to relative position if WebView is offset or safe-area insets were applied.
+            int relativeY = y;
+            if (isEdgeToEdgeActive) {
+                relativeY = y - webViewTopInset;
+            } else if (lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0) {
+                relativeY = y - safeAreaTopInsetPx;
+            }
 
             Log.d("CameraPreview", "========================");
             Log.d("CameraPreview", "CAMERA STARTED - POSITION RETURNED:");
             Log.d("CameraPreview", "7. RETURNED (pixels) - x=" + x + ", y=" + y + ", width=" + width + ", height=" + height);
             Log.d("CameraPreview", "8. EDGE-TO-EDGE - " + (isEdgeToEdgeActive ? "ACTIVE" : "INACTIVE"));
             Log.d("CameraPreview", "9. WEBVIEW INSET - " + webViewTopInset);
+            Log.d(
+                "CameraPreview",
+                "9b. SAFE AREA - " + (lastIncludeSafeAreaInsets ? ("ENABLED (inset=" + safeAreaTopInsetPx + ")") : "DISABLED")
+            );
             Log.d(
                 "CameraPreview",
                 "10. RELATIVE Y - " + relativeY + " (y=" + y + (isEdgeToEdgeActive ? " - inset=" + webViewTopInset : " unchanged") + ")"
@@ -1817,6 +1871,26 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             cameraXView.setAspectRatio(aspectRatio, x, y, () -> {
                 // Return the actual preview bounds after layout and camera operations are complete
                 int[] bounds = cameraXView.getCurrentPreviewBounds();
+                if (lastIncludeSafeAreaInsets) {
+                    DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
+                    float pixelRatio = metrics.density;
+                    WebView webView = getBridge().getWebView();
+                    int webViewTopInset = 0;
+                    boolean isWebViewOffset = false;
+                    if (webView != null) {
+                        int[] location = new int[2];
+                        webView.getLocationOnScreen(location);
+                        webViewTopInset = location[1];
+                        isWebViewOffset = webViewTopInset > 0;
+                    }
+                    if (!isWebViewOffset) {
+                        int safeAreaTopInsetPx = getSafeAreaTopInsetPx();
+                        if (safeAreaTopInsetPx > 0) {
+                            int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / pixelRatio);
+                            bounds[1] = Math.max(0, bounds[1] - safeAreaTopInsetLogical);
+                        }
+                    }
+                }
                 JSObject ret = new JSObject();
                 ret.put("x", bounds[0]);
                 ret.put("y", bounds[1]);
@@ -1874,12 +1948,28 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
         float pixelRatio = metrics.density;
 
+        WebView webView = getBridge().getWebView();
+        int webViewTopInset = 0;
+        boolean isWebViewOffset = false;
+        if (webView != null) {
+            int[] location = new int[2];
+            webView.getLocationOnScreen(location);
+            webViewTopInset = location[1];
+            isWebViewOffset = webViewTopInset > 0;
+        }
+        int safeAreaTopInsetPx = lastIncludeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
+
         JSObject ret = new JSObject();
         // Use same rounding strategy as start method
         double x = Math.ceil(cameraXView.getPreviewX() / pixelRatio);
         double y = Math.ceil(cameraXView.getPreviewY() / pixelRatio);
         double width = Math.floor(cameraXView.getPreviewWidth() / pixelRatio);
         double height = Math.floor(cameraXView.getPreviewHeight() / pixelRatio);
+
+        if (!isWebViewOffset && lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0) {
+            int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / pixelRatio);
+            y = Math.max(0, y - safeAreaTopInsetLogical);
+        }
 
         Log.d("CameraPreview", "getPreviewSize: x=" + x + ", y=" + y + ", width=" + width + ", height=" + height);
         ret.put("x", x);
@@ -1906,31 +1996,40 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
         float pixelRatio = metrics.density;
 
-        // Check if edge-to-edge mode is active
-        WebView webView = getBridge().getWebView();
-        int webViewTopInset = 0;
-        boolean isEdgeToEdgeActive = false;
-        if (webView != null) {
-            int[] location = new int[2];
-            webView.getLocationOnScreen(location);
-            webViewTopInset = location[1];
-            isEdgeToEdgeActive = webViewTopInset > 0;
-        }
+		// Check if edge-to-edge mode is active
+		WebView webView = getBridge().getWebView();
+		int webViewTopInset = 0;
+		if (webView != null) {
+			int[] location = new int[2];
+			webView.getLocationOnScreen(location);
+			webViewTopInset = location[1];
+		}
+		final boolean isWebViewOffset = webViewTopInset > 0;
+		final int safeAreaTopInsetPx = lastIncludeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
+		final float pixelRatioFinal = pixelRatio;
 
-        int x = (xParam != null && xParam > 0) ? (int) (xParam * pixelRatio) : 0;
-        int y = (yParam != null && yParam > 0) ? (int) (yParam * pixelRatio) : 0;
+		int x = (xParam != null && xParam > 0) ? (int) (xParam * pixelRatio) : 0;
+		int y = (yParam != null && yParam > 0) ? (int) (yParam * pixelRatio) : 0;
 
-        // Add edge-to-edge inset to Y if active
-        if (isEdgeToEdgeActive && y > 0) {
+        // Add inset to Y for coordinate conversion if needed.
+        // - If the WebView is already offset from the screen top, use that.
+        // - Otherwise, if safe-area insets were requested (Capacitor 8 edge-to-edge), use system inset.
+        if (isWebViewOffset && y > 0) {
             y += webViewTopInset;
+        } else if (!isWebViewOffset && lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0 && y > 0) {
+            y += safeAreaTopInsetPx;
         }
         int width = (widthParam != null && widthParam > 0) ? (int) (widthParam * pixelRatio) : 0;
         int height = (heightParam != null && heightParam > 0) ? (int) (heightParam * pixelRatio) : 0;
 
-        cameraXView.setPreviewSize(x, y, width, height, () -> {
-            // Return the actual preview bounds after layout operations are complete
-            int[] bounds = cameraXView.getCurrentPreviewBounds();
-            JSObject ret = new JSObject();
+		cameraXView.setPreviewSize(x, y, width, height, () -> {
+			// Return the actual preview bounds after layout operations are complete
+			int[] bounds = cameraXView.getCurrentPreviewBounds();
+			if (!isWebViewOffset && lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0) {
+				int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / pixelRatioFinal);
+				bounds[1] = Math.max(0, bounds[1] - safeAreaTopInsetLogical);
+			}
+			JSObject ret = new JSObject();
             ret.put("x", bounds[0]);
             ret.put("y", bounds[1]);
             ret.put("width", bounds[2]);
@@ -2101,6 +2200,19 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             result = getContext().getResources().getDimensionPixelSize(resourceId);
         }
         return result;
+    }
+
+    private int getSafeAreaTopInsetPx() {
+        try {
+            View decorView = getBridge().getActivity().getWindow().getDecorView();
+            WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(decorView);
+            if (insets != null) {
+                Insets cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout());
+                Insets sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                return Math.max(cutout.top, sysBars.top);
+            }
+        } catch (Exception ignored) {}
+        return getStatusBarHeightPx();
     }
 
     @PluginMethod
