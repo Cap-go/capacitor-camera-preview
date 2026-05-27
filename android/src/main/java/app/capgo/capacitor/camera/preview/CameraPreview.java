@@ -1685,6 +1685,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
         if (!toBack) {
+            restoreSystemUiForToBackMode(activity);
             return;
         }
 
@@ -2211,20 +2212,20 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
         float pixelRatio = metrics.density;
 
-		// Check if edge-to-edge mode is active
-		WebView webView = getBridge().getWebView();
-		int webViewTopInset = 0;
-		if (webView != null) {
-			int[] location = new int[2];
-			webView.getLocationOnScreen(location);
-			webViewTopInset = location[1];
-		}
-		final boolean isWebViewOffset = webViewTopInset > 0;
-		final int safeAreaTopInsetPx = lastIncludeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
-		final float pixelRatioFinal = pixelRatio;
+        // Check if edge-to-edge mode is active
+        WebView webView = getBridge().getWebView();
+        int webViewTopInset = 0;
+        if (webView != null) {
+            int[] location = new int[2];
+            webView.getLocationOnScreen(location);
+            webViewTopInset = location[1];
+        }
+        final boolean isWebViewOffset = webViewTopInset > 0;
+        final int safeAreaTopInsetPx = lastIncludeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
+        final float pixelRatioFinal = pixelRatio;
 
-		int x = (xParam != null && xParam > 0) ? (int) (xParam * pixelRatio) : 0;
-		int y = (yParam != null && yParam > 0) ? (int) (yParam * pixelRatio) : 0;
+        int x = (xParam != null && xParam > 0) ? (int) (xParam * pixelRatio) : 0;
+        int y = (yParam != null && yParam > 0) ? (int) (yParam * pixelRatio) : 0;
 
         // Add inset to Y for coordinate conversion if needed.
         // - If the WebView is already offset from the screen top, use that.
@@ -2237,14 +2238,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         int width = (widthParam != null && widthParam > 0) ? (int) (widthParam * pixelRatio) : 0;
         int height = (heightParam != null && heightParam > 0) ? (int) (heightParam * pixelRatio) : 0;
 
-		cameraXView.setPreviewSize(x, y, width, height, () -> {
-			// Return the actual preview bounds after layout operations are complete
-			int[] bounds = cameraXView.getCurrentPreviewBounds();
-			if (!isWebViewOffset && lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0) {
-				int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / pixelRatioFinal);
-				bounds[1] = Math.max(0, bounds[1] - safeAreaTopInsetLogical);
-			}
-			JSObject ret = new JSObject();
+        cameraXView.setPreviewSize(x, y, width, height, () -> {
+            // Return the actual preview bounds after layout operations are complete
+            int[] bounds = cameraXView.getCurrentPreviewBounds();
+            if (!isWebViewOffset && lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0) {
+                int safeAreaTopInsetLogical = (int) Math.ceil(safeAreaTopInsetPx / pixelRatioFinal);
+                bounds[1] = Math.max(0, bounds[1] - safeAreaTopInsetLogical);
+            }
+            JSObject ret = new JSObject();
             ret.put("x", bounds[0]);
             ret.put("y", bounds[1]);
             ret.put("width", bounds[2]);
