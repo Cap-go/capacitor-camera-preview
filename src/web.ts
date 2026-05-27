@@ -2,6 +2,10 @@ import { WebPlugin } from '@capacitor/core';
 import type { PermissionState } from '@capacitor/core';
 
 import type {
+  BarcodeFormat,
+  BarcodeScanResult,
+  BarcodeScannerOptions,
+  BarcodeScannerFormat,
   CameraDevice,
   CameraPreviewAspectRatio,
   CameraOpacityOptions,
@@ -22,6 +26,10 @@ import type {
 import { DeviceType } from './definitions';
 
 type WebPermissionState = 'granted' | 'denied' | 'prompt';
+type WebBarcodeDetectorResult = {
+  rawValue?: string;
+  format?: string;
+};
 
 const DEFAULT_VIDEO_ID = 'capgo_video';
 export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
@@ -37,6 +45,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: BlobPart[] = [];
   private currentAspectRatio: CameraPreviewAspectRatio = '4:3';
+  private barcodeDetector: any = null;
+  private barcodeScannerTimer: number | null = null;
+  private barcodeScannerBusy = false;
 
   constructor() {
     super();
@@ -561,12 +572,24 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       },
     });
 
-    return {
+    const result = {
       width: Math.round(rect.width),
       height: Math.round(rect.height),
       x: Math.round(rect.x),
       y: Math.round(rect.y),
     };
+
+    const barcodeScannerOptions = this.getStartBarcodeScannerOptions(options);
+    if (barcodeScannerOptions) {
+      try {
+        await this.startBarcodeScanner(barcodeScannerOptions);
+      } catch (error) {
+        await this.stop({ force: true });
+        throw error;
+      }
+    }
+
+    return result;
   }
 
   private stopStream(stream: any) {
@@ -580,6 +603,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   async stop(_options?: { force?: boolean }): Promise<void> {
     // Force option doesn't change behavior on web - we always stop immediately
     void _options; // Mark as intentionally unused
+    await this.stopBarcodeScanner();
+
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (video) {
       video.pause();
@@ -683,6 +708,122 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
   async captureSample(_options: CameraSampleOptions): Promise<any> {
     return this.capture(_options);
+  }
+
+  async startBarcodeScanner(options?: BarcodeScannerOptions): Promise<void> {
+    if (!this.isStarted || !this.videoElement?.srcObject) {
+      throw new Error('camera is not running');
+    }
+
+    const Detector = (window as any).BarcodeDetector;
+    if (!Detector) {
+      throw new Error('BarcodeDetector API is not available in this browser');
+    }
+
+    await this.stopBarcodeScanner();
+
+    const formats = (options?.formats || [])
+      .map((format) => this.toWebBarcodeFormat(format))
+      .filter((format): format is string => !!format);
+    this.barcodeDetector = new Detector(formats.length > 0 ? { formats } : undefined);
+
+    const detectionInterval = Math.max(100, options?.detectionInterval ?? 500);
+    const detect = async () => {
+      if (this.barcodeScannerBusy || !this.barcodeDetector || !this.videoElement?.srcObject) {
+        return;
+      }
+
+      this.barcodeScannerBusy = true;
+      try {
+        const results = (await this.barcodeDetector.detect(this.videoElement)) as WebBarcodeDetectorResult[];
+        const barcodes = results
+          .map((result) => this.toBarcodeScanResult(result))
+          .filter((barcode): barcode is BarcodeScanResult => !!barcode);
+
+        if (barcodes.length > 0) {
+          this.notifyListeners('barcodeScanned', { barcodes });
+        }
+      } finally {
+        this.barcodeScannerBusy = false;
+      }
+    };
+
+    this.barcodeScannerTimer = window.setInterval(() => {
+      void detect();
+    }, detectionInterval);
+    void detect();
+  }
+
+  async stopBarcodeScanner(): Promise<void> {
+    if (this.barcodeScannerTimer !== null) {
+      window.clearInterval(this.barcodeScannerTimer);
+      this.barcodeScannerTimer = null;
+    }
+    this.barcodeDetector = null;
+    this.barcodeScannerBusy = false;
+  }
+
+  private getStartBarcodeScannerOptions(options: CameraPreviewOptions): BarcodeScannerOptions | null {
+    if (options.barcodeScanner === true) {
+      return {};
+    }
+    if (options.barcodeScanner && typeof options.barcodeScanner === 'object') {
+      return options.barcodeScanner;
+    }
+    return null;
+  }
+
+  private toWebBarcodeFormat(format: BarcodeScannerFormat): string | null {
+    switch (format) {
+      case 'aztec':
+      case 'codabar':
+      case 'code_39':
+      case 'code_93':
+      case 'code_128':
+      case 'data_matrix':
+      case 'ean_8':
+      case 'ean_13':
+      case 'itf':
+      case 'pdf417':
+      case 'qr_code':
+      case 'upc_a':
+      case 'upc_e':
+        return format;
+      default:
+        return null;
+    }
+  }
+
+  private toBarcodeScanResult(result: WebBarcodeDetectorResult): BarcodeScanResult | null {
+    if (!result.rawValue) {
+      return null;
+    }
+
+    return {
+      value: result.rawValue,
+      format: this.fromWebBarcodeFormat(result.format),
+    };
+  }
+
+  private fromWebBarcodeFormat(format: string | undefined): BarcodeFormat {
+    switch (format) {
+      case 'aztec':
+      case 'codabar':
+      case 'code_39':
+      case 'code_93':
+      case 'code_128':
+      case 'data_matrix':
+      case 'ean_8':
+      case 'ean_13':
+      case 'itf':
+      case 'pdf417':
+      case 'qr_code':
+      case 'upc_a':
+      case 'upc_e':
+        return format;
+      default:
+        return 'unknown';
+    }
   }
 
   async stopRecordVideo(): Promise<any> {

@@ -10,6 +10,58 @@ export type CameraPositioning = 'center' | 'top' | 'bottom';
 
 export type CameraPreviewAspectRatio = '4:3' | '16:9' | 'fill';
 
+export type BarcodeScannerFormat =
+  | 'aztec'
+  | 'codabar'
+  | 'code_39'
+  | 'code_93'
+  | 'code_128'
+  | 'data_matrix'
+  | 'ean_8'
+  | 'ean_13'
+  | 'itf'
+  | 'pdf417'
+  | 'qr_code'
+  | 'upc_a'
+  | 'upc_e';
+
+export type BarcodeFormat = BarcodeScannerFormat | 'unknown';
+
+export interface BarcodeScannerOptions {
+  /**
+   * Restricts detection to the given formats. Leaving this empty scans all supported formats.
+   * Restricting formats can improve scanning speed.
+   */
+  formats?: BarcodeScannerFormat[];
+  /**
+   * Minimum delay between native scan attempts in milliseconds.
+   * Lower values scan more often but use more CPU.
+   * @default 500
+   */
+  detectionInterval?: number;
+}
+
+export interface BarcodeScanResult {
+  /** Decoded barcode value. */
+  value: string;
+  /** Barcode format. */
+  format: BarcodeFormat;
+  /** Human-readable value when the platform exposes one. */
+  displayValue?: string;
+  /** Base64-encoded raw bytes when the platform exposes them. */
+  rawBytes?: string;
+}
+
+export interface BarcodeScannedEvent {
+  /** Barcodes decoded from the current frame. */
+  barcodes: BarcodeScanResult[];
+}
+
+export interface BarcodeScanErrorEvent {
+  /** Native scanner error message. */
+  message: string;
+}
+
 export interface CameraPermissionStatus {
   camera: PermissionState;
   microphone?: PermissionState;
@@ -256,6 +308,14 @@ export interface CameraPreviewOptions {
    * @default "high"
    */
   videoQuality?: 'low' | 'medium' | 'high';
+  /**
+   * Starts barcode scanning together with the camera preview.
+   * Set to `true` or pass options to scan all supported formats.
+   * Omit this option to keep barcode scanning disabled at startup.
+   * @platform android, ios, web
+   * @since 8.8.0
+   */
+  barcodeScanner?: boolean | BarcodeScannerOptions;
 }
 
 /**
@@ -453,6 +513,28 @@ export interface CameraPreviewPlugin {
    * @since 0.0.1
    */
   captureSample(options: CameraSampleOptions): Promise<{ value: string }>;
+
+  /**
+   * Starts barcode scanning on the active camera preview.
+   *
+   * The scanner reuses the current camera session and emits `barcodeScanned` events.
+   * Call `stopBarcodeScanner()` when scanning is no longer needed.
+   *
+   * Android uses the lightweight Google Play Services ML Kit model. If the model is not installed yet,
+   * first scans may return no result until Google Play Services finishes downloading it.
+   *
+   * @since 8.8.0
+   * @platform android, ios, web
+   */
+  startBarcodeScanner(options?: BarcodeScannerOptions): Promise<void>;
+
+  /**
+   * Stops barcode scanning while keeping the camera preview running.
+   *
+   * @since 8.8.0
+   * @platform android, ios, web
+   */
+  stopBarcodeScanner(): Promise<void>;
 
   /**
    * Gets the flash modes supported by the active camera.
@@ -745,6 +827,28 @@ export interface CameraPreviewPlugin {
   addListener(
     eventName: 'orientationChange',
     listenerFunc: (data: { orientation: DeviceOrientation }) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for barcode scan results.
+   *
+   * @since 8.8.0
+   * @platform android, ios, web
+   */
+  addListener(
+    eventName: 'barcodeScanned',
+    listenerFunc: (data: BarcodeScannedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for non-fatal barcode scanner errors.
+   *
+   * @since 8.8.0
+   * @platform android
+   */
+  addListener(
+    eventName: 'barcodeScanError',
+    listenerFunc: (data: BarcodeScanErrorEvent) => void,
   ): Promise<PluginListenerHandle>;
   /**
    * Deletes a file at the given absolute path on the device.

@@ -25,7 +25,10 @@
     "video",
     "photo",
     "image",
-    "capture"
+    "capture",
+    "barcode",
+    "qr",
+    "scanner"
   ],
   "main": "dist/esm/index.js",
   "types": "dist/esm/index.d.ts",
