@@ -110,6 +110,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             cameraXView = null;
         }
         lastSessionConfig = null;
+        restoreSystemUiForToBackMode(getBridge().getActivity());
     }
 
     private CameraSessionConfiguration lastSessionConfig;
@@ -139,6 +140,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private Drawable originalWindowBackground;
     private Float originalWebViewAlpha;
     private Drawable originalWebViewParentBackground;
+    private Integer originalStatusBarColor;
+    private Integer originalNavigationBarColor;
+    private Boolean originalNavigationBarContrastEnforced;
     private boolean isCameraPermissionDialogShowing = false;
     private boolean pendingStartBarcodeScanner = false;
     private List<String> pendingStartBarcodeFormats = new ArrayList<>();
@@ -528,6 +532,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     originalWindowBackground = null;
                 }
                 restoreWebViewVisualState();
+                restoreSystemUiForToBackMode(getBridge().getActivity());
                 call.resolve();
             });
     }
@@ -1045,6 +1050,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         getBridge()
             .getActivity()
             .runOnUiThread(() -> {
+                lockSystemUiForToBackMode(getBridge().getActivity(), toBack);
                 // Ensure transparent background when preview is behind the WebView (Android 10 fix)
                 if (toBack) {
                     try {
@@ -1670,6 +1676,70 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return manufacturer.contains("xiaomi") || brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco");
     }
 
+    private int toOpaqueColor(int color) {
+        return Color.argb(255, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+    private void lockSystemUiForToBackMode(Activity activity, boolean toBack) {
+        if (activity == null) {
+            return;
+        }
+        if (!toBack) {
+            return;
+        }
+
+        try {
+            if (originalStatusBarColor == null) {
+                originalStatusBarColor = activity.getWindow().getStatusBarColor();
+            }
+            if (originalNavigationBarColor == null) {
+                originalNavigationBarColor = activity.getWindow().getNavigationBarColor();
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && originalNavigationBarContrastEnforced == null) {
+                originalNavigationBarContrastEnforced = activity.getWindow().isNavigationBarContrastEnforced();
+            }
+
+            int statusBarColor = toOpaqueColor(originalStatusBarColor != null ? originalStatusBarColor : Color.BLACK);
+            int navigationBarColor = toOpaqueColor(originalNavigationBarColor != null ? originalNavigationBarColor : Color.BLACK);
+
+            activity.getWindow().setStatusBarColor(statusBarColor);
+            activity.getWindow().setNavigationBarColor(navigationBarColor);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                activity.getWindow().setNavigationBarContrastEnforced(false);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to lock system UI colors for toBack mode", e);
+        }
+    }
+
+    private void restoreSystemUiForToBackMode(Activity activity) {
+        final Integer statusBarColor = originalStatusBarColor;
+        final Integer navigationBarColor = originalNavigationBarColor;
+        final Boolean navigationBarContrastEnforced = originalNavigationBarContrastEnforced;
+        originalStatusBarColor = null;
+        originalNavigationBarColor = null;
+        originalNavigationBarContrastEnforced = null;
+
+        if (activity == null) {
+            return;
+        }
+
+        activity.runOnUiThread(() -> {
+            try {
+                if (statusBarColor != null) {
+                    activity.getWindow().setStatusBarColor(statusBarColor);
+                }
+                if (navigationBarColor != null) {
+                    activity.getWindow().setNavigationBarColor(navigationBarColor);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && navigationBarContrastEnforced != null) {
+                    activity.getWindow().setNavigationBarContrastEnforced(navigationBarContrastEnforced);
+                }
+            } catch (Exception ignored) {}
+        });
+    }
+
     private void applyTransparentBackgroundsForToBack() {
         if (!isToBackMode()) {
             return;
@@ -1999,6 +2069,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             }
         }
         restoreWebViewVisualState();
+        restoreSystemUiForToBackMode(getBridge().getActivity());
     }
 
     @PluginMethod
