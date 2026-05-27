@@ -196,7 +196,7 @@ export interface CameraPreviewOptions {
   gridMode?: GridMode;
   /**
    * Adjusts the y-position to account for safe areas (e.g., notches).
-   * @platform ios
+   * @platform android, ios
    * @default false
    */
   includeSafeAreaInsets?: boolean;
