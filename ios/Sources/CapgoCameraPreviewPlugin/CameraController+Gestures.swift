@@ -13,15 +13,11 @@ extension CameraController: UIGestureRecognizerDelegate {
 
         let point = tap.location(in: tap.view)
         let devicePoint = self.previewLayer?.captureDevicePointConverted(fromLayerPoint: point)
+        let focusPoint = devicePoint ?? CGPoint(x: 0, y: 0)
 
         // Show focus indicator at the tap point if not disabled
         if !self.disableFocusIndicator, let view = tap.view {
             showFocusIndicator(at: point, in: view)
-        }
-
-        guard let devicePoint = devicePoint else {
-            print("[CameraPreview] Cannot focus tap because preview layer is unavailable")
-            return
         }
 
         do {
@@ -30,14 +26,14 @@ extension CameraController: UIGestureRecognizerDelegate {
 
             let focusMode = AVCaptureDevice.FocusMode.autoFocus
             if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(focusMode) {
-                device.focusPointOfInterest = devicePoint
+                device.focusPointOfInterest = focusPoint
                 device.focusMode = focusMode
             }
             // Skip exposure point if locked
             if device.exposureMode != .locked {
                 let exposureMode = AVCaptureDevice.ExposureMode.autoExpose
                 if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(exposureMode) {
-                    device.exposurePointOfInterest = devicePoint
+                    device.exposurePointOfInterest = focusPoint
                     device.exposureMode = exposureMode
                     device.setExposureTargetBias(0.0) { _ in }
                 }

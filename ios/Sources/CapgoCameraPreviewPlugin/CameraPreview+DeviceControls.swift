@@ -33,11 +33,6 @@ extension CameraPreview {
     }
 
     @objc func getSupportedFlashModes(_ call: CAPPluginCall) {
-        guard self.isInitialized else {
-            call.reject("Camera not initialized")
-            return
-        }
-
         do {
             let supportedFlashModes = try self.cameraController.getSupportedFlashModes()
             call.resolve(["result": supportedFlashModes])
@@ -47,11 +42,6 @@ extension CameraPreview {
     }
 
     @objc func getHorizontalFov(_ call: CAPPluginCall) {
-        guard self.isInitialized else {
-            call.reject("Camera not initialized")
-            return
-        }
-
         do {
             let horizontalFov = try self.cameraController.getHorizontalFov()
             call.resolve(["result": horizontalFov])
@@ -61,11 +51,6 @@ extension CameraPreview {
     }
 
     @objc func setFlashMode(_ call: CAPPluginCall) {
-        guard self.isInitialized else {
-            call.reject("Camera not initialized")
-            return
-        }
-
         guard let flashMode = call.getString("flashMode") else {
             call.reject("failed to set flash mode. required parameter flashMode is missing")
             return
@@ -96,11 +81,6 @@ extension CameraPreview {
     }
 
     @objc func startRecordVideo(_ call: CAPPluginCall) {
-        guard self.isInitialized else {
-            call.reject("Camera not initialized")
-            return
-        }
-
         do {
             try self.cameraController.captureVideo()
             call.resolve()
@@ -110,11 +90,6 @@ extension CameraPreview {
     }
 
     @objc func stopRecordVideo(_ call: CAPPluginCall) {
-        guard self.isInitialized else {
-            call.reject("Camera not initialized")
-            return
-        }
-
         self.cameraController.stopRecording { (fileURL, error) in
             guard let fileURL = fileURL else {
                 print(error ?? "Video capture error")

@@ -200,11 +200,9 @@ extension UIImage {
         // Flip image one more time if needed to, this is to prevent flipped image
         switch imageOrientation {
         case .upMirrored, .downMirrored:
-            transform = transform.translatedBy(x: size.width, y: 0)
-            transform = transform.scaledBy(x: -1, y: 1)
+            break
         case .leftMirrored, .rightMirrored:
-            transform = transform.translatedBy(x: size.height, y: 0)
-            transform = transform.scaledBy(x: -1, y: 1)
+            break
         case .up, .down, .left, .right:
             break
         @unknown default:
@@ -230,15 +228,10 @@ extension UIImage {
 
 extension CameraController: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        let completion = self.videoRecordingCompletion
-        self.videoRecordingCompletion = nil
-
         if let error = error {
             print("Error recording movie: \(error.localizedDescription)")
-            completion?(nil, error)
         } else {
             print("Movie recorded successfully: \(outputFileURL)")
-            completion?(outputFileURL, nil)
         }
     }
 }

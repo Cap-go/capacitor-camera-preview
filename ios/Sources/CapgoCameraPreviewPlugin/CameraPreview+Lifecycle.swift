@@ -319,7 +319,10 @@ extension CameraPreview {
             self.cameraController.addGridOverlay(to: self.previewView, gridMode: self.gridMode)
         }
 
-        // Setup observers for app state changes
+        // Setup observers for device rotation and app state changes
+        if self.rotateWhenOrientationChanged == true {
+            NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appDidBecomeActive), name: UIApplication.didBecomeActiveNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.appWillEnterForeground), name: UIApplication.willEnterForegroundNotification, object: nil)
 

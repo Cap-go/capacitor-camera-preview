@@ -16,7 +16,6 @@ extension CameraController {
         let captureContext = PhotoCaptureContext(
             width: width,
             height: height,
-            quality: quality,
             gpsLocation: gpsLocation,
             embedTimestamp: embedTimestamp,
             embedLocation: embedLocation,
@@ -50,7 +49,6 @@ extension CameraController {
     struct PhotoCaptureContext {
         let width: Int?
         let height: Int?
-        let quality: Float
         let gpsLocation: CLLocation?
         let embedTimestamp: Bool
         let embedLocation: Bool
@@ -125,6 +123,10 @@ extension CameraController {
             return
         }
 
+        if let location = context.gpsLocation {
+            self.addGPSMetadata(to: image, location: location)
+        }
+
         var finalImage = imageForRequestedSize(image: image, width: context.width, height: context.height)
         finalImage = imageWithRequestedOverlays(
             image: finalImage,
@@ -132,25 +134,8 @@ extension CameraController {
             metadata: metadata,
             context: context
         )
-        let finalPhotoData = imageDataForCaptureResult(image: finalImage, fallbackData: photoData, context: context)
 
-        context.completion(finalImage, finalPhotoData, metadata, nil)
-    }
-
-    func imageDataForCaptureResult(image: UIImage, fallbackData: Data?, context: PhotoCaptureContext) -> Data? {
-        let compressionQuality = normalizedCompressionQuality(context.quality)
-        if let location = context.gpsLocation,
-           let dataWithLocation = addGPSMetadata(to: image, quality: compressionQuality, location: location) {
-            return dataWithLocation
-        }
-        return image.jpegData(compressionQuality: compressionQuality) ?? fallbackData
-    }
-
-    func normalizedCompressionQuality(_ quality: Float) -> CGFloat {
-        if quality > 1 {
-            return CGFloat(max(0, min(quality, 100)) / 100)
-        }
-        return CGFloat(max(0, min(quality, 1)))
+        context.completion(finalImage, photoData, metadata, nil)
     }
 
     func finishPhotoCaptureIfNeeded() {

@@ -7,10 +7,10 @@ import Foundation
 import UIKit
 
 extension CameraController {
-    func addGPSMetadata(to image: UIImage, quality: CGFloat, location: CLLocation) -> Data? {
-        guard let jpegData = image.jpegData(compressionQuality: quality),
+    func addGPSMetadata(to image: UIImage, location: CLLocation) {
+        guard let jpegData = image.jpegData(compressionQuality: 1.0),
               let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
-              let uti = CGImageSourceGetType(source) else { return nil }
+              let uti = CGImageSourceGetType(source) else { return }
 
         var metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
 
@@ -31,10 +31,9 @@ extension CameraController {
         metadata[kCGImagePropertyGPSDictionary as String] = gpsDict
 
         let destData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(destData, uti, 1, nil) else { return nil }
+        guard let destination = CGImageDestinationCreateWithData(destData, uti, 1, nil) else { return }
         CGImageDestinationAddImageFromSource(destination, source, 0, metadata as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return destData as Data
+        CGImageDestinationFinalize(destination)
     }
 
     func resizeImage(image: UIImage, to size: CGSize) -> UIImage? {
