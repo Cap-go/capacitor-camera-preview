@@ -92,8 +92,9 @@ extension CameraPreview {
             } else {
                 self.cameraController.addGridOverlay(to: self.previewView, gridMode: gridMode)
             }
-            call.resolve()
         }
+
+        call.resolve()
     }
 
     @objc func getGridMode(_ call: CAPPluginCall) {

@@ -43,8 +43,14 @@ extension CameraPreview {
         let status = manager.authorizationStatus
         print("[CameraPreview] locationManagerDidChangeAuthorization called, status: \(status.rawValue), thread: \(Thread.current)")
 
-        DispatchQueue.main.async {
+        if Thread.isMainThread {
+            print("[CameraPreview] Already on main thread")
             self.handleLocationAuthorizationChange(status)
+        } else {
+            print("[CameraPreview] Not on main thread, dispatching")
+            DispatchQueue.main.async {
+                self.handleLocationAuthorizationChange(status)
+            }
         }
     }
 
@@ -92,56 +98,36 @@ extension CameraPreview {
 
     public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("[CameraPreview] locationManager didFailWithError: \(error.localizedDescription)")
-        DispatchQueue.main.async {
-            let completion = self.locationCompletion
-            self.locationCompletion = nil
-            self.locationManager?.stopUpdatingLocation()
-            self.locationManager?.stopUpdatingHeading()
-            completion?(nil)
-        }
     }
     func getCurrentLocation(completion: @escaping (CLLocation?) -> Void) {
-        let startLocationUpdates = {
-            print("[CameraPreview] getCurrentLocation called")
-            self.currentHeading = nil
-            self.locationCompletion = completion
-            self.locationManager?.startUpdatingLocation()
-            print("[CameraPreview] Started updating location")
-            if CLLocationManager.headingAvailable() {
-                self.locationManager?.startUpdatingHeading()
-                print("[CameraPreview] Started updating heading")
-            }
-        }
-
-        if Thread.isMainThread {
-            startLocationUpdates()
-        } else {
-            DispatchQueue.main.async(execute: startLocationUpdates)
+        print("[CameraPreview] getCurrentLocation called")
+        self.currentHeading = nil
+        self.locationCompletion = completion
+        self.locationManager?.startUpdatingLocation()
+        print("[CameraPreview] Started updating location")
+        if CLLocationManager.headingAvailable() {
+            self.locationManager?.startUpdatingHeading()
+            print("[CameraPreview] Started updating heading")
         }
     }
 
     public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         print("[CameraPreview] locationManager didUpdateLocations called, locations count: \(locations.count)")
-        let latestLocation = locations.last
-        DispatchQueue.main.async {
-            self.currentLocation = latestLocation
-            if let completion = self.locationCompletion {
-                print("[CameraPreview] Calling location completion with location: \(self.currentLocation?.description ?? "nil")")
-                self.locationManager?.stopUpdatingLocation()
-                completion(self.currentLocation)
-                self.locationCompletion = nil
-            } else {
-                print("[CameraPreview] No location completion handler found")
-            }
+        self.currentLocation = locations.last
+        if let completion = locationCompletion {
+            print("[CameraPreview] Calling location completion with location: \(self.currentLocation?.description ?? "nil")")
+            self.locationManager?.stopUpdatingLocation()
+            completion(self.currentLocation)
+            locationCompletion = nil
+        } else {
+            print("[CameraPreview] No location completion handler found")
         }
     }
 
     public func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         print("[CameraPreview] locationManager didUpdateHeading: trueHeading=\(newHeading.trueHeading), magneticHeading=\(newHeading.magneticHeading), accuracy=\(newHeading.headingAccuracy)")
-        DispatchQueue.main.async {
-            if newHeading.headingAccuracy >= 0 {
-                self.currentHeading = newHeading
-            }
+        if newHeading.headingAccuracy >= 0 {
+            self.currentHeading = newHeading
         }
     }
 
