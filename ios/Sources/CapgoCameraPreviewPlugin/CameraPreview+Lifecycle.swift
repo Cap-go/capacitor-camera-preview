@@ -9,7 +9,13 @@ import UIKit
 
 extension CameraPreview {
     @objc func start(_ call: CAPPluginCall) {
-        startOnMain(call)
+        if Thread.isMainThread {
+            startOnMain(call)
+        } else {
+            DispatchQueue.main.async {
+                self.startOnMain(call)
+            }
+        }
     }
 
     func startOnMain(_ call: CAPPluginCall) {
@@ -266,11 +272,19 @@ extension CameraPreview {
             beginStart()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
-                if granted {
-                    beginStart()
+                let handleAuthorizationResult = {
+                    if granted {
+                        beginStart()
+                    } else {
+                        let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
+                        handleDenied(currentStatus)
+                    }
+                }
+
+                if Thread.isMainThread {
+                    handleAuthorizationResult()
                 } else {
-                    let currentStatus = AVCaptureDevice.authorizationStatus(for: .video)
-                    handleDenied(currentStatus)
+                    DispatchQueue.main.async(execute: handleAuthorizationResult)
                 }
             }
         case .denied, .restricted:
