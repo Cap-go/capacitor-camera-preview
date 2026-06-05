@@ -1338,6 +1338,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
+                config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
 
                 bridge.saveCall(call);

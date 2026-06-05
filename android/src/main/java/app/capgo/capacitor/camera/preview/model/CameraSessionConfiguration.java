@@ -27,6 +27,7 @@ public class CameraSessionConfiguration {
     private boolean isCentered = false;
     private final String videoQuality;
     private boolean enablePhysicalDeviceSelection = false;
+    private boolean barcodeScannerEnabled = false;
 
     public CameraSessionConfiguration(
         String deviceId,
@@ -156,6 +157,14 @@ public class CameraSessionConfiguration {
 
     public void setEnablePhysicalDeviceSelection(boolean enablePhysicalDeviceSelection) {
         this.enablePhysicalDeviceSelection = enablePhysicalDeviceSelection;
+    }
+
+    public boolean isBarcodeScannerEnabled() {
+        return barcodeScannerEnabled;
+    }
+
+    public void setBarcodeScannerEnabled(boolean barcodeScannerEnabled) {
+        this.barcodeScannerEnabled = barcodeScannerEnabled;
     }
 
     // Additional getters with "get" prefix for compatibility

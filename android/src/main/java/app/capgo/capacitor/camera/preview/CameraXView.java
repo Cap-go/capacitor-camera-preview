@@ -148,6 +148,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private ImageCapture imageCapture;
     private ImageCapture sampleImageCapture;
     private ImageAnalysis barcodeAnalysis;
+    private boolean barcodeAnalysisBoundWithSession = false;
     private BarcodeScanner barcodeScanner;
     private VideoCapture<Recorder> videoCapture;
     private Recording currentRecording;
@@ -631,6 +632,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 if (cameraProvider != null) {
                     cameraProvider.unbindAll();
                 }
+                barcodeAnalysis = null;
+                barcodeAnalysisBoundWithSession = false;
                 if (cameraExecutor != null) {
                     cameraExecutor.shutdown();
                 }
@@ -1077,8 +1080,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     .build();
                 sampleImageCapture = imageCapture;
                 barcodeAnalysis = null;
+                barcodeAnalysisBoundWithSession = false;
 
-                if (!sessionConfig.isVideoModeEnabled()) {
+                if (!sessionConfig.isVideoModeEnabled() && sessionConfig.isBarcodeScannerEnabled()) {
                     barcodeAnalysis = createBarcodeAnalysisUseCase();
                     if (isBarcodeScannerActive && barcodeScanner != null && cameraExecutor != null) {
                         barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
@@ -1590,10 +1594,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
         if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
+            barcodeAnalysisBoundWithSession = false;
         } else if (barcodeAnalysis != null) {
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, barcodeAnalysis);
+            barcodeAnalysisBoundWithSession = true;
         } else {
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture);
+            barcodeAnalysisBoundWithSession = false;
         }
 
         CameraInfo cameraInfo = camera.getCameraInfo();
@@ -1631,6 +1638,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     barcodeAnalysis = createBarcodeAnalysisUseCase();
                     barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
                     cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
+                    barcodeAnalysisBoundWithSession = false;
                 } else {
                     barcodeAnalysis.clearAnalyzer();
                     barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
@@ -1644,7 +1652,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public void stopBarcodeScanner() {
-        mainExecutor.execute(() -> stopBarcodeScannerInternal(false));
+        mainExecutor.execute(() -> stopBarcodeScannerInternal(true));
     }
 
     private ImageAnalysis createBarcodeAnalysisUseCase() {
@@ -1665,12 +1673,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         if (barcodeAnalysis != null) {
             barcodeAnalysis.clearAnalyzer();
-            if (unbindAnalysis && cameraProvider != null) {
+            if (unbindAnalysis && cameraProvider != null && !barcodeAnalysisBoundWithSession) {
                 try {
                     cameraProvider.unbind(barcodeAnalysis);
-                    barcodeAnalysis = null;
                 } catch (Exception e) {
                     Log.w(TAG, "stopBarcodeScannerInternal: failed to unbind barcode analysis", e);
+                } finally {
+                    barcodeAnalysis = null;
+                    barcodeAnalysisBoundWithSession = false;
                 }
             }
         }
@@ -1878,6 +1888,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         target.setCentered(source.isCentered());
         target.setTargetZoom(source.getTargetZoom());
         target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
+        target.setBarcodeScannerEnabled(source.isBarcodeScannerEnabled());
     }
 
     private void requestEnumeratedDeviceCacheRefresh() {
