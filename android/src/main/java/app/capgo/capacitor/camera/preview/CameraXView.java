@@ -1640,7 +1640,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
                     barcodeAnalysisBoundWithSession = false;
                 } else {
-                    barcodeAnalysis.clearAnalyzer();
                     barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
                 }
                 callback.onStarted();

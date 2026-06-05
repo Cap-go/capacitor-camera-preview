@@ -1879,16 +1879,23 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
         Activity activity = getActivity();
         WebView webView = getBridge().getWebView();
-        final Float alphaToRestore = originalWebViewAlpha;
-        final Drawable webViewBackground = originalWebViewBackground;
-        final boolean webViewBackgroundCaptured = originalWebViewBackgroundCaptured;
-        final Drawable parentBackground = originalWebViewParentBackground;
-        final boolean parentBackgroundCaptured = originalWebViewParentBackgroundCaptured;
-        originalWebViewAlpha = null;
-        originalWebViewBackground = null;
-        originalWebViewBackgroundCaptured = false;
-        originalWebViewParentBackground = null;
-        originalWebViewParentBackgroundCaptured = false;
+        final Float alphaToRestore;
+        final Drawable webViewBackground;
+        final boolean webViewBackgroundCaptured;
+        final Drawable parentBackground;
+        final boolean parentBackgroundCaptured;
+        synchronized (this) {
+            alphaToRestore = originalWebViewAlpha;
+            webViewBackground = originalWebViewBackground;
+            webViewBackgroundCaptured = originalWebViewBackgroundCaptured;
+            parentBackground = originalWebViewParentBackground;
+            parentBackgroundCaptured = originalWebViewParentBackgroundCaptured;
+            originalWebViewAlpha = null;
+            originalWebViewBackground = null;
+            originalWebViewBackgroundCaptured = false;
+            originalWebViewParentBackground = null;
+            originalWebViewParentBackgroundCaptured = false;
+        }
 
         if (alphaToRestore == null && !webViewBackgroundCaptured && !parentBackgroundCaptured) {
             return;
