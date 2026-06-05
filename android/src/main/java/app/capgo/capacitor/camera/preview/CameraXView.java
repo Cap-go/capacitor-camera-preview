@@ -1290,8 +1290,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             );
                             previewContainer.postDelayed(
                                 () -> {
-                                    if (!cameraStartedCallbackSent) {
-                                        notifyCameraStartedIfNeeded("fallback");
+                                    PreviewView.StreamState latestState = previewView != null
+                                        ? previewView.getPreviewStreamState().getValue()
+                                        : null;
+                                    if (!cameraStartedCallbackSent && latestState == PreviewView.StreamState.STREAMING) {
+                                        notifyCameraStartedIfNeeded("fallback-streaming");
                                     }
                                 },
                                 1500
