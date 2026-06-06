@@ -1628,7 +1628,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
         // Ensure reference is cleared once the originating CameraXView has fully stopped
-        if (cameraXView == source) {
+        if (source != null && cameraXView == source) {
             cameraXView = null;
         }
         if (!toBackVisualStateActive) {
@@ -2161,10 +2161,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(TAG, "onCameraStartError: ignoring callback from stale instance");
             return;
         }
-        if (cameraXView == source) {
-            cameraXView = null;
-        }
         toBackVisualStateActive = false;
+        if (cameraXView == source) {
+            try {
+                // Keep the reference until onCameraStopped clears it after native cleanup.
+                source.stopSession();
+            } catch (Exception e) {
+                Log.w(TAG, "onCameraStartError: failed to stop failed camera session", e);
+                cameraXView = null;
+            }
+        }
 
         PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
         if (call != null) {
