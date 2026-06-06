@@ -590,8 +590,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
 
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            return;
+        }
+
         BarcodeScannerRequest request = consumeBarcodeScannerRestartRequest();
-        if (request == null || cameraXView == null || !cameraXView.isRunning()) {
+        if (request == null) {
             return;
         }
 
