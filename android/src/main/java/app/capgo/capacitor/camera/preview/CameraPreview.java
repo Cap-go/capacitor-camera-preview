@@ -6,7 +6,11 @@ import static android.Manifest.permission.RECORD_AUDIO;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.KeyguardManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -70,11 +74,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private final String pluginVersion = "";
 
     @Override
+    public void load() {
+        registerScreenLockReceiver();
+    }
+
+    @Override
     protected void handleOnPause() {
         super.handleOnPause();
+        activityPaused = true;
         if (cameraXView != null && cameraXView.isRunning()) {
             // Store the current configuration before stopping
             lastSessionConfig = cameraXView.getSessionConfig();
+            requestBarcodeScannerRestartAfterCameraResume();
             cameraXView.stopSession();
         }
     }
@@ -82,6 +93,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
+        registerScreenLockReceiver();
+        activityPaused = false;
         if (lastSessionConfig != null) {
             // Recreate camera with last known configuration
             if (cameraXView == null || !cameraXView.isRunning() || cameraXView.isStopping()) {
@@ -97,6 +110,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             } else {
                 toBackVisualStateActive = false;
             }
+            requestBarcodeScannerRestartAfterCameraResume();
+            cameraRestartAfterResumeInProgress = true;
             cameraXView.startSession(lastSessionConfig);
         }
     }
@@ -109,10 +124,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             cameraXView = null;
         }
         lastSessionConfig = null;
+        clearActiveBarcodeScanner();
         toBackVisualStateActive = false;
         restoreOriginalWindowBackground(getBridge().getActivity());
         restoreWebViewVisualState();
         restoreSystemUiForToBackMode(getBridge().getActivity());
+        unregisterScreenLockReceiver();
     }
 
     private CameraSessionConfiguration lastSessionConfig;
@@ -155,6 +172,26 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private boolean pendingStartBarcodeScanner = false;
     private List<String> pendingStartBarcodeFormats = new ArrayList<>();
     private int pendingStartBarcodeDetectionInterval = 500;
+    private final Object activeBarcodeScannerLock = new Object();
+    private boolean activeBarcodeScanner = false;
+    private List<String> activeBarcodeFormats = new ArrayList<>();
+    private int activeBarcodeDetectionInterval = 500;
+    private boolean restartBarcodeScannerAfterCameraResume = false;
+    private boolean screenLocked = false;
+    private boolean activityPaused = false;
+    private boolean cameraRestartAfterResumeInProgress = false;
+    private BroadcastReceiver screenLockReceiver;
+
+    private static final class BarcodeScannerRequest {
+
+        private final List<String> formats;
+        private final int detectionInterval;
+
+        private BarcodeScannerRequest(List<String> formats, int detectionInterval) {
+            this.formats = formats;
+            this.detectionInterval = detectionInterval;
+        }
+    }
 
     @PluginMethod
     public void getExposureModes(PluginCall call) {
@@ -426,6 +463,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             new CameraXView.BarcodeScannerStartCallback() {
                 @Override
                 public void onStarted() {
+                    markActiveBarcodeScanner(formats, detectionInterval != null ? detectionInterval : 500);
                     call.resolve();
                 }
 
@@ -439,6 +477,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @PluginMethod
     public void stopBarcodeScanner(PluginCall call) {
+        clearActiveBarcodeScanner();
         if (cameraXView != null) {
             cameraXView.stopBarcodeScanner();
         }
@@ -500,6 +539,172 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         pendingStartBarcodeDetectionInterval = 500;
     }
 
+    private void markActiveBarcodeScanner(List<String> formats, int detectionInterval) {
+        synchronized (activeBarcodeScannerLock) {
+            activeBarcodeScanner = true;
+            activeBarcodeFormats = new ArrayList<>(formats);
+            activeBarcodeDetectionInterval = detectionInterval;
+        }
+    }
+
+    private void clearActiveBarcodeScanner() {
+        synchronized (activeBarcodeScannerLock) {
+            activeBarcodeScanner = false;
+            activeBarcodeFormats = new ArrayList<>();
+            activeBarcodeDetectionInterval = 500;
+            restartBarcodeScannerAfterCameraResume = false;
+        }
+    }
+
+    private void requestBarcodeScannerRestartAfterCameraResume() {
+        synchronized (activeBarcodeScannerLock) {
+            if (activeBarcodeScanner) {
+                restartBarcodeScannerAfterCameraResume = true;
+            }
+        }
+    }
+
+    private BarcodeScannerRequest consumeBarcodeScannerRestartRequest() {
+        synchronized (activeBarcodeScannerLock) {
+            if (!activeBarcodeScanner || !restartBarcodeScannerAfterCameraResume) {
+                return null;
+            }
+            restartBarcodeScannerAfterCameraResume = false;
+            return new BarcodeScannerRequest(new ArrayList<>(activeBarcodeFormats), activeBarcodeDetectionInterval);
+        }
+    }
+
+    private void restoreBarcodeScannerRestartRequest(BarcodeScannerRequest request) {
+        if (request == null) {
+            return;
+        }
+        synchronized (activeBarcodeScannerLock) {
+            if (activeBarcodeScanner) {
+                restartBarcodeScannerAfterCameraResume = true;
+            }
+        }
+    }
+
+    private void restartBarcodeScannerAfterCameraResumeIfNeeded() {
+        if (screenLocked || isDeviceLocked()) {
+            return;
+        }
+
+        BarcodeScannerRequest request = consumeBarcodeScannerRestartRequest();
+        if (request == null || cameraXView == null || !cameraXView.isRunning()) {
+            return;
+        }
+
+        cameraXView.startBarcodeScanner(
+            request.formats,
+            request.detectionInterval,
+            new CameraXView.BarcodeScannerStartCallback() {
+                @Override
+                public void onStarted() {
+                    markActiveBarcodeScanner(request.formats, request.detectionInterval);
+                }
+
+                @Override
+                public void onError(String message) {
+                    restoreBarcodeScannerRestartRequest(request);
+                    onBarcodeScanError("Failed to restart barcode scanner after unlock: " + message);
+                }
+            }
+        );
+    }
+
+    private void registerScreenLockReceiver() {
+        if (screenLockReceiver != null) {
+            return;
+        }
+
+        screenLockReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String action = intent != null ? intent.getAction() : null;
+                if (Intent.ACTION_SCREEN_OFF.equals(action)) {
+                    handleScreenOff();
+                } else if (Intent.ACTION_SCREEN_ON.equals(action)) {
+                    handleScreenOn();
+                } else if (Intent.ACTION_USER_PRESENT.equals(action)) {
+                    handleScreenUnlocked();
+                }
+            }
+        };
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
+
+        Context context = getContext();
+        if (context == null) {
+            screenLockReceiver = null;
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(screenLockReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            context.registerReceiver(screenLockReceiver, filter);
+        }
+    }
+
+    private void unregisterScreenLockReceiver() {
+        if (screenLockReceiver == null) {
+            return;
+        }
+        try {
+            Context context = getContext();
+            if (context != null) {
+                context.unregisterReceiver(screenLockReceiver);
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Receiver may already be unregistered by the host activity.
+        } finally {
+            screenLockReceiver = null;
+        }
+    }
+
+    private boolean isDeviceLocked() {
+        Context context = getContext();
+        KeyguardManager keyguardManager = context != null ? (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE) : null;
+        return keyguardManager != null && keyguardManager.isKeyguardLocked();
+    }
+
+    private void handleScreenOff() {
+        screenLocked = true;
+        requestBarcodeScannerRestartAfterCameraResume();
+        if (cameraXView != null && cameraXView.isRunning() && !cameraXView.isStopping()) {
+            lastSessionConfig = cameraXView.getSessionConfig();
+            cameraXView.stopSession();
+        }
+    }
+
+    private void handleScreenOn() {
+        screenLocked = isDeviceLocked();
+        if (!screenLocked) {
+            restartBarcodeScannerAfterCameraResumeIfNeeded();
+        }
+    }
+
+    private void handleScreenUnlocked() {
+        screenLocked = false;
+        if (
+            !activityPaused &&
+            !cameraRestartAfterResumeInProgress &&
+            lastSessionConfig != null &&
+            (cameraXView == null || cameraXView.isStopping())
+        ) {
+            cameraXView = new CameraXView(getContext(), getBridge().getWebView());
+            cameraXView.setListener(this);
+            requestBarcodeScannerRestartAfterCameraResume();
+            cameraRestartAfterResumeInProgress = true;
+            cameraXView.startSession(lastSessionConfig);
+            return;
+        }
+        restartBarcodeScannerAfterCameraResumeIfNeeded();
+    }
+
     @PluginMethod
     public void stop(final PluginCall call) {
         boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
@@ -532,6 +737,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 }
                 // Manual stops should not trigger automatic resume with stale config
                 lastSessionConfig = null;
+                clearActiveBarcodeScanner();
                 toBackVisualStateActive = false;
                 restoreOriginalWindowBackground(getBridge().getActivity());
                 restoreWebViewVisualState();
@@ -1340,6 +1546,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
                 config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
+                if (barcodeScannerOptions == null) {
+                    clearActiveBarcodeScanner();
+                }
 
                 bridge.saveCall(call);
                 cameraStartCallbackId = call.getCallbackId();
@@ -1627,6 +1836,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(TAG, "onCameraStopped: ignoring callback from stale instance");
             return;
         }
+        cameraRestartAfterResumeInProgress = false;
         // Ensure reference is cleared once the originating CameraXView has fully stopped
         if (source != null && cameraXView == source) {
             cameraXView = null;
@@ -1925,6 +2135,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @Override
     public void onCameraStarted(int width, int height, int x, int y) {
+        cameraRestartAfterResumeInProgress = false;
         // Always transition window and WebView backgrounds to transparent when the camera starts,
         // regardless of whether there is a pending JS call. This is critical for the
         // background/foreground resume cycle: on resume, handleOnResume() sets backgrounds to
@@ -2085,6 +2296,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     new CameraXView.BarcodeScannerStartCallback() {
                         @Override
                         public void onStarted() {
+                            markActiveBarcodeScanner(formats, detectionInterval);
                             resolveCameraStartCall(call, result);
                         }
 
@@ -2099,6 +2311,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
             resolveCameraStartCall(call, result);
         }
+        restartBarcodeScannerAfterCameraResumeIfNeeded();
     }
 
     private void resolveCameraStartCall(PluginCall call, JSObject result) {
@@ -2161,6 +2374,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(TAG, "onCameraStartError: ignoring callback from stale instance");
             return;
         }
+        cameraRestartAfterResumeInProgress = false;
         toBackVisualStateActive = false;
         if (cameraXView == source) {
             try {
