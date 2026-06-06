@@ -129,7 +129,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         void onBarcodesScanned(JSONArray barcodes);
         void onBarcodeScanError(String message);
         void onCameraStarted(int width, int height, int x, int y);
-        void onCameraStartError(String message);
+        void onCameraStartError(CameraXView source, String message);
         void onCameraStopped(CameraXView source);
     }
 
@@ -191,6 +191,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private volatile boolean isBarcodeFrameProcessing = false;
     private volatile long lastBarcodeFrameAtMs = 0L;
     private volatile long barcodeDetectionIntervalMs = 500L;
+    private boolean cameraStartedCallbackSent = false;
 
     // Operation coordination (acts like a semaphore to prevent stop during active ops)
     private final Object operationLock = new Object();
@@ -481,13 +482,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             // runnable is still queued — never transition backward from DESTROYED.
             if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
                 if (listener != null) {
-                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                    listener.onCameraStartError(this, "Camera start aborted: lifecycle destroyed");
                 }
                 return;
             }
             if (stopRequested) {
                 if (listener != null) {
-                    listener.onCameraStartError("Camera start aborted: stop requested");
+                    listener.onCameraStartError(this, "Camera start aborted: stop requested");
                 }
                 return;
             }
@@ -496,44 +497,45 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 lifecycleRegistry.setCurrentState(Lifecycle.State.CREATED);
                 if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
                     if (listener != null) {
-                        listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                        listener.onCameraStartError(this, "Camera start aborted: lifecycle destroyed");
                     }
                     return;
                 }
                 if (stopRequested) {
                     if (listener != null) {
-                        listener.onCameraStartError("Camera start aborted: stop requested");
+                        listener.onCameraStartError(this, "Camera start aborted: stop requested");
                     }
                     return;
                 }
             }
             if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
                 if (listener != null) {
-                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                    listener.onCameraStartError(this, "Camera start aborted: lifecycle destroyed");
                 }
                 return;
             }
             if (stopRequested) {
                 if (listener != null) {
-                    listener.onCameraStartError("Camera start aborted: stop requested");
+                    listener.onCameraStartError(this, "Camera start aborted: stop requested");
                 }
                 return;
             }
             lifecycleRegistry.setCurrentState(Lifecycle.State.STARTED);
             if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
                 if (listener != null) {
-                    listener.onCameraStartError("Camera start aborted: lifecycle destroyed");
+                    listener.onCameraStartError(this, "Camera start aborted: lifecycle destroyed");
                 }
                 return;
             }
             if (stopRequested) {
                 if (listener != null) {
-                    listener.onCameraStartError("Camera start aborted: stop requested");
+                    listener.onCameraStartError(this, "Camera start aborted: stop requested");
                 }
                 return;
             }
 
             this.sessionConfig = config;
+            cameraStartedCallbackSent = false;
             cameraExecutor = Executors.newSingleThreadExecutor();
             requestEnumeratedDeviceCacheRefresh();
 
@@ -629,6 +631,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 if (cameraProvider != null) {
                     cameraProvider.unbindAll();
                 }
+                barcodeAnalysis = null;
                 if (cameraExecutor != null) {
                     cameraExecutor.shutdown();
                 }
@@ -654,7 +657,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private void restoreWebViewBackground() {
         // Capture sessionConfig reference once to avoid race conditions
         CameraSessionConfiguration config = sessionConfig;
-        boolean shouldRestore = config != null && config.isToBack();
+        boolean shouldRestore = config == null || !config.isToBack();
         if (shouldRestore) {
             // Capture background color before posting to UI thread
             final int backgroundColorToRestore = originalWebViewBackground;
@@ -674,26 +677,26 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 try {
                     if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
                         if (listener != null) {
-                            listener.onCameraStartError("Camera binding cancelled: lifecycle destroyed (before provider)");
+                            listener.onCameraStartError(this, "Camera binding cancelled: lifecycle destroyed (before provider)");
                         }
                         return;
                     }
                     if (stopRequested) {
                         if (listener != null) {
-                            listener.onCameraStartError("Camera binding cancelled: stop requested (before provider)");
+                            listener.onCameraStartError(this, "Camera binding cancelled: stop requested (before provider)");
                         }
                         return;
                     }
                     cameraProvider = cameraProviderFuture.get();
                     if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
                         if (listener != null) {
-                            listener.onCameraStartError("Camera binding cancelled: lifecycle destroyed (after provider)");
+                            listener.onCameraStartError(this, "Camera binding cancelled: lifecycle destroyed (after provider)");
                         }
                         return;
                     }
                     if (stopRequested) {
                         if (listener != null) {
-                            listener.onCameraStartError("Camera binding cancelled: stop requested (after provider)");
+                            listener.onCameraStartError(this, "Camera binding cancelled: stop requested (after provider)");
                         }
                         return;
                     }
@@ -703,7 +706,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     // Restore webView background on error
                     restoreWebViewBackground();
                     if (listener != null) {
-                        listener.onCameraStartError("Error initializing camera: " + e.getMessage());
+                        listener.onCameraStartError(this, "Error initializing camera: " + e.getMessage());
                     }
                 }
             },
@@ -715,13 +718,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (previewView != null) {
             removePreviewView();
         }
-        if (sessionConfig.isToBack()) {
-            // Set to black initially to prevent flickering, will be transparent after camera starts
-            webView.setBackgroundColor(android.graphics.Color.BLACK);
-        }
-
         // Create a container to hold both the preview and grid overlay
         previewContainer = new FrameLayout(context);
+        if (sessionConfig != null && sessionConfig.isToBack()) {
+            previewContainer.setBackgroundColor(Color.TRANSPARENT);
+        }
         // Ensure container can receive touch events
         previewContainer.setClickable(true);
         previewContainer.setFocusable(true);
@@ -735,9 +736,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         // Create and setup the preview view
         previewView = new PreviewView(context);
-        // Use TextureView-backed implementation for broader device compatibility when overlaying with WebView
-        // This avoids SurfaceView z-order issues seen on some MIUI/EMUI devices.
-        previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);
+        if (sessionConfig != null && sessionConfig.isToBack()) {
+            previewView.setBackgroundColor(Color.TRANSPARENT);
+        }
+        PreviewView.ImplementationMode implementationMode = choosePreviewImplementationMode();
+        previewView.setImplementationMode(implementationMode);
         // Set scale type based on aspectMode: 'contain' uses FIT, 'cover' uses FILL
         String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
         previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
@@ -752,6 +755,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             previewView,
             new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         );
+
+        previewView
+            .getPreviewStreamState()
+            .observe(this, (streamState) -> {
+                if (sessionConfig != null && sessionConfig.isToBack() && streamState == PreviewView.StreamState.STREAMING) {
+                    notifyCameraStartedIfNeeded("streaming");
+                }
+            });
 
         // Create and setup the grid overlay
         gridOverlayView = new GridOverlayView(context);
@@ -781,7 +792,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (parent != null) {
             FrameLayout.LayoutParams layoutParams = calculatePreviewLayoutParams();
             parent.addView(previewContainer, layoutParams);
-            if (sessionConfig.isToBack()) webView.bringToFront();
+            if (sessionConfig.isToBack()) {
+                webView.bringToFront();
+                parent.requestTransparentRegion(webView);
+                webView.post(() -> {
+                    webView.bringToFront();
+                    ViewGroup currentParent = (ViewGroup) webView.getParent();
+                    if (currentParent != null) {
+                        currentParent.requestTransparentRegion(webView);
+                    }
+                });
+            }
 
             // Log the actual position after layout
             previewContainer.post(() -> {
@@ -809,6 +830,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 Log.d(TAG, "========================");
             });
         }
+    }
+
+    private PreviewView.ImplementationMode choosePreviewImplementationMode() {
+        return PreviewView.ImplementationMode.COMPATIBLE;
     }
 
     /**
@@ -1000,7 +1025,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if (focusIndicatorView != null) {
             focusIndicatorView = null;
         }
-        webView.setBackgroundColor(originalWebViewBackground);
+        if (sessionConfig == null || !sessionConfig.isToBack()) {
+            webView.setBackgroundColor(originalWebViewBackground);
+        }
     }
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
@@ -1050,6 +1077,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     .setTargetRotation(rotation)
                     .build();
                 sampleImageCapture = imageCapture;
+                barcodeAnalysis = null;
+
+                if (!sessionConfig.isVideoModeEnabled() && sessionConfig.isBarcodeScannerEnabled()) {
+                    barcodeAnalysis = createBarcodeAnalysisUseCase();
+                    if (isBarcodeScannerActive && barcodeScanner != null && cameraExecutor != null) {
+                        barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
+                    }
+                }
 
                 // Only setup VideoCapture if enableVideoMode is true
                 if (sessionConfig.isVideoModeEnabled()) {
@@ -1214,6 +1249,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         if (initialZoom < minZoom || initialZoom > maxZoom) {
                             if (listener != null) {
                                 listener.onCameraStartError(
+                                    this,
                                     "Initial zoom level " +
                                         initialZoom +
                                         " is not available. " +
@@ -1233,40 +1269,75 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 isRunning = true;
                 Log.d(TAG, "bindCameraUseCases: Camera bound successfully");
                 if (listener != null) {
-                    // Post the callback to ensure layout is complete
-                    previewContainer.post(() -> {
-                        // Return actual preview container dimensions instead of requested dimensions
-                        // Get the actual camera dimensions and position
-                        int actualWidth = getPreviewWidth();
-                        int actualHeight = getPreviewHeight();
-                        int actualX = getPreviewX();
-                        int actualY = getPreviewY();
-
-                        Log.d(
-                            TAG,
-                            "onCameraStarted callback - actualX=" +
-                                actualX +
-                                ", actualY=" +
-                                actualY +
-                                ", actualWidth=" +
-                                actualWidth +
-                                ", actualHeight=" +
-                                actualHeight
-                        );
-
-                        // Update grid overlay bounds after camera is started
-                        updateGridOverlayBounds();
-
-                        // Notify listener that camera is started
-                        // The listener (CameraPreview) will handle setting both window and webview to transparent
-                        listener.onCameraStarted(actualWidth, actualHeight, actualX, actualY);
-                    });
+                    if (sessionConfig != null && sessionConfig.isToBack()) {
+                        PreviewView.StreamState streamState = previewView != null ? previewView.getPreviewStreamState().getValue() : null;
+                        if (streamState == PreviewView.StreamState.STREAMING) {
+                            notifyCameraStartedIfNeeded("already-streaming");
+                        } else if (previewContainer != null) {
+                            previewContainer.postDelayed(
+                                () -> {
+                                    PreviewView.StreamState latestState = previewView != null
+                                        ? previewView.getPreviewStreamState().getValue()
+                                        : null;
+                                    if (latestState == PreviewView.StreamState.STREAMING) {
+                                        notifyCameraStartedIfNeeded("watchdog-streaming");
+                                    }
+                                },
+                                300
+                            );
+                            previewContainer.postDelayed(
+                                () -> {
+                                    PreviewView.StreamState latestState = previewView != null
+                                        ? previewView.getPreviewStreamState().getValue()
+                                        : null;
+                                    if (!cameraStartedCallbackSent && latestState == PreviewView.StreamState.STREAMING) {
+                                        notifyCameraStartedIfNeeded("fallback-streaming");
+                                    }
+                                },
+                                1500
+                            );
+                        }
+                    } else {
+                        notifyCameraStartedIfNeeded("bound");
+                    }
                 }
             } catch (Exception e) {
                 // Restore webView background on error
                 restoreWebViewBackground();
-                if (listener != null) listener.onCameraStartError("Error binding camera: " + e.getMessage());
+                if (listener != null) listener.onCameraStartError(this, "Error binding camera: " + e.getMessage());
             }
+        });
+    }
+
+    private void notifyCameraStartedIfNeeded(String reason) {
+        if (cameraStartedCallbackSent || listener == null || previewContainer == null) {
+            return;
+        }
+        cameraStartedCallbackSent = true;
+        previewContainer.post(() -> {
+            if (listener == null || previewContainer == null) {
+                return;
+            }
+
+            int actualWidth = getPreviewWidth();
+            int actualHeight = getPreviewHeight();
+            int actualX = getPreviewX();
+            int actualY = getPreviewY();
+
+            Log.d(
+                TAG,
+                "onCameraStarted callback - actualX=" +
+                    actualX +
+                    ", actualY=" +
+                    actualY +
+                    ", actualWidth=" +
+                    actualWidth +
+                    ", actualHeight=" +
+                    actualHeight
+            );
+
+            updateGridOverlayBounds();
+            listener.onCameraStarted(actualWidth, actualHeight, actualX, actualY);
         });
     }
 
@@ -1523,6 +1594,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
         if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
+        } else if (barcodeAnalysis != null) {
+            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, barcodeAnalysis);
         } else {
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture);
         }
@@ -1551,26 +1624,20 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         mainExecutor.execute(() -> {
             try {
-                stopBarcodeScannerInternal(true);
+                stopBarcodeScannerInternal(false);
                 barcodeScanner = createBarcodeScanner(formats);
                 barcodeDetectionIntervalMs = Math.max(100L, detectionIntervalMs);
                 lastBarcodeFrameAtMs = 0L;
                 isBarcodeFrameProcessing = false;
                 isBarcodeScannerActive = true;
 
-                ResolutionSelector barcodeResolutionSelector = new ResolutionSelector.Builder()
-                    .setResolutionStrategy(
-                        new ResolutionStrategy(new Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
-                    )
-                    .build();
-
-                barcodeAnalysis = new ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .setResolutionSelector(barcodeResolutionSelector)
-                    .build();
-                barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
-
-                cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
+                if (barcodeAnalysis == null) {
+                    barcodeAnalysis = createBarcodeAnalysisUseCase();
+                    barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
+                    cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
+                } else {
+                    barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
+                }
                 callback.onStarted();
             } catch (Exception e) {
                 stopBarcodeScannerInternal(true);
@@ -1581,6 +1648,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     public void stopBarcodeScanner() {
         mainExecutor.execute(() -> stopBarcodeScannerInternal(true));
+    }
+
+    private ImageAnalysis createBarcodeAnalysisUseCase() {
+        ResolutionSelector barcodeResolutionSelector = new ResolutionSelector.Builder()
+            .setResolutionStrategy(new ResolutionStrategy(new Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
+            .build();
+
+        return new ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .setResolutionSelector(barcodeResolutionSelector)
+            .build();
     }
 
     private void stopBarcodeScannerInternal(boolean unbindAnalysis) {
@@ -1595,9 +1673,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     cameraProvider.unbind(barcodeAnalysis);
                 } catch (Exception e) {
                     Log.w(TAG, "stopBarcodeScannerInternal: failed to unbind barcode analysis", e);
+                } finally {
+                    barcodeAnalysis = null;
                 }
             }
-            barcodeAnalysis = null;
         }
 
         if (barcodeScanner != null) {
@@ -1803,6 +1882,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         target.setCentered(source.isCentered());
         target.setTargetZoom(source.getTargetZoom());
         target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
+        target.setBarcodeScannerEnabled(source.isBarcodeScannerEnabled());
     }
 
     private void requestEnumeratedDeviceCacheRefresh() {
