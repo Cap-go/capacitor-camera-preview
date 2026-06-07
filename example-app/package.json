@@ -9,7 +9,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "capgo:deploy": "cd .. && bun run example:capgo:deploy"
   },
   "private": true,
   "dependencies": {
@@ -37,7 +38,8 @@
     "postcss": "^8.5.4",
     "rxjs": "~7.8.2",
     "tslib": "^2.8.1",
-    "zone.js": "~0.15.1"
+    "zone.js": "~0.15.1",
+    "@capgo/capacitor-updater": "^8.45.11"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^19.2.7",
