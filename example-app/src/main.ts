@@ -23,10 +23,14 @@ bootstrapApplication(AppComponent, {
     }),
     provideRouter(routes, withPreloading(PreloadAllModules)),
   ],
-});
-
-if (Capacitor.isNativePlatform()) {
-  CapacitorUpdater.notifyAppReady().catch((error) => {
-    console.error('Capgo notifyAppReady failed', error);
+})
+  .then(() => {
+    if (Capacitor.isNativePlatform()) {
+      CapacitorUpdater.notifyAppReady().catch((error) => {
+        console.error('Capgo notifyAppReady failed', error);
+      });
+    }
+  })
+  .catch((error) => {
+    console.error('Angular bootstrap failed', error);
   });
-}
