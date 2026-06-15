@@ -9,12 +9,14 @@ const config: CapacitorConfig = {
     adjustMarginsForEdgeToEdge: 'auto',
   },
   plugins: {
+    SplashScreen: {
+      launchAutoHide: false,
+    },
     CapacitorUpdater: {
       appId: 'app.capgo.camera.preview',
       autoUpdate: true,
       autoSplashscreen: true,
       directUpdate: 'always',
-      defaultChannel: 'production',
       version: pkg.version,
     },
   },
