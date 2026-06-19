@@ -9,8 +9,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint",
-    "capgo:deploy": "cd .. && bun run example:capgo:deploy"
+    "lint": "ng lint"
   },
   "private": true,
   "dependencies": {
