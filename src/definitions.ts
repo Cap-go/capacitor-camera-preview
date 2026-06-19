@@ -310,7 +310,7 @@ export interface CameraPreviewOptions {
   /**
    * If true, enables video capture capabilities when the camera starts.
    * @default false
-   * @platform android
+   * @platform android, ios
    * @since 7.11.0
    */
   enableVideoMode?: boolean;

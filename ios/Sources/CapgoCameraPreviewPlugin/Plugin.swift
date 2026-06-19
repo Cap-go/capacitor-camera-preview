@@ -652,7 +652,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("[CameraPreview] 📋 Settings received:")
         print("  - position: \(call.getString("position") ?? "rear")")
         print("  - deviceId: \(call.getString("deviceId") ?? "nil")")
-        print("  - cameraMode: \(call.getBool("cameraMode") ?? false)")
+        print("  - enableVideoMode: \(call.getBool("enableVideoMode") ?? call.getBool("cameraMode") ?? false)")
         print("  - width: \(call.getInt("width") ?? 0)")
         print("  - height: \(call.getInt("height") ?? 0)")
         print("  - x: \(call.getInt("x") ?? -1)")
@@ -724,7 +724,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
-        let cameraMode = call.getBool("cameraMode") ?? false
+        let cameraMode = call.getBool("enableVideoMode") ?? call.getBool("cameraMode") ?? false
 
         // Set width - use screen width if not provided or if 0
         if let width = call.getInt("width"), width > 0 {
