@@ -51,6 +51,7 @@ import com.getcapacitor.annotation.PermissionCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -2373,6 +2374,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     @Override
+    public void onVideoRecordingFinished(String filePath, String reason) {
+        JSObject data = new JSObject();
+        data.put("videoFilePath", filePath);
+        data.put("reason", reason);
+        notifyListeners("recordingFinished", data);
+    }
+
+    @Override
     public void onCameraStartError(CameraXView source, String message) {
         if (cameraXView != null && cameraXView != source) {
             Log.d(TAG, "onCameraStartError: ignoring callback from stale instance");
@@ -2603,6 +2612,99 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     @PluginMethod
+    public void setVideoQuality(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        String quality = call.getString("quality");
+        if (quality == null) {
+            call.reject("quality is required");
+            return;
+        }
+        try {
+            cameraXView.setVideoQualitySetting(quality);
+            call.resolve();
+        } catch (IllegalArgumentException e) {
+            call.reject(e.getMessage());
+        } catch (Exception e) {
+            call.reject("Failed to set video quality: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getVideoQuality(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("quality", cameraXView.getVideoQualitySetting());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getSupportedVideoQualities(PluginCall call) {
+        List<String> qualities = cameraXView != null
+            ? cameraXView.getSupportedVideoQualities()
+            : Arrays.asList("low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3");
+        JSONArray arr = new JSONArray();
+        for (String quality : qualities) {
+            arr.put(quality);
+        }
+        JSObject ret = new JSObject();
+        ret.put("qualities", arr);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setVideoCodec(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        String codec = call.getString("codec");
+        if (codec == null) {
+            call.reject("codec is required");
+            return;
+        }
+        try {
+            cameraXView.setVideoCodecSetting(codec);
+            call.resolve();
+        } catch (IllegalArgumentException e) {
+            call.reject(e.getMessage());
+        } catch (Exception e) {
+            call.reject("Failed to set video codec: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getVideoCodec(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("codec", cameraXView.getVideoCodecSetting());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getSupportedVideoCodecs(PluginCall call) {
+        List<String> codecs = cameraXView != null
+            ? cameraXView.getSupportedVideoCodecs()
+            : Arrays.asList("avc1");
+        JSONArray arr = new JSONArray();
+        for (String codec : codecs) {
+            arr.put(codec);
+        }
+        JSObject ret = new JSObject();
+        ret.put("codecs", arr);
+        call.resolve(ret);
+    }
+
+
+    @PluginMethod
     public void startRecordVideo(PluginCall call) {
         if (cameraXView == null || !cameraXView.isRunning()) {
             call.reject("Camera is not running");
@@ -2617,7 +2719,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
         if (PermissionState.GRANTED.equals(getPermissionState(permissionAlias))) {
             try {
-                cameraXView.startRecordVideo();
+                applyVideoCodecFromCall(call);
+                cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
                 call.resolve();
             } catch (Exception e) {
                 call.reject("Failed to start video recording: " + e.getMessage());
@@ -2640,11 +2743,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             cameraXView.stopRecordVideo(
                 new CameraXView.VideoRecordingCallback() {
                     @Override
-                    public void onSuccess(String filePath) {
+                    public void onSuccess(String filePath, String reason) {
                         PluginCall saved = bridge.getSavedCall(cbId);
                         if (saved != null) {
                             JSObject result = new JSObject();
                             result.put("videoFilePath", filePath);
+                            result.put("reason", reason);
                             saved.resolve(result);
                             bridge.releaseCall(saved);
                         }
@@ -2665,6 +2769,32 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    private void applyVideoCodecFromCall(PluginCall call) {
+        String codec = call.getString("videoCodec");
+        if (codec != null && cameraXView != null) {
+            cameraXView.setVideoCodecSetting(codec);
+        }
+    }
+
+    private Long getMaxDurationMillis(PluginCall call) {
+        if (!call.getData().has("maxDuration") || call.getData().isNull("maxDuration")) {
+            return null;
+        }
+        double seconds = call.getData().optDouble("maxDuration", 0D);
+        if (seconds <= 0D) {
+            return null;
+        }
+        return Math.max(1L, Math.round(seconds * 1000D));
+    }
+
+    private Long getMaxFileSize(PluginCall call) {
+        if (!call.getData().has("maxFileSize") || call.getData().isNull("maxFileSize")) {
+            return null;
+        }
+        long bytes = call.getData().optLong("maxFileSize", 0L);
+        return bytes > 0L ? bytes : null;
+    }
+
     @PermissionCallback
     private void handleVideoRecordingPermissionResult(PluginCall call) {
         // Use the persisted session value to determine which permission we requested
@@ -2676,7 +2806,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             PermissionState.GRANTED.equals(getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS))
         ) {
             try {
-                cameraXView.startRecordVideo();
+                applyVideoCodecFromCall(call);
+                cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
                 call.resolve();
             } catch (Exception e) {
                 call.reject("Failed to start video recording: " + e.getMessage());

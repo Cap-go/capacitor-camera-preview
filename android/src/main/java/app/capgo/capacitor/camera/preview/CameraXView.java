@@ -23,6 +23,8 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.location.Location;
 import android.media.Image;
+import android.media.MediaCodecList;
+import android.media.MediaFormat;
 import android.media.MediaScannerConnection;
 import android.os.Build;
 import android.os.Environment;
@@ -128,6 +130,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         void onSampleTakenError(String message);
         void onBarcodesScanned(JSONArray barcodes);
         void onBarcodeScanError(String message);
+        void onVideoRecordingFinished(String filePath, String reason);
         void onCameraStarted(int width, int height, int x, int y);
         void onCameraStartError(CameraXView source, String message);
         void onCameraStopped(CameraXView source);
@@ -139,7 +142,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public interface VideoRecordingCallback {
-        void onSuccess(String filePath);
+        void onSuccess(String filePath, String reason);
         void onError(String message);
     }
 
@@ -1093,24 +1096,36 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     // Get quality from sessionConfig default to high if null
                     String videoQuality = sessionConfig.getVideoQuality() != null ? sessionConfig.getVideoQuality() : "high";
 
-                    switch (videoQuality.toLowerCase()) {
-                        case "low":
-                            // Target SD, allow falling back to lower if needed
+                    switch (videoQuality.toLowerCase(Locale.US)) {
+                        case "2160p":
                             qualitySelector = QualitySelector.fromOrderedList(
-                                Arrays.asList(Quality.SD, Quality.LOWEST),
-                                FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                                Arrays.asList(Quality.UHD, Quality.FHD, Quality.HD, Quality.SD),
+                                FallbackStrategy.lowerQualityOrHigherThan(Quality.UHD)
                             );
                             break;
+                        case "1080p":
+                            qualitySelector = QualitySelector.fromOrderedList(
+                                Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
+                                FallbackStrategy.higherQualityOrLowerThan(Quality.FHD)
+                            );
+                            break;
+                        case "720p":
                         case "medium":
-                            // Target HD, allow falling back to SD
                             qualitySelector = QualitySelector.fromOrderedList(
                                 Arrays.asList(Quality.HD, Quality.SD),
                                 FallbackStrategy.lowerQualityOrHigherThan(Quality.HD)
                             );
                             break;
+                        case "480p":
+                        case "low":
+                            qualitySelector = QualitySelector.fromOrderedList(
+                                Arrays.asList(Quality.SD, Quality.LOWEST),
+                                FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+                            );
+                            break;
                         case "high":
+                        case "4:3":
                         default:
-                            // Target FHD allow falling back SD
                             qualitySelector = QualitySelector.fromOrderedList(
                                 Arrays.asList(Quality.FHD, Quality.HD, Quality.SD),
                                 FallbackStrategy.higherQualityOrLowerThan(Quality.FHD)
@@ -1118,7 +1133,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             break;
                     }
 
-                    Recorder recorder = new Recorder.Builder().setQualitySelector(qualitySelector).build();
+                    Recorder.Builder recorderBuilder = new Recorder.Builder().setQualitySelector(qualitySelector);
+                    String videoCodec = sessionConfig.getVideoCodec() != null ? sessionConfig.getVideoCodec() : "avc1";
+                    if ("hvc1".equalsIgnoreCase(videoCodec)) {
+                        recorderBuilder.setVideoCapabilitiesSource(Recorder.VIDEO_CAPABILITIES_SOURCE_CODEC_CAPABILITIES);
+                    }
+                    Recorder recorder = recorderBuilder.build();
                     videoCapture = VideoCapture.withOutput(recorder);
                 }
 
@@ -4644,7 +4664,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     /** @noinspection ResultOfMethodCallIgnored*/
-    public void startRecordVideo() throws Exception {
+    public void startRecordVideo(Long maxDurationMillis, Long maxFileSize) throws Exception {
         if (videoCapture == null) {
             throw new Exception("VideoCapture is not initialized");
         }
@@ -4666,7 +4686,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
         currentVideoFile = new File(outputDir, fileName);
 
-        FileOutputOptions outputOptions = new FileOutputOptions.Builder(currentVideoFile).build();
+        FileOutputOptions.Builder outputOptionsBuilder = new FileOutputOptions.Builder(currentVideoFile);
+        if (maxDurationMillis != null && maxDurationMillis > 0) {
+            outputOptionsBuilder.setDurationLimitMillis(maxDurationMillis);
+        }
+        if (maxFileSize != null && maxFileSize > 0) {
+            outputOptionsBuilder.setFileSizeLimit(maxFileSize);
+        }
+        FileOutputOptions outputOptions = outputOptionsBuilder.build();
 
         // Create recording event listener
         androidx.core.util.Consumer<VideoRecordEvent> videoRecordEventListener = (videoRecordEvent) -> {
@@ -4712,11 +4739,18 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private void handleRecordingFinalized(VideoRecordEvent.Finalize finalizeEvent) {
-        if (!finalizeEvent.hasError()) {
-            Log.d(TAG, "Video recording completed successfully");
+        String reason = getRecordingFinishReason(finalizeEvent.getError());
+        boolean hasVideoFile = currentVideoFile != null && currentVideoFile.exists();
+        boolean finishedWithUsableFile = !finalizeEvent.hasError() || isRecordingLimitReached(finalizeEvent.getError());
+
+        if (finishedWithUsableFile && hasVideoFile) {
+            String filePath = "file://" + currentVideoFile.getAbsolutePath();
+            Log.d(TAG, "Video recording completed: " + reason);
             if (currentVideoCallback != null) {
-                String filePath = "file://" + currentVideoFile.getAbsolutePath();
-                currentVideoCallback.onSuccess(filePath);
+                currentVideoCallback.onSuccess(filePath, reason);
+            }
+            if (listener != null) {
+                listener.onVideoRecordingFinished(filePath, reason);
             }
         } else {
             Log.e(TAG, "Video recording failed: " + finalizeEvent.getError());
@@ -4730,4 +4764,114 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentVideoFile = null;
         currentVideoCallback = null;
     }
+
+    private boolean isRecordingLimitReached(int error) {
+        return (
+            error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED ||
+            error == VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED
+        );
+    }
+
+    private String getRecordingFinishReason(int error) {
+        if (error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED) {
+            return "maxDuration";
+        }
+        if (error == VideoRecordEvent.Finalize.ERROR_FILE_SIZE_LIMIT_REACHED) {
+            return "maxFileSize";
+        }
+        return "manual";
+    }
+
+    private static final List<String> ALL_VIDEO_QUALITIES = Arrays.asList(
+        "low",
+        "medium",
+        "high",
+        "2160p",
+        "1080p",
+        "720p",
+        "480p",
+        "4:3"
+    );
+
+    private static final List<String> ALL_VIDEO_CODECS = Arrays.asList("avc1", "hvc1");
+
+    public String getVideoQualitySetting() {
+        if (sessionConfig == null) {
+            return "high";
+        }
+        return sessionConfig.getVideoQuality();
+    }
+
+    public void setVideoQualitySetting(String quality) {
+        if (sessionConfig == null) {
+            throw new IllegalStateException("Camera session is not running");
+        }
+        String normalized = quality != null ? quality.toLowerCase(Locale.US) : "high";
+        if (!ALL_VIDEO_QUALITIES.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported video quality: " + quality);
+        }
+        if (normalized.equals(sessionConfig.getVideoQuality())) {
+            return;
+        }
+        sessionConfig.setVideoQuality(normalized);
+        if (sessionConfig.isVideoModeEnabled() && isRunning) {
+            mainExecutor.execute(this::bindCameraUseCases);
+        }
+    }
+
+    public List<String> getSupportedVideoQualities() {
+        return new ArrayList<>(ALL_VIDEO_QUALITIES);
+    }
+
+    public String getVideoCodecSetting() {
+        if (sessionConfig == null) {
+            return "avc1";
+        }
+        return sessionConfig.getVideoCodec();
+    }
+
+    public void setVideoCodecSetting(String codec) {
+        if (sessionConfig == null) {
+            throw new IllegalStateException("Camera session is not running");
+        }
+        String normalized = codec != null ? codec.toLowerCase(Locale.US) : "avc1";
+        if (!ALL_VIDEO_CODECS.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported video codec: " + codec);
+        }
+        if (normalized.equals(sessionConfig.getVideoCodec())) {
+            return;
+        }
+        sessionConfig.setVideoCodec(normalized);
+        if (sessionConfig.isVideoModeEnabled() && isRunning) {
+            mainExecutor.execute(this::bindCameraUseCases);
+        }
+    }
+
+    public List<String> getSupportedVideoCodecs() {
+        List<String> codecs = new ArrayList<>();
+        codecs.add("avc1");
+        if (isVideoCodecSupported(MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+            codecs.add("hvc1");
+        }
+        return codecs;
+    }
+
+    private boolean isVideoCodecSupported(String mimeType) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+            return false;
+        }
+        MediaCodecList codecList = new MediaCodecList(MediaCodecList.REGULAR_CODECS);
+        for (android.media.MediaCodecInfo codecInfo : codecList.getCodecInfos()) {
+            if (!codecInfo.isEncoder()) {
+                continue;
+            }
+            for (String type : codecInfo.getSupportedTypes()) {
+                if (mimeType.equalsIgnoreCase(type)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
 }

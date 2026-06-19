@@ -140,9 +140,81 @@ class CameraController: NSObject {
     private var lastCaptureOrientation: AVCaptureVideoOrientation?
 
     var videoFileURL: URL?
+    var recordingFinishedCallback: ((URL, String) -> Void)?
     private let saneMaxZoomFactor: CGFloat = 25.5
 
     var videoQuality: String = "high"
+    var videoCodec: String = "avc1"
+
+    private static let allVideoQualities = ["low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3"]
+
+    func getSupportedVideoQualities() -> [String] {
+        guard let captureSession = self.captureSession else {
+            return Self.allVideoQualities
+        }
+        let device = self.currentCameraPosition == .front ? self.frontCamera : self.rearCamera
+        guard let device = device else {
+            return Self.allVideoQualities
+        }
+        return Self.allVideoQualities.filter { quality in
+            let preset = self.bestPreset(for: self.requestedAspectRatio, quality: quality, on: device)
+            return captureSession.canSetSessionPreset(preset)
+        }
+    }
+
+    func setVideoQuality(_ quality: String) throws {
+        guard Self.allVideoQualities.contains(quality.lowercased()) else {
+            throw CameraControllerError.invalidOperation
+        }
+        self.videoQuality = quality.lowercased()
+        self.configureSessionPreset(for: self.requestedAspectRatio)
+    }
+
+    func getVideoQuality() -> String {
+        return self.videoQuality
+    }
+
+    func getSupportedVideoCodecs() -> [String] {
+        guard let fileVideoOutput = self.fileVideoOutput else {
+            return ["avc1"]
+        }
+        var codecs: [String] = []
+        if fileVideoOutput.availableVideoCodecTypes.contains(.h264) {
+            codecs.append("avc1")
+        }
+        if fileVideoOutput.availableVideoCodecTypes.contains(.hevc) {
+            codecs.append("hvc1")
+        }
+        return codecs.isEmpty ? ["avc1"] : codecs
+    }
+
+    func setVideoCodec(_ codec: String) throws {
+        let normalized = codec.lowercased()
+        guard ["avc1", "hvc1"].contains(normalized) else {
+            throw CameraControllerError.invalidOperation
+        }
+        if !getSupportedVideoCodecs().contains(normalized) {
+            throw CameraControllerError.invalidOperation
+        }
+        self.videoCodec = normalized
+    }
+
+    func getVideoCodec() -> String {
+        return self.videoCodec
+    }
+
+    private func avVideoCodecType(for codec: String) -> AVVideoCodecType? {
+        switch codec.lowercased() {
+        case "avc1":
+            return .h264
+        case "hvc1":
+            return .hevc
+        default:
+            return nil
+        }
+    }
+
+
 
     // Track output preparation status
     private var outputsPrepared: Bool = false
@@ -528,28 +600,40 @@ extension CameraController {
 
         // Prioritize video quality setting
         switch self.videoQuality.lowercased() {
-        case "low":
-            // Match Android "Low" (SD/480p)
-            if captureSession.canSetSessionPreset(.vga640x480) {
-                targetPreset = .vga640x480
-            } else {
-                targetPreset = .low
+        case "2160p":
+            if captureSession.canSetSessionPreset(.hd4K3840x2160) {
+                targetPreset = .hd4K3840x2160
+            } else if captureSession.canSetSessionPreset(.hd1920x1080) {
+                targetPreset = .hd1920x1080
             }
-        case "medium":
-            // Match Android "Medium" (HD/720p)
+        case "1080p":
+            if captureSession.canSetSessionPreset(.hd1920x1080) {
+                targetPreset = .hd1920x1080
+            } else if captureSession.canSetSessionPreset(.hd1280x720) {
+                targetPreset = .hd1280x720
+            }
+        case "720p", "medium":
             if captureSession.canSetSessionPreset(.hd1280x720) {
                 targetPreset = .hd1280x720
             } else {
                 targetPreset = .medium
             }
+        case "480p", "low":
+            if captureSession.canSetSessionPreset(.vga640x480) {
+                targetPreset = .vga640x480
+            } else {
+                targetPreset = .low
+            }
+        case "4:3":
+            if captureSession.canSetSessionPreset(.photo) {
+                targetPreset = .photo
+            } else if captureSession.canSetSessionPreset(.high) {
+                targetPreset = .high
+            }
         case "high":
-            // Exisiting logic for High Quality (4K/1080p based on Asepct Ratio)
-
             if let aspectRatio = aspectRatio {
                 switch aspectRatio {
                 case "16:9":
-                    // Start with 1080p for faster initialization, 4K only when explicitly needed
-                    // This maintains capture quality while optimizing preview performance
                     if captureSession.canSetSessionPreset(.hd1920x1080) {
                         targetPreset = .hd1920x1080
                     } else if captureSession.canSetSessionPreset(.hd4K3840x2160) {
@@ -573,7 +657,6 @@ extension CameraController {
                     }
                 }
             }
-        // Handle unexpected values
         default:
             if captureSession.canSetSessionPreset(.photo) {
                 targetPreset = .photo
@@ -893,28 +976,37 @@ extension CameraController {
 
         // Handle specific quality overrides first
         switch quality.lowercased() {
-        case "low":
-            if device.supportsSessionPreset(.vga640x480) { return .vga640x480 }
-            return .low
-        case "medium":
+        case "2160p":
+            if device.supportsSessionPreset(.hd4K3840x2160) { return .hd4K3840x2160 }
+            if device.supportsSessionPreset(.hd1920x1080) { return .hd1920x1080 }
+            if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
+            return .vga640x480
+        case "1080p":
+            if device.supportsSessionPreset(.hd1920x1080) { return .hd1920x1080 }
+            if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
+            return .vga640x480
+        case "720p", "medium":
             if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
             return .medium
-        case "high":
-            break // Exit and go off code below
+        case "480p", "low":
+            if device.supportsSessionPreset(.vga640x480) { return .vga640x480 }
+            return .low
+        case "4:3":
+            if device.supportsSessionPreset(.photo) { return .photo }
+            if device.supportsSessionPreset(.high) { return .high }
+            return .vga640x480
         default:
-            break // Exit and go off code below
+            break
         }
         // Preference order depends on aspect ratio
         if aspectRatio == "16:9" {
-            // Prefer 4K → 1080p → 720p → high → photo → vga
             if device.supportsSessionPreset(.hd4K3840x2160) { return .hd4K3840x2160 }
             if device.supportsSessionPreset(.hd1920x1080) { return .hd1920x1080 }
             if device.supportsSessionPreset(.hd1280x720) { return .hd1280x720 }
             if device.supportsSessionPreset(.high) { return .high }
-            if device.supportsSessionPreset(.photo) { return .photo } // safe, though 4:3
+            if device.supportsSessionPreset(.photo) { return .photo }
             return .vga640x480
         } else {
-            // 4:3 or unknown: prefer photo → high → 1080p → 720p → vga
             if device.supportsSessionPreset(.photo) { return .photo }
             if device.supportsSessionPreset(.high) { return .high }
             if device.supportsSessionPreset(.hd1920x1080) { return .hd1920x1080 }
@@ -2384,7 +2476,8 @@ extension CameraController {
         }
     }
 
-    func captureVideo() throws {
+
+    func captureVideo(maxDuration: Float? = nil, maxFileSize: Int? = nil) throws {
         guard let captureSession = self.captureSession, captureSession.isRunning else {
             throw CameraControllerError.captureSessionIsMissing
         }
@@ -2443,6 +2536,19 @@ extension CameraController {
 
         let fileUrl = documentsDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: fileUrl)
+
+        if let maxDuration = maxDuration, maxDuration > 0 {
+            fileVideoOutput.maxRecordedDuration = CMTime(seconds: Double(maxDuration), preferredTimescale: 600)
+        } else {
+            fileVideoOutput.maxRecordedDuration = .invalid
+        }
+        fileVideoOutput.maxRecordedFileSize = Int64(maxFileSize ?? 0)
+
+        if let connection = fileVideoOutput.connection(with: .video),
+           let codecType = avVideoCodecType(for: self.videoCodec),
+           fileVideoOutput.availableVideoCodecTypes.contains(codecType) {
+            fileVideoOutput.setOutputSettings([AVVideoCodecKey: codecType], for: connection)
+        }
 
         // Start recording video
         fileVideoOutput.startRecording(to: fileUrl, recordingDelegate: self)
@@ -2857,11 +2963,33 @@ extension UIImage {
 
 extension CameraController: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
-        if let error = error {
-            print("Error recording movie: \(error.localizedDescription)")
-        } else {
-            print("Movie recorded successfully: \(outputFileURL)")
-            // You can save the file to the library, upload it, etc.
+        let reason = recordingFinishReason(from: error)
+        if reason == "error" {
+            print("Error recording movie: \(error?.localizedDescription ?? "unknown")")
+            return
+        }
+
+        print("Movie recorded successfully: \(outputFileURL)")
+        self.recordingFinishedCallback?(outputFileURL, reason)
+    }
+
+    private func recordingFinishReason(from error: Error?) -> String {
+        guard let error = error else {
+            return "manual"
+        }
+
+        let nsError = error as NSError
+        guard nsError.domain == AVFoundationErrorDomain else {
+            return "error"
+        }
+
+        switch AVError.Code(rawValue: nsError.code) {
+        case .maximumDurationReached:
+            return "maxDuration"
+        case .maximumFileSizeReached:
+            return "maxFileSize"
+        default:
+            return "error"
         }
     }
 }

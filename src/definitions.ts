@@ -138,6 +138,28 @@ export interface LensInfo {
   digitalZoom: number;
 }
 
+export type VideoQuality = 'low' | 'medium' | 'high' | '2160p' | '1080p' | '720p' | '480p' | '4:3';
+
+/**
+ * Video codec identifiers used when recording.
+ * - `avc1`: H.264
+ * - `hvc1`: HEVC / H.265
+ */
+export type VideoCodec = 'avc1' | 'hvc1' | 'jpeg' | 'apcn' | 'ap4h';
+
+export type RecordingFinishedReason = 'manual' | 'maxDuration' | 'maxFileSize';
+
+export interface RecordingFinishedEvent {
+  /**
+   * The path to the recorded video file.
+   */
+  videoFilePath: string;
+  /**
+   * Why the recording stopped.
+   */
+  reason: RecordingFinishedReason;
+}
+
 /**
  * Defines the configuration options for starting the camera preview.
  */
@@ -301,13 +323,29 @@ export interface CameraPreviewOptions {
   force?: boolean;
   /**
    * Sets the quality of video for recording.
-   * Options: 'low', 'medium', 'high'
+   * Options: 'low', 'medium', 'high', '2160p', '1080p', '720p', '480p', '4:3'
    * @note On Android requires 'enableVideoMode' to be true
    * @note Will affect the entire preview stream for iOS
    * @platform ios, android
    * @default "high"
    */
-  videoQuality?: 'low' | 'medium' | 'high';
+  videoQuality?: VideoQuality;
+  /**
+   * Maximum recording duration in seconds. Recording stops automatically when reached.
+   * @platform ios, android
+   */
+  maxDuration?: number;
+  /**
+   * Maximum recording file size in bytes. Recording stops automatically when reached.
+   * @platform ios, android
+   */
+  maxFileSize?: number;
+  /**
+   * Preferred video codec for recording.
+   * @platform ios, android
+   * @default "avc1"
+   */
+  videoCodec?: VideoCodec;
   /**
    * Starts barcode scanning together with the camera preview.
    * Set to `true` or pass options to scan all supported formats.
@@ -660,19 +698,76 @@ export interface CameraPreviewPlugin {
   /**
    * Stops an ongoing video recording.
    *
-   * @returns {Promise<{ videoFilePath: string }>} A promise that resolves with the path to the recorded video file.
+   * @returns {Promise<RecordingFinishedEvent>} A promise that resolves with the path to the recorded video file.
    * @since 0.0.1
    */
-  stopRecordVideo(): Promise<{ videoFilePath: string }>;
+  stopRecordVideo(): Promise<RecordingFinishedEvent>;
 
   /**
    * Starts recording a video.
    *
-   * @param {CameraPreviewOptions} options - The options for video recording. Only iOS.
+   * @param {CameraPreviewOptions} options - The options for video recording.
    * @returns {Promise<void>} A promise that resolves when video recording starts.
    * @since 0.0.1
    */
   startRecordVideo(options: CameraPreviewOptions): Promise<void>;
+
+  /**
+   * Sets the video recording quality for the active camera session.
+   *
+   * @param {{ quality: VideoQuality }} options - The desired video quality.
+   * @returns {Promise<void>} A promise that resolves when the quality is set.
+   * @since 8.5.0
+   * @platform android, ios
+   */
+  setVideoQuality(options: { quality: VideoQuality }): Promise<void>;
+
+  /**
+   * Gets the current video recording quality.
+   *
+   * @returns {Promise<{ quality: VideoQuality }>} A promise that resolves with the current quality.
+   * @since 8.5.0
+   * @platform android, ios
+   */
+  getVideoQuality(): Promise<{ quality: VideoQuality }>;
+
+  /**
+   * Returns the video qualities supported by the active camera.
+   *
+   * @returns {Promise<{ qualities: VideoQuality[] }>} A promise that resolves with supported qualities.
+   * @since 8.5.0
+   * @platform android, ios
+   */
+  getSupportedVideoQualities(): Promise<{ qualities: VideoQuality[] }>;
+
+  /**
+   * Sets the video codec used when recording.
+   *
+   * @param {{ codec: VideoCodec }} options - The desired codec.
+   * @returns {Promise<void>} A promise that resolves when the codec is set.
+   * @since 8.5.0
+   * @platform android, ios
+   */
+  setVideoCodec(options: { codec: VideoCodec }): Promise<void>;
+
+  /**
+   * Gets the current video codec used for recording.
+   *
+   * @returns {Promise<{ codec: VideoCodec }>} A promise that resolves with the current codec.
+   * @since 8.5.0
+   * @platform android, ios
+   */
+  getVideoCodec(): Promise<{ codec: VideoCodec }>;
+
+  /**
+   * Returns the video codecs supported by the active camera.
+   *
+   * @returns {Promise<{ codecs: VideoCodec[] }>} A promise that resolves with supported codecs.
+   * @since 8.5.0
+   * @platform android, ios
+   */
+  getSupportedVideoCodecs(): Promise<{ codecs: VideoCodec[] }>;
+
 
   /**
    * Checks if the camera preview is currently running.
@@ -849,6 +944,17 @@ export interface CameraPreviewPlugin {
   addListener(
     eventName: 'barcodeScanError',
     listenerFunc: (data: BarcodeScanErrorEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener fired when a video recording finishes natively, including automatic stops.
+   *
+   * @since 8.4.7
+   * @platform android, ios
+   */
+  addListener(
+    eventName: 'recordingFinished',
+    listenerFunc: (data: RecordingFinishedEvent) => void,
   ): Promise<PluginListenerHandle>;
   /**
    * Deletes a file at the given absolute path on the device.

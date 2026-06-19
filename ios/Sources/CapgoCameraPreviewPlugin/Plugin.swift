@@ -51,6 +51,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startRecordVideo", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopRecordVideo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSupportedVideoCodecs", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getVideoCodec", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setVideoCodec", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSupportedVideoQualities", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getVideoQuality", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setVideoQuality", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getTempFilePath", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedPictureSizes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isRunning", returnType: CAPPluginReturnPromise),
@@ -1595,9 +1601,64 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    @objc func startRecordVideo(_ call: CAPPluginCall) {
+
+    @objc func setVideoQuality(_ call: CAPPluginCall) {
+        guard let quality = call.getString("quality") else {
+            call.reject("quality is required")
+            return
+        }
         do {
-            try self.cameraController.captureVideo()
+            try self.cameraController.setVideoQuality(quality)
+            call.resolve()
+        } catch {
+            call.reject("Failed to set video quality: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func getVideoQuality(_ call: CAPPluginCall) {
+        call.resolve(["quality": self.cameraController.getVideoQuality()])
+    }
+
+    @objc func getSupportedVideoQualities(_ call: CAPPluginCall) {
+        call.resolve(["qualities": self.cameraController.getSupportedVideoQualities()])
+    }
+
+    @objc func setVideoCodec(_ call: CAPPluginCall) {
+        guard let codec = call.getString("codec") else {
+            call.reject("codec is required")
+            return
+        }
+        do {
+            try self.cameraController.setVideoCodec(codec)
+            call.resolve()
+        } catch {
+            call.reject("Failed to set video codec: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func getVideoCodec(_ call: CAPPluginCall) {
+        call.resolve(["codec": self.cameraController.getVideoCodec()])
+    }
+
+    @objc func getSupportedVideoCodecs(_ call: CAPPluginCall) {
+        call.resolve(["codecs": self.cameraController.getSupportedVideoCodecs()])
+    }
+
+
+    @objc func startRecordVideo(_ call: CAPPluginCall) {
+        let maxDuration = call.getFloat("maxDuration")
+        let maxFileSize = call.getInt("maxFileSize")
+        if let videoCodec = call.getString("videoCodec") {
+            try? self.cameraController.setVideoCodec(videoCodec)
+        }
+        self.cameraController.recordingFinishedCallback = { [weak self] fileURL, reason in
+            DispatchQueue.main.async {
+                self?.notifyListeners("recordingFinished", data: ["videoFilePath": fileURL.absoluteString, "reason": reason])
+            }
+        }
+
+        do {
+            try self.cameraController.captureVideo(maxDuration: maxDuration, maxFileSize: maxFileSize)
             call.resolve()
         } catch {
             call.reject(error.localizedDescription)
@@ -1616,7 +1677,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
 
-            call.resolve(["videoFilePath": fileURL.absoluteString])
+            call.resolve(["videoFilePath": fileURL.absoluteString, "reason": "manual"])
         }
     }
 
