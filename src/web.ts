@@ -967,7 +967,6 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     if (!!video && !!_options.opacity) video.style.setProperty('opacity', _options.opacity.toString());
   }
 
-
   async setVideoQuality(): Promise<void> {
     throw this.unimplemented('setVideoQuality');
   }

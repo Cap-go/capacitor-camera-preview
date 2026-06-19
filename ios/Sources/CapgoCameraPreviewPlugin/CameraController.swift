@@ -214,8 +214,6 @@ class CameraController: NSObject {
         }
     }
 
-
-
     // Track output preparation status
     private var outputsPrepared: Bool = false
 
@@ -2475,7 +2473,6 @@ extension CameraController {
             throw CameraControllerError.invalidOperation
         }
     }
-
 
     func captureVideo(maxDuration: Float? = nil, maxFileSize: Int? = nil) throws {
         guard let captureSession = self.captureSession, captureSession.isRunning else {

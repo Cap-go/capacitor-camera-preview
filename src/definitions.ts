@@ -768,7 +768,6 @@ export interface CameraPreviewPlugin {
    */
   getSupportedVideoCodecs(): Promise<{ codecs: VideoCodec[] }>;
 
-
   /**
    * Checks if the camera preview is currently running.
    *

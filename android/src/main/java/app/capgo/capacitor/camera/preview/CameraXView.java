@@ -4782,16 +4782,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         return "manual";
     }
 
-    private static final List<String> ALL_VIDEO_QUALITIES = Arrays.asList(
-        "low",
-        "medium",
-        "high",
-        "2160p",
-        "1080p",
-        "720p",
-        "480p",
-        "4:3"
-    );
+    private static final List<String> ALL_VIDEO_QUALITIES = Arrays.asList("low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3");
 
     private static final List<String> ALL_VIDEO_CODECS = Arrays.asList("avc1", "hvc1");
 
@@ -4873,5 +4864,4 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
         return false;
     }
-
 }

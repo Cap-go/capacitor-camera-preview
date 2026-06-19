@@ -2691,9 +2691,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @PluginMethod
     public void getSupportedVideoCodecs(PluginCall call) {
-        List<String> codecs = cameraXView != null
-            ? cameraXView.getSupportedVideoCodecs()
-            : Arrays.asList("avc1");
+        List<String> codecs = cameraXView != null ? cameraXView.getSupportedVideoCodecs() : Arrays.asList("avc1");
         JSONArray arr = new JSONArray();
         for (String codec : codecs) {
             arr.put(codec);
@@ -2702,7 +2700,6 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         ret.put("codecs", arr);
         call.resolve(ret);
     }
-
 
     @PluginMethod
     public void startRecordVideo(PluginCall call) {

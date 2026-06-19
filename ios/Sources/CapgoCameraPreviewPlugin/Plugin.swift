@@ -1601,7 +1601,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-
     @objc func setVideoQuality(_ call: CAPPluginCall) {
         guard let quality = call.getString("quality") else {
             call.reject("quality is required")
@@ -1643,7 +1642,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     @objc func getSupportedVideoCodecs(_ call: CAPPluginCall) {
         call.resolve(["codecs": self.cameraController.getSupportedVideoCodecs()])
     }
-
 
     @objc func startRecordVideo(_ call: CAPPluginCall) {
         let maxDuration = call.getFloat("maxDuration")
