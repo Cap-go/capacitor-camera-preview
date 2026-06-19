@@ -22,6 +22,8 @@ import type {
   LensInfo,
   PermissionRequestOptions,
   SafeAreaInsets,
+  VideoCodec,
+  VideoQuality,
 } from './definitions';
 import { DeviceType } from './definitions';
 
@@ -847,7 +849,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
           this.mediaRecorder = null;
 
           const videoFilePath = URL.createObjectURL(blob);
-          resolve({ videoFilePath });
+          resolve({ videoFilePath, reason: 'manual' });
         } catch (error) {
           reject(error);
         }
@@ -963,6 +965,30 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   async setOpacity(_options: CameraOpacityOptions): Promise<any> {
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (!!video && !!_options.opacity) video.style.setProperty('opacity', _options.opacity.toString());
+  }
+
+  async setVideoQuality(): Promise<void> {
+    throw this.unimplemented('setVideoQuality');
+  }
+
+  async getVideoQuality(): Promise<{ quality: VideoQuality }> {
+    throw this.unimplemented('getVideoQuality');
+  }
+
+  async getSupportedVideoQualities(): Promise<{ qualities: VideoQuality[] }> {
+    throw this.unimplemented('getSupportedVideoQualities');
+  }
+
+  async setVideoCodec(): Promise<void> {
+    throw this.unimplemented('setVideoCodec');
+  }
+
+  async getVideoCodec(): Promise<{ codec: VideoCodec }> {
+    throw this.unimplemented('getVideoCodec');
+  }
+
+  async getSupportedVideoCodecs(): Promise<{ codecs: VideoCodec[] }> {
+    throw this.unimplemented('getSupportedVideoCodecs');
   }
 
   async isRunning(): Promise<{ isRunning: boolean }> {

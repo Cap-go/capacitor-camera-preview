@@ -25,7 +25,8 @@ public class CameraSessionConfiguration {
     private final boolean enableVideoMode;
     private float targetZoom = 1.0f;
     private boolean isCentered = false;
-    private final String videoQuality;
+    private String videoQuality;
+    private String videoCodec = "avc1";
     private boolean enablePhysicalDeviceSelection = false;
     private boolean barcodeScannerEnabled = false;
 
@@ -145,6 +146,18 @@ public class CameraSessionConfiguration {
 
     public String getVideoQuality() {
         return videoQuality;
+    }
+
+    public void setVideoQuality(String quality) {
+        this.videoQuality = quality != null ? quality : "high";
+    }
+
+    public String getVideoCodec() {
+        return videoCodec;
+    }
+
+    public void setVideoCodec(String codec) {
+        this.videoCodec = codec != null ? codec : "avc1";
     }
 
     public boolean isPhysicalDeviceSelectionEnabled() {

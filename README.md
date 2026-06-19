@@ -376,6 +376,12 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setOpacity(...)`](#setopacity)
 * [`stopRecordVideo()`](#stoprecordvideo)
 * [`startRecordVideo(...)`](#startrecordvideo)
+* [`setVideoQuality(...)`](#setvideoquality)
+* [`getVideoQuality()`](#getvideoquality)
+* [`getSupportedVideoQualities()`](#getsupportedvideoqualities)
+* [`setVideoCodec(...)`](#setvideocodec)
+* [`getVideoCodec()`](#getvideocodec)
+* [`getSupportedVideoCodecs()`](#getsupportedvideocodecs)
 * [`isRunning()`](#isrunning)
 * [`getAvailableDevices()`](#getavailabledevices)
 * [`getZoom()`](#getzoom)
@@ -392,6 +398,7 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`addListener('orientationChange', ...)`](#addlistenerorientationchange-)
 * [`addListener('barcodeScanned', ...)`](#addlistenerbarcodescanned-)
 * [`addListener('barcodeScanError', ...)`](#addlistenerbarcodescanerror-)
+* [`addListener('recordingFinished', ...)`](#addlistenerrecordingfinished-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -728,12 +735,12 @@ Sets the opacity of the camera preview.
 ### stopRecordVideo()
 
 ```typescript
-stopRecordVideo() => Promise<{ videoFilePath: string; }>
+stopRecordVideo() => Promise<RecordingFinishedEvent>
 ```
 
 Stops an ongoing video recording.
 
-**Returns:** <code>Promise&lt;{ videoFilePath: string; }&gt;</code>
+**Returns:** <code>Promise&lt;<a href="#recordingfinishedevent">RecordingFinishedEvent</a>&gt;</code>
 
 **Since:** 0.0.1
 
@@ -748,11 +755,105 @@ startRecordVideo(options: CameraPreviewOptions) => Promise<void>
 
 Starts recording a video.
 
-| Param         | Type                                                                  | Description                                  |
-| ------------- | --------------------------------------------------------------------- | -------------------------------------------- |
-| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. Only iOS. |
+| Param         | Type                                                                  | Description                        |
+| ------------- | --------------------------------------------------------------------- | ---------------------------------- |
+| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. |
 
 **Since:** 0.0.1
+
+--------------------
+
+
+### setVideoQuality(...)
+
+```typescript
+setVideoQuality(options: { quality: VideoQuality; }) => Promise<void>
+```
+
+Sets the video recording quality for the active camera session.
+
+| Param         | Type                                                                | Description                  |
+| ------------- | ------------------------------------------------------------------- | ---------------------------- |
+| **`options`** | <code>{ quality: <a href="#videoquality">VideoQuality</a>; }</code> | - The desired video quality. |
+
+**Since:** 8.5.0
+
+--------------------
+
+
+### getVideoQuality()
+
+```typescript
+getVideoQuality() => Promise<{ quality: VideoQuality; }>
+```
+
+Gets the current video recording quality.
+
+**Returns:** <code>Promise&lt;{ quality: <a href="#videoquality">VideoQuality</a>; }&gt;</code>
+
+**Since:** 8.5.0
+
+--------------------
+
+
+### getSupportedVideoQualities()
+
+```typescript
+getSupportedVideoQualities() => Promise<{ qualities: VideoQuality[]; }>
+```
+
+Returns the video qualities supported by the active camera.
+
+**Returns:** <code>Promise&lt;{ qualities: VideoQuality[]; }&gt;</code>
+
+**Since:** 8.5.0
+
+--------------------
+
+
+### setVideoCodec(...)
+
+```typescript
+setVideoCodec(options: { codec: VideoCodec; }) => Promise<void>
+```
+
+Sets the video codec used when recording.
+
+| Param         | Type                                                          | Description          |
+| ------------- | ------------------------------------------------------------- | -------------------- |
+| **`options`** | <code>{ codec: <a href="#videocodec">VideoCodec</a>; }</code> | - The desired codec. |
+
+**Since:** 8.5.0
+
+--------------------
+
+
+### getVideoCodec()
+
+```typescript
+getVideoCodec() => Promise<{ codec: VideoCodec; }>
+```
+
+Gets the current video codec used for recording.
+
+**Returns:** <code>Promise&lt;{ codec: <a href="#videocodec">VideoCodec</a>; }&gt;</code>
+
+**Since:** 8.5.0
+
+--------------------
+
+
+### getSupportedVideoCodecs()
+
+```typescript
+getSupportedVideoCodecs() => Promise<{ codecs: VideoCodec[]; }>
+```
+
+Returns the video codecs supported by the active camera.
+
+**Returns:** <code>Promise&lt;{ codecs: VideoCodec[]; }&gt;</code>
+
+**Since:** 8.5.0
 
 --------------------
 
@@ -1031,6 +1132,26 @@ Adds a listener for non-fatal barcode scanner errors.
 --------------------
 
 
+### addListener('recordingFinished', ...)
+
+```typescript
+addListener(eventName: 'recordingFinished', listenerFunc: (data: RecordingFinishedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener fired when a video recording finishes natively, including automatic stops.
+
+| Param              | Type                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'recordingFinished'</code>                                                             |
+| **`listenerFunc`** | <code>(data: <a href="#recordingfinishedevent">RecordingFinishedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.4.7
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -1218,7 +1339,10 @@ Defines the configuration options for starting the camera preview.
 | **`positioning`**                   | <code><a href="#camerapositioning">CameraPositioning</a></code>                    | The vertical positioning of the camera preview.                                                                                                                                                                                     | <code>"center"</code>  | 2.3.0  |
 | **`enableVideoMode`**               | <code>boolean</code>                                                               | If true, enables video capture capabilities when the camera starts.                                                                                                                                                                 | <code>false</code>     | 7.11.0 |
 | **`force`**                         | <code>boolean</code>                                                               | If true, forces the camera to start/restart even if it's already running or busy. This will kill the current camera session and start a new one, ignoring all state checks.                                                         | <code>false</code>     |        |
-| **`videoQuality`**                  | <code>'low' \| 'medium' \| 'high'</code>                                           | Sets the quality of video for recording. Options: 'low', 'medium', 'high'                                                                                                                                                           | <code>"high"</code>    |        |
+| **`videoQuality`**                  | <code><a href="#videoquality">VideoQuality</a></code>                              | Sets the quality of video for recording. Options: 'low', 'medium', 'high', '2160p', '1080p', '720p', '480p', '4:3'                                                                                                                  | <code>"high"</code>    |        |
+| **`maxDuration`**                   | <code>number</code>                                                                | Maximum recording duration in seconds. Recording stops automatically when reached.                                                                                                                                                  |                        |        |
+| **`maxFileSize`**                   | <code>number</code>                                                                | Maximum recording file size in bytes. Recording stops automatically when reached.                                                                                                                                                   |                        |        |
+| **`videoCodec`**                    | <code><a href="#videocodec">VideoCodec</a></code>                                  | Preferred video codec for recording.                                                                                                                                                                                                | <code>"avc1"</code>    |        |
 | **`barcodeScanner`**                | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                               |                        | 8.8.0  |
 
 
@@ -1308,6 +1432,14 @@ Defines the options for setting the camera preview's opacity.
 | Prop          | Type                | Description                                                                 | Default          |
 | ------------- | ------------------- | --------------------------------------------------------------------------- | ---------------- |
 | **`opacity`** | <code>number</code> | The opacity percentage, from 0.0 (fully transparent) to 1.0 (fully opaque). | <code>1.0</code> |
+
+
+#### RecordingFinishedEvent
+
+| Prop                | Type                                                                        | Description                          |
+| ------------------- | --------------------------------------------------------------------------- | ------------------------------------ |
+| **`videoFilePath`** | <code>string</code>                                                         | The path to the recorded video file. |
+| **`reason`**        | <code><a href="#recordingfinishedreason">RecordingFinishedReason</a></code> | Why the recording stopped.           |
 
 
 #### CameraDevice
@@ -1417,6 +1549,20 @@ iOS: Values are expressed in physical pixels and exclude status bar.
 <code>'center' | 'top' | 'bottom'</code>
 
 
+#### VideoQuality
+
+<code>'low' | 'medium' | 'high' | '2160p' | '1080p' | '720p' | '480p' | '4:3'</code>
+
+
+#### VideoCodec
+
+Video codec identifiers used when recording.
+- `avc1`: H.264
+- `hvc1`: HEVC / H.265
+
+<code>'avc1' | 'hvc1' | 'jpeg' | 'apcn' | 'ap4h'</code>
+
+
 #### BarcodeScannerFormat
 
 <code>'aztec' | 'codabar' | 'code_39' | 'code_93' | 'code_128' | 'data_matrix' | 'ean_8' | 'ean_13' | 'itf' | 'pdf417' | 'qr_code' | 'upc_a' | 'upc_e'</code>
@@ -1445,6 +1591,11 @@ The available flash modes for the camera.
 From T, pick a set of properties whose keys are in the union K
 
 <code>{ [P in K]: T[P]; }</code>
+
+
+#### RecordingFinishedReason
+
+<code>'manual' | 'maxDuration' | 'maxFileSize'</code>
 
 
 #### FlashMode
