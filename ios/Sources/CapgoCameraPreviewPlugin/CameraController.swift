@@ -57,6 +57,16 @@ class CameraController: NSObject {
         }
     }
 
+
+    private func setVideoOrientation(_ orientation: AVCaptureVideoOrientation, on connection: AVCaptureConnection) {
+        guard connection.isVideoOrientationSupported else { return }
+        connection.videoOrientation = orientation
+    }
+
+    private func setVideoOrientation(_ orientation: AVCaptureVideoOrientation, on connections: [AVCaptureConnection]) {
+        connections.forEach { setVideoOrientation(orientation, on: $0) }
+    }
+
     // Continuous focus with significant movement if focus was locked from setFocus earlier
     @objc private func subjectAreaDidChange(notification: NSNotification) {
         guard let device = self.currentCameraPosition == .rear ? rearCamera : frontCamera else { return }
@@ -416,45 +426,7 @@ extension CameraController {
             let layer = AVCaptureVideoPreviewLayer()
             // Configure orientation immediately
             if let connection = layer.connection {
-                // Ensure UI calls are made on the main thread
-                if Thread.isMainThread {
-                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                        switch windowScene.interfaceOrientation {
-                        case .portrait:
-                            connection.videoOrientation = .portrait
-                        case .landscapeLeft:
-                            connection.videoOrientation = .landscapeLeft
-                        case .landscapeRight:
-                            connection.videoOrientation = .landscapeRight
-                        case .portraitUpsideDown:
-                            connection.videoOrientation = .portraitUpsideDown
-                        case .unknown:
-                            fallthrough
-                        @unknown default:
-                            connection.videoOrientation = .portrait
-                        }
-                    }
-                } else {
-                    // If not on main thread, use a sync call to get the orientation
-                    DispatchQueue.main.sync {
-                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                            switch windowScene.interfaceOrientation {
-                            case .portrait:
-                                connection.videoOrientation = .portrait
-                            case .landscapeLeft:
-                                connection.videoOrientation = .landscapeLeft
-                            case .landscapeRight:
-                                connection.videoOrientation = .landscapeRight
-                            case .portraitUpsideDown:
-                                connection.videoOrientation = .portraitUpsideDown
-                            case .unknown:
-                                fallthrough
-                            @unknown default:
-                                connection.videoOrientation = .portrait
-                            }
-                        }
-                    }
-                }
+                self.setVideoOrientation(self.getVideoOrientation(), on: connection)
             }
             // Don't set session here - we'll do it during configuration
             self.previewLayer = layer
@@ -527,7 +499,7 @@ extension CameraController {
                     let videoQueue = DispatchQueue(label: "com.camera.videoQueue", qos: .userInteractive)
                     dataOutput.setSampleBufferDelegate(self, queue: videoQueue)
                     // Set orientation immediately
-                    dataOutput.connections.forEach { $0.videoOrientation = videoOrientation }
+                    self.setVideoOrientation(videoOrientation, on: dataOutput.connections)
                 }
 
                 // Add photo output immediately to avoid later reconfiguration
@@ -535,21 +507,21 @@ extension CameraController {
                     photoOutput.isHighResolutionCaptureEnabled = true
                     captureSession.addOutput(photoOutput)
                     // Set orientation immediately
-                    photoOutput.connections.forEach { $0.videoOrientation = videoOrientation }
+                    self.setVideoOrientation(videoOrientation, on: photoOutput.connections)
                 }
 
                 // Add video output if in camera mode
                 if cameraMode, let fileVideoOutput = self.fileVideoOutput, captureSession.canAddOutput(fileVideoOutput) {
                     captureSession.addOutput(fileVideoOutput)
                     // Set orientation immediately
-                    fileVideoOutput.connections.forEach { $0.videoOrientation = videoOrientation }
+                    self.setVideoOrientation(videoOrientation, on: fileVideoOutput.connections)
                 }
 
                 // Set up preview layer session in the same configuration block
                 if let layer = self.previewLayer {
                     layer.session = captureSession
                     // Set orientation for preview layer
-                    layer.connection?.videoOrientation = videoOrientation
+                    if let connection = layer.connection { self.setVideoOrientation(videoOrientation, on: connection) }
                     // Start with a very subtle fade to smooth any remaining visual artifacts
                     layer.opacity = 0.95
                 }
@@ -930,9 +902,10 @@ extension CameraController {
         // Apply orientation asynchronously on main thread
         let updateBlock = { [weak self] in
             guard let self = self else { return }
-            self.previewLayer?.connection?.videoOrientation = videoOrientation
-            self.dataOutput?.connections.forEach { $0.videoOrientation = videoOrientation }
-            self.photoOutput?.connections.forEach { $0.videoOrientation = videoOrientation }
+            if let connection = self.previewLayer?.connection { self.setVideoOrientation(videoOrientation, on: connection) }
+            if let connections = self.dataOutput?.connections { self.setVideoOrientation(videoOrientation, on: connections) }
+            if let connections = self.photoOutput?.connections { self.setVideoOrientation(videoOrientation, on: connections) }
+            if let connections = self.fileVideoOutput?.connections { self.setVideoOrientation(videoOrientation, on: connections) }
         }
 
         if Thread.isMainThread {
@@ -1138,7 +1111,7 @@ extension CameraController {
         if let connection = photoOutput.connection(with: .video) {
             let captureOrientation = self.getPhysicalOrientation()
             self.lastCaptureOrientation = captureOrientation
-            connection.videoOrientation = captureOrientation
+            self.setVideoOrientation(captureOrientation, on: connection)
         }
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
@@ -2516,7 +2489,7 @@ extension CameraController {
         if let connection = fileVideoOutput.connection(with: .video) {
             if connection.isEnabled == false { connection.isEnabled = true }
             // Goes off accelerometer now
-            connection.videoOrientation = self.getPhysicalOrientation()
+            self.setVideoOrientation(self.getPhysicalOrientation(), on: connection)
 
             // Front camera: mirror the recorded video so it looks natural (selfie style).
             if self.currentCameraPosition == .front, connection.isVideoMirroringSupported {
