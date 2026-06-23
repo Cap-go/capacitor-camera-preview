@@ -147,6 +147,22 @@ export type VideoQuality = 'low' | 'medium' | 'high' | '2160p' | '1080p' | '720p
  */
 export type VideoCodec = 'avc1' | 'hvc1' | 'jpeg' | 'apcn' | 'ap4h';
 
+/**
+ * Video stabilization modes used when recording.
+ *
+ * On Android only `off` and `standard` are supported.
+ * On iOS all listed modes may be available when the device supports video stabilization.
+ */
+export type VideoStabilizationMode =
+  | 'off'
+  | 'standard'
+  | 'cinematic'
+  | 'cinematicExtended'
+  | 'previewOptimized'
+  | 'cinematicExtendedEnhanced'
+  | 'auto'
+  | 'lowLatency';
+
 export type RecordingFinishedReason = 'manual' | 'maxDuration' | 'maxFileSize';
 
 export interface RecordingFinishedEvent {
@@ -346,6 +362,12 @@ export interface CameraPreviewOptions {
    * @default "avc1"
    */
   videoCodec?: VideoCodec;
+  /**
+   * Preferred video stabilization mode for recording.
+   * @platform ios, android
+   * @default "off"
+   */
+  videoStabilizationMode?: VideoStabilizationMode;
   /**
    * Starts barcode scanning together with the camera preview.
    * Set to `true` or pass options to scan all supported formats.
@@ -706,7 +728,7 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
-   * @param {CameraPreviewOptions} options - The options for video recording.
+   * @param {CameraPreviewOptions} options - The options for video recording. Supports `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio`.
    * @returns {Promise<void>} A promise that resolves when video recording starts.
    * @since 0.0.1
    */
@@ -767,6 +789,45 @@ export interface CameraPreviewPlugin {
    * @platform android, ios
    */
   getSupportedVideoCodecs(): Promise<{ codecs: VideoCodec[] }>;
+
+  /**
+   * Checks whether video stabilization is supported by the active camera.
+   *
+   * @returns {Promise<{ supported: boolean }>} A promise that resolves with the support state.
+   * @since 8.5.2
+   * @platform android, ios
+   */
+  isVideoStabilizationSupported(): Promise<{ supported: boolean }>;
+
+  /**
+   * Returns the video stabilization modes supported by the active camera.
+   *
+   * @returns {Promise<{ modes: VideoStabilizationMode[] }>} A promise that resolves with supported modes.
+   * @since 8.5.2
+   * @platform android, ios
+   */
+  getSupportedVideoStabilizationModes(): Promise<{ modes: VideoStabilizationMode[] }>;
+
+  /**
+   * Gets the current video stabilization mode.
+   *
+   * @returns {Promise<{ mode: VideoStabilizationMode }>} A promise that resolves with the current mode.
+   * @since 8.5.2
+   * @platform android, ios
+   */
+  getVideoStabilizationMode(): Promise<{ mode: VideoStabilizationMode }>;
+
+  /**
+   * Sets the video stabilization mode for recording.
+   * Cannot be changed while a recording is in progress.
+   * You can also pass `videoStabilizationMode` in `startRecordVideo()` options.
+   *
+   * @param {{ mode: VideoStabilizationMode }} options - The desired stabilization mode.
+   * @returns {Promise<void>} A promise that resolves when the mode is set.
+   * @since 8.5.2
+   * @platform android, ios
+   */
+  setVideoStabilizationMode(options: { mode: VideoStabilizationMode }): Promise<void>;
 
   /**
    * Checks if the camera preview is currently running.

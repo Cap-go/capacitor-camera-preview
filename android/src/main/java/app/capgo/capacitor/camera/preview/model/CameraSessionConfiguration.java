@@ -27,6 +27,7 @@ public class CameraSessionConfiguration {
     private boolean isCentered = false;
     private String videoQuality;
     private String videoCodec = "avc1";
+    private String videoStabilizationMode = "off";
     private boolean enablePhysicalDeviceSelection = false;
     private boolean barcodeScannerEnabled = false;
 
@@ -158,6 +159,14 @@ public class CameraSessionConfiguration {
 
     public void setVideoCodec(String codec) {
         this.videoCodec = codec != null ? codec : "avc1";
+    }
+
+    public String getVideoStabilizationMode() {
+        return videoStabilizationMode;
+    }
+
+    public void setVideoStabilizationMode(String mode) {
+        this.videoStabilizationMode = mode != null ? mode : "off";
     }
 
     public boolean isPhysicalDeviceSelectionEnabled() {

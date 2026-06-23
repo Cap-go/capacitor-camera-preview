@@ -1139,7 +1139,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         recorderBuilder.setVideoCapabilitiesSource(Recorder.VIDEO_CAPABILITIES_SOURCE_CODEC_CAPABILITIES);
                     }
                     Recorder recorder = recorderBuilder.build();
-                    videoCapture = VideoCapture.withOutput(recorder);
+                    VideoCapture.Builder<Recorder> videoCaptureBuilder = new VideoCapture.Builder<>(recorder);
+                    videoCaptureBuilder.setVideoStabilizationEnabled(isVideoStabilizationEnabledForSession());
+                    videoCapture = videoCaptureBuilder.build();
                 }
 
                 // Unbind any existing use cases and bind new ones
@@ -4785,6 +4787,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private static final List<String> ALL_VIDEO_QUALITIES = Arrays.asList("low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3");
 
     private static final List<String> ALL_VIDEO_CODECS = Arrays.asList("avc1", "hvc1");
+    private static final List<String> ALL_VIDEO_STABILIZATION_MODES = Arrays.asList("off", "standard");
+    private static final List<String> IOS_ONLY_VIDEO_STABILIZATION_MODES = Arrays.asList(
+        "cinematic",
+        "cinematicExtended",
+        "previewOptimized",
+        "cinematicExtendedEnhanced",
+        "auto",
+        "lowLatency"
+    );
 
     public String getVideoQualitySetting() {
         if (sessionConfig == null) {
@@ -4861,6 +4872,88 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     return true;
                 }
             }
+        }
+        return false;
+    }
+
+    public boolean isVideoStabilizationSupported() {
+        return isStandardVideoStabilizationSupported();
+    }
+
+    public List<String> getSupportedVideoStabilizationModes() {
+        List<String> modes = new ArrayList<>();
+        modes.add("off");
+        if (isStandardVideoStabilizationSupported()) {
+            modes.add("standard");
+        }
+        return modes;
+    }
+
+    public String getVideoStabilizationModeSetting() {
+        if (sessionConfig == null) {
+            return "off";
+        }
+        return sessionConfig.getVideoStabilizationMode();
+    }
+
+    public void setVideoStabilizationModeSetting(String mode) {
+        if (sessionConfig == null) {
+            throw new IllegalStateException("Camera session is not running");
+        }
+        if (currentRecording != null) {
+            throw new IllegalStateException("Cannot change video stabilization while recording is in progress");
+        }
+        String normalized = mode != null ? mode : "off";
+        if (IOS_ONLY_VIDEO_STABILIZATION_MODES.contains(normalized)) {
+            throw new IllegalArgumentException(
+                "Video stabilization mode '" + normalized + "' is only supported on iOS. Use 'off' or 'standard' on Android."
+            );
+        }
+        if (!ALL_VIDEO_STABILIZATION_MODES.contains(normalized)) {
+            throw new IllegalArgumentException("Unsupported video stabilization mode: " + mode);
+        }
+        if ("standard".equals(normalized) && !isStandardVideoStabilizationSupported()) {
+            throw new IllegalArgumentException("Video stabilization mode 'standard' is not supported on this device");
+        }
+        if (normalized.equals(sessionConfig.getVideoStabilizationMode())) {
+            return;
+        }
+        sessionConfig.setVideoStabilizationMode(normalized);
+        if (sessionConfig.isVideoModeEnabled() && isRunning) {
+            mainExecutor.execute(this::bindCameraUseCases);
+        }
+    }
+
+    private boolean isVideoStabilizationEnabledForSession() {
+        if (sessionConfig == null) {
+            return false;
+        }
+        return "standard".equalsIgnoreCase(sessionConfig.getVideoStabilizationMode());
+    }
+
+    private boolean isStandardVideoStabilizationSupported() {
+        if (camera == null) {
+            return false;
+        }
+        try {
+            String cameraId = Camera2CameraInfo.from(camera.getCameraInfo()).getCameraId();
+            CameraManager cameraManager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+            if (cameraManager == null) {
+                return false;
+            }
+            int[] modes = cameraManager
+                .getCameraCharacteristics(cameraId)
+                .get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES);
+            if (modes == null) {
+                return false;
+            }
+            for (int availableMode : modes) {
+                if (availableMode == CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON) {
+                    return true;
+                }
+            }
+        } catch (CameraAccessException e) {
+            Log.w(TAG, "Failed to read video stabilization modes", e);
         }
         return false;
     }

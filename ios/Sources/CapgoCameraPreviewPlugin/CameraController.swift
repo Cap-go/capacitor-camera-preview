@@ -57,7 +57,6 @@ class CameraController: NSObject {
         }
     }
 
-
     private func setVideoOrientation(_ orientation: AVCaptureVideoOrientation, on connection: AVCaptureConnection) {
         guard connection.isVideoOrientationSupported else { return }
         connection.videoOrientation = orientation
@@ -155,6 +154,7 @@ class CameraController: NSObject {
 
     var videoQuality: String = "high"
     var videoCodec: String = "avc1"
+    var videoStabilizationMode: String = "off"
 
     private static let allVideoQualities = ["low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3"]
 
@@ -211,6 +211,138 @@ class CameraController: NSObject {
 
     func getVideoCodec() -> String {
         return self.videoCodec
+    }
+
+    func isVideoStabilizationSupported() -> Bool {
+        guard let connection = self.fileVideoOutput?.connection(with: .video) else {
+            return false
+        }
+        return connection.isVideoStabilizationSupported
+    }
+
+    func getSupportedVideoStabilizationModes() -> [String] {
+        guard let connection = self.fileVideoOutput?.connection(with: .video),
+              connection.isVideoStabilizationSupported else {
+            return ["off"]
+        }
+
+        let savedPreferred = connection.preferredVideoStabilizationMode
+        var supported: [String] = []
+
+        for candidate in Self.allVideoStabilizationModeCandidates() {
+            connection.preferredVideoStabilizationMode = candidate.mode
+            if connection.preferredVideoStabilizationMode == candidate.mode {
+                supported.append(candidate.name)
+            }
+        }
+
+        connection.preferredVideoStabilizationMode = savedPreferred
+        return supported.isEmpty ? ["off"] : supported
+    }
+
+    func getVideoStabilizationMode() -> String {
+        if let connection = self.fileVideoOutput?.connection(with: .video),
+           connection.isVideoStabilizationSupported {
+            return self.videoStabilizationModeString(from: connection.activeVideoStabilizationMode)
+        }
+        return self.videoStabilizationMode
+    }
+
+    func setVideoStabilizationMode(_ mode: String) throws {
+        if self.fileVideoOutput?.isRecording == true {
+            throw CameraControllerError.recordingInProgress
+        }
+        guard let avMode = self.avVideoStabilizationMode(from: mode) else {
+            throw CameraControllerError.invalidOperation
+        }
+        let supportedModes = self.getSupportedVideoStabilizationModes()
+        guard supportedModes.contains(mode) else {
+            throw CameraControllerError.invalidOperation
+        }
+        self.videoStabilizationMode = mode
+        self.applyVideoStabilizationMode(avMode)
+    }
+
+    private static func allVideoStabilizationModeCandidates() -> [(name: String, mode: AVCaptureVideoStabilizationMode)] {
+        var candidates: [(String, AVCaptureVideoStabilizationMode)] = [
+            ("off", .off),
+            ("standard", .standard),
+            ("cinematic", .cinematic),
+            ("cinematicExtended", .cinematicExtended),
+            ("auto", .auto),
+        ]
+        if #available(iOS 17.0, *) {
+            candidates.append(("previewOptimized", .previewOptimized))
+        }
+        if #available(iOS 18.0, *) {
+            candidates.append(("cinematicExtendedEnhanced", .cinematicExtendedEnhanced))
+        }
+        return candidates
+    }
+
+    private func applyVideoStabilizationMode(_ mode: AVCaptureVideoStabilizationMode? = nil) {
+        guard let connection = self.fileVideoOutput?.connection(with: .video),
+              connection.isVideoStabilizationSupported else {
+            return
+        }
+        let targetMode = mode ?? self.avVideoStabilizationMode(from: self.videoStabilizationMode) ?? .off
+        connection.preferredVideoStabilizationMode = targetMode
+    }
+
+    private func avVideoStabilizationMode(from mode: String) -> AVCaptureVideoStabilizationMode? {
+        switch mode {
+        case "off":
+            return .off
+        case "standard":
+            return .standard
+        case "cinematic":
+            return .cinematic
+        case "cinematicExtended":
+            return .cinematicExtended
+        case "auto":
+            return .auto
+        case "previewOptimized":
+            if #available(iOS 17.0, *) {
+                return .previewOptimized
+            }
+            return nil
+        case "cinematicExtendedEnhanced":
+            if #available(iOS 18.0, *) {
+                return .cinematicExtendedEnhanced
+            }
+            return nil
+        case "lowLatency":
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    private func videoStabilizationModeString(from mode: AVCaptureVideoStabilizationMode) -> String {
+        switch mode {
+        case .off:
+            return "off"
+        case .standard:
+            return "standard"
+        case .cinematic:
+            return "cinematic"
+        case .cinematicExtended:
+            return "cinematicExtended"
+        case .auto:
+            return "auto"
+        default:
+            if #available(iOS 17.0, *) {
+                if mode == .previewOptimized {
+                    return "previewOptimized"
+                }
+            }
+            if #available(iOS 18.0, *) {
+                if mode == .cinematicExtendedEnhanced {
+                    return "cinematicExtendedEnhanced"
+                }
+            }
+            return self.videoStabilizationMode
+        }
     }
 
     private func avVideoCodecType(for codec: String) -> AVVideoCodecType? {
@@ -515,6 +647,7 @@ extension CameraController {
                     captureSession.addOutput(fileVideoOutput)
                     // Set orientation immediately
                     self.setVideoOrientation(videoOrientation, on: fileVideoOutput.connections)
+                    self.applyVideoStabilizationMode()
                 }
 
                 // Set up preview layer session in the same configuration block
@@ -1094,6 +1227,7 @@ extension CameraController {
             captureSession.removeOutput(fileVideoOutput)
             if captureSession.canAddOutput(fileVideoOutput) {
                 captureSession.addOutput(fileVideoOutput)
+                self.applyVideoStabilizationMode()
             }
         }
 
@@ -2479,6 +2613,7 @@ extension CameraController {
             captureSession.beginConfiguration()
             if captureSession.canAddOutput(fileVideoOutput) {
                 captureSession.addOutput(fileVideoOutput)
+                self.applyVideoStabilizationMode()
             } else {
                 captureSession.commitConfiguration()
                 throw CameraControllerError.invalidOperation
@@ -2519,6 +2654,8 @@ extension CameraController {
            fileVideoOutput.availableVideoCodecTypes.contains(codecType) {
             fileVideoOutput.setOutputSettings([AVVideoCodecKey: codecType], for: connection)
         }
+
+        self.applyVideoStabilizationMode()
 
         // Start recording video
         fileVideoOutput.startRecording(to: fileUrl, recordingDelegate: self)
@@ -2824,6 +2961,7 @@ enum CameraControllerError: Swift.Error {
     case invalidOperation
     case noCamerasAvailable
     case cannotFindDocumentsDirectory
+    case recordingInProgress
     case fileVideoOutputNotFound
     case unknown
     case invalidZoomLevel(min: CGFloat, max: CGFloat, requested: CGFloat)
@@ -2851,6 +2989,8 @@ extension CameraControllerError: LocalizedError {
             return NSLocalizedString("Unknown", comment: "Unknown")
         case .cannotFindDocumentsDirectory:
             return NSLocalizedString("Cannot find documents directory", comment: "This should never happen")
+        case .recordingInProgress:
+            return NSLocalizedString("Cannot change video stabilization while recording is in progress.", comment: "Recording in progress")
         case .fileVideoOutputNotFound:
             return NSLocalizedString("Video recording is not available. Make sure the camera is properly initialized.", comment: "Video recording not available")
         case .invalidZoomLevel(let min, let max, let requested):
