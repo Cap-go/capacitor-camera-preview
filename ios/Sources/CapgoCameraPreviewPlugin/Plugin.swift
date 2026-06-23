@@ -1659,6 +1659,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         do {
+            if let frameRate = call.getInt("frameRate") {
+                try self.cameraController.setVideoFrameRate(frameRate)
+            }
             try self.cameraController.captureVideo(maxDuration: maxDuration, maxFileSize: maxFileSize)
             call.resolve()
         } catch {

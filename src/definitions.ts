@@ -347,6 +347,13 @@ export interface CameraPreviewOptions {
    */
   videoCodec?: VideoCodec;
   /**
+   * Target video frame rate in frames per second.
+   * Applied when recording starts. Use `getSupportedVideoFrameRates()` to list supported values.
+   * @platform ios, android
+   * @since 8.6.0
+   */
+  frameRate?: number;
+  /**
    * Starts barcode scanning together with the camera preview.
    * Set to `true` or pass options to scan all supported formats.
    * Omit this option to keep barcode scanning disabled at startup.
@@ -706,10 +713,13 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
+   * Supports `frameRate`, `maxDuration`, `maxFileSize`, and `videoCodec` on each call.
+   *
    * @param {CameraPreviewOptions} options - The options for video recording.
    * @returns {Promise<void>} A promise that resolves when video recording starts.
    * @since 0.0.1
    */
+  startRecordVideo(options: CameraPreviewOptions): Promise<void>;
   startRecordVideo(options: CameraPreviewOptions): Promise<void>;
 
   /**
@@ -1049,7 +1059,8 @@ export interface CameraPreviewPlugin {
   }>;
 
   /**
-   * Sets the target video frame rate before recording starts.
+   * Sets the target video frame rate for the active camera session.
+   * Prefer passing `frameRate` to `startRecordVideo()` when starting a recording.
    * Rejects unsupported values with a clear error.
    *
    * @platform android, ios

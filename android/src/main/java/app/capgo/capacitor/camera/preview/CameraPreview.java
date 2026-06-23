@@ -2765,13 +2765,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String permissionAlias = disableAudio ? CAMERA_ONLY_PERMISSION_ALIAS : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
         if (PermissionState.GRANTED.equals(getPermissionState(permissionAlias))) {
-            try {
-                applyVideoCodecFromCall(call);
-                cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to start video recording: " + e.getMessage());
-            }
+            beginVideoRecording(call);
         } else {
             requestPermissionForAlias(permissionAlias, call, "handleVideoRecordingPermissionResult");
         }
@@ -2842,6 +2836,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return bytes > 0L ? bytes : null;
     }
 
+    private void beginVideoRecording(PluginCall call) {
+        applyVideoCodecFromCall(call);
+        Integer frameRate = call.getInt("frameRate");
+        cameraXView.startRecordVideo(
+            getMaxDurationMillis(call),
+            getMaxFileSize(call),
+            frameRate,
+            call::resolve,
+            message -> call.reject("Failed to start video recording: " + message)
+        );
+    }
+
     @PermissionCallback
     private void handleVideoRecordingPermissionResult(PluginCall call) {
         // Use the persisted session value to determine which permission we requested
@@ -2852,13 +2858,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             PermissionState.GRANTED.equals(getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS)) ||
             PermissionState.GRANTED.equals(getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS))
         ) {
-            try {
-                applyVideoCodecFromCall(call);
-                cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to start video recording: " + e.getMessage());
-            }
+            beginVideoRecording(call);
         } else {
             call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied");
         }

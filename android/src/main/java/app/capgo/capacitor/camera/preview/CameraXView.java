@@ -4793,6 +4793,30 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    public void startRecordVideo(
+        Long maxDurationMillis,
+        Long maxFileSize,
+        Integer frameRate,
+        Runnable onSuccess,
+        java.util.function.Consumer<String> onError
+    ) {
+        Runnable startRecording = () -> {
+            try {
+                startRecordVideo(maxDurationMillis, maxFileSize);
+                onSuccess.run();
+            } catch (Exception e) {
+                onError.accept(e.getMessage());
+            }
+        };
+
+        if (frameRate == null) {
+            mainExecutor.execute(startRecording);
+            return;
+        }
+
+        setVideoFrameRate(frameRate, startRecording, onError);
+    }
+
     /** @noinspection ResultOfMethodCallIgnored*/
     public void startRecordVideo(Long maxDurationMillis, Long maxFileSize) throws Exception {
         if (videoCapture == null) {

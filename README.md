@@ -376,6 +376,7 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setOpacity(...)`](#setopacity)
 * [`stopRecordVideo()`](#stoprecordvideo)
 * [`startRecordVideo(...)`](#startrecordvideo)
+* [`startRecordVideo(...)`](#startrecordvideo)
 * [`setVideoQuality(...)`](#setvideoquality)
 * [`getVideoQuality()`](#getvideoquality)
 * [`getSupportedVideoQualities()`](#getsupportedvideoqualities)
@@ -758,11 +759,26 @@ startRecordVideo(options: CameraPreviewOptions) => Promise<void>
 
 Starts recording a video.
 
+Supports `frameRate`, `maxDuration`, `maxFileSize`, and `videoCodec` on each call.
+
 | Param         | Type                                                                  | Description                        |
 | ------------- | --------------------------------------------------------------------- | ---------------------------------- |
 | **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. |
 
 **Since:** 0.0.1
+
+--------------------
+
+
+### startRecordVideo(...)
+
+```typescript
+startRecordVideo(options: CameraPreviewOptions) => Promise<void>
+```
+
+| Param         | Type                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> |
 
 --------------------
 
@@ -1332,7 +1348,8 @@ On Android the actual recording frame rate can still vary in low light or under 
 setVideoFrameRate(options: { frameRate: number; }) => Promise<void>
 ```
 
-Sets the target video frame rate before recording starts.
+Sets the target video frame rate for the active camera session.
+Prefer passing `frameRate` to `startRecordVideo()` when starting a recording.
 Rejects unsupported values with a clear error.
 
 | Param         | Type                                |
@@ -1396,6 +1413,7 @@ Defines the configuration options for starting the camera preview.
 | **`maxDuration`**                   | <code>number</code>                                                                | Maximum recording duration in seconds. Recording stops automatically when reached.                                                                                                                                                  |                        |        |
 | **`maxFileSize`**                   | <code>number</code>                                                                | Maximum recording file size in bytes. Recording stops automatically when reached.                                                                                                                                                   |                        |        |
 | **`videoCodec`**                    | <code><a href="#videocodec">VideoCodec</a></code>                                  | Preferred video codec for recording.                                                                                                                                                                                                | <code>"avc1"</code>    |        |
+| **`frameRate`**                     | <code>number</code>                                                                | Target video frame rate in frames per second. Applied when recording starts. Use `getSupportedVideoFrameRates()` to list supported values.                                                                                          |                        | 8.6.0  |
 | **`barcodeScanner`**                | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                               |                        | 8.8.0  |
 
 
