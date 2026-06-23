@@ -273,10 +273,9 @@ class CameraController: NSObject {
         ]
         if #available(iOS 17.0, *) {
             candidates.append(("previewOptimized", .previewOptimized))
-            candidates.append(("cinematicExtendedEnhanced", .cinematicExtendedEnhanced))
         }
         if #available(iOS 18.0, *) {
-            candidates.append(("lowLatency", .lowLatency))
+            candidates.append(("cinematicExtendedEnhanced", .cinematicExtendedEnhanced))
         }
         return candidates
     }
@@ -308,14 +307,11 @@ class CameraController: NSObject {
             }
             return nil
         case "cinematicExtendedEnhanced":
-            if #available(iOS 17.0, *) {
+            if #available(iOS 18.0, *) {
                 return .cinematicExtendedEnhanced
             }
             return nil
         case "lowLatency":
-            if #available(iOS 18.0, *) {
-                return .lowLatency
-            }
             return nil
         default:
             return nil
@@ -339,13 +335,10 @@ class CameraController: NSObject {
                 if mode == .previewOptimized {
                     return "previewOptimized"
                 }
-                if mode == .cinematicExtendedEnhanced {
-                    return "cinematicExtendedEnhanced"
-                }
             }
             if #available(iOS 18.0, *) {
-                if mode == .lowLatency {
-                    return "lowLatency"
+                if mode == .cinematicExtendedEnhanced {
+                    return "cinematicExtendedEnhanced"
                 }
             }
             return self.videoStabilizationMode
