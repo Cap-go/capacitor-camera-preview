@@ -376,13 +376,16 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setOpacity(...)`](#setopacity)
 * [`stopRecordVideo()`](#stoprecordvideo)
 * [`startRecordVideo(...)`](#startrecordvideo)
-* [`startRecordVideo(...)`](#startrecordvideo)
 * [`setVideoQuality(...)`](#setvideoquality)
 * [`getVideoQuality()`](#getvideoquality)
 * [`getSupportedVideoQualities()`](#getsupportedvideoqualities)
 * [`setVideoCodec(...)`](#setvideocodec)
 * [`getVideoCodec()`](#getvideocodec)
 * [`getSupportedVideoCodecs()`](#getsupportedvideocodecs)
+* [`isVideoStabilizationSupported()`](#isvideostabilizationsupported)
+* [`getSupportedVideoStabilizationModes()`](#getsupportedvideostabilizationmodes)
+* [`getVideoStabilizationMode()`](#getvideostabilizationmode)
+* [`setVideoStabilizationMode(...)`](#setvideostabilizationmode)
 * [`isRunning()`](#isrunning)
 * [`getAvailableDevices()`](#getavailabledevices)
 * [`getZoom()`](#getzoom)
@@ -759,26 +762,13 @@ startRecordVideo(options: CameraPreviewOptions) => Promise<void>
 
 Starts recording a video.
 
-Supports `frameRate`, `maxDuration`, `maxFileSize`, and `videoCodec` on each call.
+Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio` on each call.
 
 | Param         | Type                                                                  | Description                        |
 | ------------- | --------------------------------------------------------------------- | ---------------------------------- |
 | **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. |
 
 **Since:** 0.0.1
-
---------------------
-
-
-### startRecordVideo(...)
-
-```typescript
-startRecordVideo(options: CameraPreviewOptions) => Promise<void>
-```
-
-| Param         | Type                                                                  |
-| ------------- | --------------------------------------------------------------------- |
-| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> |
 
 --------------------
 
@@ -873,6 +863,70 @@ Returns the video codecs supported by the active camera.
 **Returns:** <code>Promise&lt;{ codecs: VideoCodec[]; }&gt;</code>
 
 **Since:** 8.5.0
+
+--------------------
+
+
+### isVideoStabilizationSupported()
+
+```typescript
+isVideoStabilizationSupported() => Promise<{ supported: boolean; }>
+```
+
+Checks whether video stabilization is supported by the active camera.
+
+**Returns:** <code>Promise&lt;{ supported: boolean; }&gt;</code>
+
+**Since:** 8.5.2
+
+--------------------
+
+
+### getSupportedVideoStabilizationModes()
+
+```typescript
+getSupportedVideoStabilizationModes() => Promise<{ modes: VideoStabilizationMode[]; }>
+```
+
+Returns the video stabilization modes supported by the active camera.
+
+**Returns:** <code>Promise&lt;{ modes: VideoStabilizationMode[]; }&gt;</code>
+
+**Since:** 8.5.2
+
+--------------------
+
+
+### getVideoStabilizationMode()
+
+```typescript
+getVideoStabilizationMode() => Promise<{ mode: VideoStabilizationMode; }>
+```
+
+Gets the current video stabilization mode.
+
+**Returns:** <code>Promise&lt;{ mode: <a href="#videostabilizationmode">VideoStabilizationMode</a>; }&gt;</code>
+
+**Since:** 8.5.2
+
+--------------------
+
+
+### setVideoStabilizationMode(...)
+
+```typescript
+setVideoStabilizationMode(options: { mode: VideoStabilizationMode; }) => Promise<void>
+```
+
+Sets the video stabilization mode for recording.
+Cannot be changed while a recording is in progress.
+You can also pass `videoStabilizationMode` in `startRecordVideo()` options.
+
+| Param         | Type                                                                                 | Description                       |
+| ------------- | ------------------------------------------------------------------------------------ | --------------------------------- |
+| **`options`** | <code>{ mode: <a href="#videostabilizationmode">VideoStabilizationMode</a>; }</code> | - The desired stabilization mode. |
+
+**Since:** 8.5.2
 
 --------------------
 
@@ -1414,6 +1468,7 @@ Defines the configuration options for starting the camera preview.
 | **`maxFileSize`**                   | <code>number</code>                                                                | Maximum recording file size in bytes. Recording stops automatically when reached.                                                                                                                                                   |                        |        |
 | **`videoCodec`**                    | <code><a href="#videocodec">VideoCodec</a></code>                                  | Preferred video codec for recording.                                                                                                                                                                                                | <code>"avc1"</code>    |        |
 | **`frameRate`**                     | <code>number</code>                                                                | Target video frame rate in frames per second. Applied when recording starts. Use `getSupportedVideoFrameRates()` to list supported values.                                                                                          |                        | 8.6.0  |
+| **`videoStabilizationMode`**        | <code><a href="#videostabilizationmode">VideoStabilizationMode</a></code>          | Preferred video stabilization mode for recording.                                                                                                                                                                                   | <code>"off"</code>     |        |
 | **`barcodeScanner`**                | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                               |                        | 8.8.0  |
 
 
@@ -1632,6 +1687,16 @@ Video codec identifiers used when recording.
 - `hvc1`: HEVC / H.265
 
 <code>'avc1' | 'hvc1' | 'jpeg' | 'apcn' | 'ap4h'</code>
+
+
+#### VideoStabilizationMode
+
+Video stabilization modes used when recording.
+
+On Android only `off` and `standard` are supported.
+On iOS all listed modes may be available when the device supports video stabilization.
+
+<code>'off' | 'standard' | 'cinematic' | 'cinematicExtended' | 'previewOptimized' | 'cinematicExtendedEnhanced' | 'auto' | 'lowLatency'</code>
 
 
 #### BarcodeScannerFormat
