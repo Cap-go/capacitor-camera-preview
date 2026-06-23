@@ -987,6 +987,7 @@ extension CameraController {
     }
 
     func switchCameras() throws {
+        configuredVideoFrameRate = nil
         guard let currentCameraPosition = currentCameraPosition,
               let captureSession = self.captureSession else {
             throw CameraControllerError.captureSessionIsMissing
@@ -2240,6 +2241,7 @@ extension CameraController {
     }
 
     func cleanup() {
+        configuredVideoFrameRate = nil
         stopBarcodeScanner()
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
@@ -2494,12 +2496,22 @@ extension CameraController {
         return Int(round(Double(duration.timescale) / Double(duration.value)))
     }
 
+    private func allSupportedFrameRates(for device: AVCaptureDevice) -> [Int] {
+        var rates = Set<Int>()
+        for format in device.formats {
+            for rate in frameRates(from: format) {
+                rates.insert(rate)
+            }
+        }
+        return rates.sorted()
+    }
+
     func getSupportedVideoFrameRates() throws -> [Int] {
         guard let device = activeVideoDevice() else {
             throw CameraControllerError.noCamerasAvailable
         }
 
-        return frameRates(from: device.activeFormat)
+        return allSupportedFrameRates(for: device)
     }
 
     func getVideoFrameRate() throws -> Int {
@@ -2527,7 +2539,7 @@ extension CameraController {
             throw CameraControllerError.noCamerasAvailable
         }
 
-        let supportedRates = frameRates(from: device.activeFormat)
+        let supportedRates = allSupportedFrameRates(for: device)
         guard supportedRates.contains(frameRate) else {
             throw NSError(
                 domain: "CameraPreview",
@@ -2536,16 +2548,12 @@ extension CameraController {
             )
         }
 
-        var targetFormat = device.activeFormat
-        if !formatSupportsFrameRate(targetFormat, frameRate: frameRate) {
-            guard let matchingFormat = device.formats.first(where: { formatSupportsFrameRate($0, frameRate: frameRate) }) else {
-                throw NSError(
-                    domain: "CameraPreview",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "Unsupported frame rate \(frameRate) for the active camera"]
-                )
-            }
-            targetFormat = matchingFormat
+        guard let targetFormat = device.formats.first(where: { formatSupportsFrameRate($0, frameRate: frameRate) }) else {
+            throw NSError(
+                domain: "CameraPreview",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported frame rate \(frameRate) for the active camera"]
+            )
         }
 
         let frameDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))

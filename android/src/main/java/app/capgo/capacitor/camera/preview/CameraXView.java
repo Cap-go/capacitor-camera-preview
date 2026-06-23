@@ -186,7 +186,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
-    private Integer configuredVideoFrameRate = null;
+    private Range<Integer> configuredVideoFrameRateRange = null;
+    private Runnable pendingFrameRateBindSuccess;
+    private java.util.function.Consumer<String> pendingFrameRateBindError;
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
     // Capture/stop coordination
     private final Object captureLock = new Object();
@@ -1296,6 +1298,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 }
 
                 isRunning = true;
+                completePendingFrameRateBindSuccess();
                 Log.d(TAG, "bindCameraUseCases: Camera bound successfully");
                 if (listener != null) {
                     if (sessionConfig != null && sessionConfig.isToBack()) {
@@ -1333,6 +1336,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             } catch (Exception e) {
                 // Restore webView background on error
                 restoreWebViewBackground();
+                completePendingFrameRateBindError("Error binding camera: " + e.getMessage());
                 if (listener != null) listener.onCameraStartError(this, "Error binding camera: " + e.getMessage());
             }
         });
@@ -3365,31 +3369,90 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     // ===================== Video frame rate APIs =====================
+    private void clearConfiguredVideoFrameRate() {
+        configuredVideoFrameRateRange = null;
+    }
+
+    private Range<Integer>[] getAdvertisedFpsRanges() throws Exception {
+        CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        String cameraId = resolveActiveCameraIdForCharacteristics();
+        CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+        return characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
+    }
+
+    private Range<Integer> findAdvertisedFpsRangeForRate(int frameRate, Range<Integer>[] ranges) {
+        if (ranges == null) {
+            return null;
+        }
+
+        Range<Integer> containingRange = null;
+        for (Range<Integer> range : ranges) {
+            if (range.getLower() > frameRate || range.getUpper() < frameRate) {
+                continue;
+            }
+            if (range.getLower().equals(range.getUpper()) && range.getLower() == frameRate) {
+                return range;
+            }
+            containingRange = range;
+        }
+        return containingRange;
+    }
+
+    private Range<Integer> resolveConfiguredVideoFrameRateRange() {
+        if (configuredVideoFrameRateRange == null) {
+            return null;
+        }
+        try {
+            Range<Integer>[] ranges = getAdvertisedFpsRanges();
+            int targetRate = configuredVideoFrameRateRange.getUpper();
+            return findAdvertisedFpsRangeForRate(targetRate, ranges);
+        } catch (Exception e) {
+            Log.w(TAG, "resolveConfiguredVideoFrameRateRange: Failed to resolve FPS range", e);
+            return null;
+        }
+    }
+
+    private void completePendingFrameRateBindSuccess() {
+        if (pendingFrameRateBindSuccess == null) {
+            return;
+        }
+        Runnable callback = pendingFrameRateBindSuccess;
+        pendingFrameRateBindSuccess = null;
+        pendingFrameRateBindError = null;
+        callback.run();
+    }
+
+    private void completePendingFrameRateBindError(String message) {
+        if (pendingFrameRateBindError == null) {
+            return;
+        }
+        java.util.function.Consumer<String> callback = pendingFrameRateBindError;
+        pendingFrameRateBindSuccess = null;
+        pendingFrameRateBindError = null;
+        callback.accept(message);
+    }
+
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private Preview.Builder applyTargetFpsToPreviewBuilder(Preview.Builder builder) {
-        if (configuredVideoFrameRate == null) {
+        Range<Integer> fpsRange = resolveConfiguredVideoFrameRateRange();
+        if (fpsRange == null) {
             return builder;
         }
 
         Camera2Interop.Extender<Preview> extender = new Camera2Interop.Extender<>(builder);
-        extender.setCaptureRequestOption(
-            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-            new Range<>(configuredVideoFrameRate, configuredVideoFrameRate)
-        );
+        extender.setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
         return builder;
     }
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private VideoCapture.Builder<Recorder> applyTargetFpsToVideoCaptureBuilder(VideoCapture.Builder<Recorder> builder) {
-        if (configuredVideoFrameRate == null) {
+        Range<Integer> fpsRange = resolveConfiguredVideoFrameRateRange();
+        if (fpsRange == null) {
             return builder;
         }
 
         Camera2Interop.Extender<VideoCapture<Recorder>> extender = new Camera2Interop.Extender<>(builder);
-        extender.setCaptureRequestOption(
-            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-            new Range<>(configuredVideoFrameRate, configuredVideoFrameRate)
-        );
+        extender.setCaptureRequestOption(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
         return builder;
     }
 
@@ -3432,30 +3495,19 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public List<Integer> getSupportedVideoFrameRates() throws Exception {
-        CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-        String cameraId = resolveActiveCameraIdForCharacteristics();
-        CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-        Range<Integer>[] ranges = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
-        return frameRatesFromFpsRanges(ranges);
+        return frameRatesFromFpsRanges(getAdvertisedFpsRanges());
     }
 
     public int getVideoFrameRate() throws Exception {
-        if (configuredVideoFrameRate != null) {
-            return configuredVideoFrameRate;
+        if (configuredVideoFrameRateRange != null) {
+            return configuredVideoFrameRateRange.getUpper();
         }
-
-        CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
-        String cameraId = resolveActiveCameraIdForCharacteristics();
-        CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
-        Range<Integer>[] ranges = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
-        if (ranges == null || ranges.length == 0) {
-            return 30;
-        }
-        return ranges[0].getUpper();
+        return 30;
     }
 
     public void setVideoFrameRate(int frameRate, Runnable onSuccess, java.util.function.Consumer<String> onError) {
         mainExecutor.execute(() -> {
+            Range<Integer> previousRange = configuredVideoFrameRateRange;
             try {
                 if (currentRecording != null) {
                     throw new Exception("Cannot change video frame rate while recording");
@@ -3469,12 +3521,24 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     throw new Exception("Unsupported frame rate " + frameRate + ". Supported values: " + supportedRates);
                 }
 
-                configuredVideoFrameRate = frameRate;
+                Range<Integer> advertisedRange = findAdvertisedFpsRangeForRate(frameRate, getAdvertisedFpsRanges());
+                if (advertisedRange == null) {
+                    throw new Exception("Unsupported frame rate " + frameRate + " for the active camera");
+                }
+
+                configuredVideoFrameRateRange = advertisedRange;
                 if (isRunning && cameraProvider != null) {
+                    pendingFrameRateBindSuccess = onSuccess;
+                    pendingFrameRateBindError = (message) -> {
+                        configuredVideoFrameRateRange = previousRange;
+                        onError.accept(message);
+                    };
                     bindCameraUseCases();
+                    return;
                 }
                 onSuccess.run();
             } catch (Exception e) {
+                configuredVideoFrameRateRange = previousRange;
                 onError.accept(e.getMessage());
             }
         });
@@ -3771,6 +3835,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         mainExecutor.execute(() -> {
             try {
+                clearConfiguredVideoFrameRate();
                 CameraSessionConfiguration previousConfig = sessionConfig;
                 CameraInfo targetCameraInfo = findAvailableCameraInfoById(deviceId);
                 String fallbackPosition = resolveFallbackPositionForDeviceId(deviceId);
@@ -3826,6 +3891,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     public void flipCamera() {
         Log.d(TAG, "flipCamera: Flipping camera");
+        clearConfiguredVideoFrameRate();
 
         // Determine current position based on session config and flip it
         String currentPosition = sessionConfig.getPosition();
