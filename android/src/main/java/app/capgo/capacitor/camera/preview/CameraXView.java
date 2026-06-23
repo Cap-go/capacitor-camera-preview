@@ -186,6 +186,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
+    private Integer configuredVideoFrameRate = null;
     private Range<Integer> configuredVideoFrameRateRange = null;
     private Runnable pendingFrameRateBindSuccess;
     private java.util.function.Consumer<String> pendingFrameRateBindError;
@@ -3369,8 +3370,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
-    // ===================== Video frame rate APIs =====================
     private void clearConfiguredVideoFrameRate() {
+        configuredVideoFrameRate = null;
         configuredVideoFrameRateRange = null;
     }
 
@@ -3400,13 +3401,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private Range<Integer> resolveConfiguredVideoFrameRateRange() {
-        if (configuredVideoFrameRateRange == null) {
+        if (configuredVideoFrameRate == null) {
             return null;
         }
         try {
             Range<Integer>[] ranges = getAdvertisedFpsRanges();
-            int targetRate = configuredVideoFrameRateRange.getUpper();
-            return findAdvertisedFpsRangeForRate(targetRate, ranges);
+            return findAdvertisedFpsRangeForRate(configuredVideoFrameRate, ranges);
         } catch (Exception e) {
             Log.w(TAG, "resolveConfiguredVideoFrameRateRange: Failed to resolve FPS range", e);
             return null;
@@ -3500,14 +3500,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public int getVideoFrameRate() throws Exception {
-        if (configuredVideoFrameRateRange != null) {
-            return configuredVideoFrameRateRange.getUpper();
+        if (configuredVideoFrameRate != null) {
+            return configuredVideoFrameRate;
         }
         return 30;
     }
 
     public void setVideoFrameRate(int frameRate, Runnable onSuccess, java.util.function.Consumer<String> onError) {
         mainExecutor.execute(() -> {
+            Integer previousFrameRate = configuredVideoFrameRate;
             Range<Integer> previousRange = configuredVideoFrameRateRange;
             try {
                 if (currentRecording != null) {
@@ -3527,10 +3528,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     throw new Exception("Unsupported frame rate " + frameRate + " for the active camera");
                 }
 
+                configuredVideoFrameRate = frameRate;
                 configuredVideoFrameRateRange = advertisedRange;
                 if (isRunning && cameraProvider != null) {
                     pendingFrameRateBindSuccess = onSuccess;
                     pendingFrameRateBindError = (message) -> {
+                        configuredVideoFrameRate = previousFrameRate;
                         configuredVideoFrameRateRange = previousRange;
                         onError.accept(message);
                     };
@@ -3539,6 +3542,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 }
                 onSuccess.run();
             } catch (Exception e) {
+                configuredVideoFrameRate = previousFrameRate;
                 configuredVideoFrameRateRange = previousRange;
                 onError.accept(e.getMessage());
             }
@@ -3836,7 +3840,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         mainExecutor.execute(() -> {
             try {
-                clearConfiguredVideoFrameRate();
+                String previousDeviceId = currentDeviceId;
                 CameraSessionConfiguration previousConfig = sessionConfig;
                 CameraInfo targetCameraInfo = findAvailableCameraInfoById(deviceId);
                 String fallbackPosition = resolveFallbackPositionForDeviceId(deviceId);
@@ -3879,6 +3883,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 );
                 copyMutableSessionConfigState(previousConfig, updatedConfig);
                 updatedConfig.setTargetZoom(1.0f);
+                if (!Objects.equals(deviceId, previousDeviceId)) {
+                    clearConfiguredVideoFrameRate();
+                }
                 sessionConfig = updatedConfig;
 
                 Log.d(TAG, "switchToDevice: Updated sessionConfig with deviceId: " + deviceId);
