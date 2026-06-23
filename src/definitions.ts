@@ -363,6 +363,12 @@ export interface CameraPreviewOptions {
    */
   videoCodec?: VideoCodec;
   /**
+   * Preferred video stabilization mode for recording.
+   * @platform ios, android
+   * @default "off"
+   */
+  videoStabilizationMode?: VideoStabilizationMode;
+  /**
    * Starts barcode scanning together with the camera preview.
    * Set to `true` or pass options to scan all supported formats.
    * Omit this option to keep barcode scanning disabled at startup.
@@ -722,7 +728,7 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
-   * @param {CameraPreviewOptions} options - The options for video recording.
+   * @param {CameraPreviewOptions} options - The options for video recording. Supports `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio`.
    * @returns {Promise<void>} A promise that resolves when video recording starts.
    * @since 0.0.1
    */
@@ -814,6 +820,7 @@ export interface CameraPreviewPlugin {
   /**
    * Sets the video stabilization mode for recording.
    * Cannot be changed while a recording is in progress.
+   * You can also pass `videoStabilizationMode` in `startRecordVideo()` options.
    *
    * @param {{ mode: VideoStabilizationMode }} options - The desired stabilization mode.
    * @returns {Promise<void>} A promise that resolves when the mode is set.

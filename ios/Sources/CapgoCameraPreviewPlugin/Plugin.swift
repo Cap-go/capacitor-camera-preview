@@ -1678,6 +1678,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if let videoCodec = call.getString("videoCodec") {
             try? self.cameraController.setVideoCodec(videoCodec)
         }
+        if let videoStabilizationMode = call.getString("videoStabilizationMode") {
+            do {
+                try self.cameraController.setVideoStabilizationMode(videoStabilizationMode)
+            } catch {
+                call.reject("Failed to set video stabilization mode: \(error.localizedDescription)")
+                return
+            }
+        }
         self.cameraController.recordingFinishedCallback = { [weak self] fileURL, reason in
             DispatchQueue.main.async {
                 self?.notifyListeners("recordingFinished", data: ["videoFilePath": fileURL.absoluteString, "reason": reason])

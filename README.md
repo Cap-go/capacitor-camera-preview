@@ -759,9 +759,9 @@ startRecordVideo(options: CameraPreviewOptions) => Promise<void>
 
 Starts recording a video.
 
-| Param         | Type                                                                  | Description                        |
-| ------------- | --------------------------------------------------------------------- | ---------------------------------- |
-| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. |
+| Param         | Type                                                                  | Description                                                                                                                           |
+| ------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. Supports `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio`. |
 
 **Since:** 0.0.1
 
@@ -915,6 +915,7 @@ setVideoStabilizationMode(options: { mode: VideoStabilizationMode; }) => Promise
 
 Sets the video stabilization mode for recording.
 Cannot be changed while a recording is in progress.
+You can also pass `videoStabilizationMode` in `startRecordVideo()` options.
 
 | Param         | Type                                                                                 | Description                       |
 | ------------- | ------------------------------------------------------------------------------------ | --------------------------------- |
@@ -1410,6 +1411,7 @@ Defines the configuration options for starting the camera preview.
 | **`maxDuration`**                   | <code>number</code>                                                                | Maximum recording duration in seconds. Recording stops automatically when reached.                                                                                                                                                  |                        |        |
 | **`maxFileSize`**                   | <code>number</code>                                                                | Maximum recording file size in bytes. Recording stops automatically when reached.                                                                                                                                                   |                        |        |
 | **`videoCodec`**                    | <code><a href="#videocodec">VideoCodec</a></code>                                  | Preferred video codec for recording.                                                                                                                                                                                                | <code>"avc1"</code>    |        |
+| **`videoStabilizationMode`**        | <code><a href="#videostabilizationmode">VideoStabilizationMode</a></code>          | Preferred video stabilization mode for recording.                                                                                                                                                                                   | <code>"off"</code>     |        |
 | **`barcodeScanner`**                | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                               |                        | 8.8.0  |
 
 
@@ -1630,6 +1632,16 @@ Video codec identifiers used when recording.
 <code>'avc1' | 'hvc1' | 'jpeg' | 'apcn' | 'ap4h'</code>
 
 
+#### VideoStabilizationMode
+
+Video stabilization modes used when recording.
+
+On Android only `off` and `standard` are supported.
+On iOS all listed modes may be available when the device supports video stabilization.
+
+<code>'off' | 'standard' | 'cinematic' | 'cinematicExtended' | 'previewOptimized' | 'cinematicExtendedEnhanced' | 'auto' | 'lowLatency'</code>
+
+
 #### BarcodeScannerFormat
 
 <code>'aztec' | 'codabar' | 'code_39' | 'code_93' | 'code_128' | 'data_matrix' | 'ean_8' | 'ean_13' | 'itf' | 'pdf417' | 'qr_code' | 'upc_a' | 'upc_e'</code>
@@ -1663,16 +1675,6 @@ From T, pick a set of properties whose keys are in the union K
 #### RecordingFinishedReason
 
 <code>'manual' | 'maxDuration' | 'maxFileSize'</code>
-
-
-#### VideoStabilizationMode
-
-Video stabilization modes used when recording.
-
-On Android only `off` and `standard` are supported.
-On iOS all listed modes may be available when the device supports video stabilization.
-
-<code>'off' | 'standard' | 'cinematic' | 'cinematicExtended' | 'previewOptimized' | 'cinematicExtendedEnhanced' | 'auto' | 'lowLatency'</code>
 
 
 #### FlashMode

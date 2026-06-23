@@ -2775,6 +2775,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (PermissionState.GRANTED.equals(getPermissionState(permissionAlias))) {
             try {
                 applyVideoCodecFromCall(call);
+                applyVideoStabilizationFromCall(call);
                 cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
                 call.resolve();
             } catch (Exception e) {
@@ -2831,6 +2832,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    private void applyVideoStabilizationFromCall(PluginCall call) {
+        String mode = call.getString("videoStabilizationMode");
+        if (mode != null && cameraXView != null) {
+            cameraXView.setVideoStabilizationModeSetting(mode);
+        }
+    }
+
     private Long getMaxDurationMillis(PluginCall call) {
         if (!call.getData().has("maxDuration") || call.getData().isNull("maxDuration")) {
             return null;
@@ -2862,6 +2870,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         ) {
             try {
                 applyVideoCodecFromCall(call);
+                applyVideoStabilizationFromCall(call);
                 cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
                 call.resolve();
             } catch (Exception e) {
