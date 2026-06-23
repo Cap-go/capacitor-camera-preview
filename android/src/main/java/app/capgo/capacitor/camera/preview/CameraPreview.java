@@ -52,6 +52,7 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -2699,6 +2700,63 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         JSObject ret = new JSObject();
         ret.put("codecs", arr);
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void isVideoStabilizationSupported(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("supported", cameraXView.isVideoStabilizationSupported());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getSupportedVideoStabilizationModes(PluginCall call) {
+        List<String> modes = cameraXView != null ? cameraXView.getSupportedVideoStabilizationModes() : Collections.singletonList("off");
+        JSONArray arr = new JSONArray();
+        for (String mode : modes) {
+            arr.put(mode);
+        }
+        JSObject ret = new JSObject();
+        ret.put("modes", arr);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getVideoStabilizationMode(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("mode", cameraXView.getVideoStabilizationModeSetting());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setVideoStabilizationMode(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        String mode = call.getString("mode");
+        if (mode == null) {
+            call.reject("mode is required");
+            return;
+        }
+        try {
+            cameraXView.setVideoStabilizationModeSetting(mode);
+            call.resolve();
+        } catch (IllegalArgumentException e) {
+            call.reject(e.getMessage());
+        } catch (IllegalStateException e) {
+            call.reject(e.getMessage());
+        } catch (Exception e) {
+            call.reject("Failed to set video stabilization mode: " + e.getMessage());
+        }
     }
 
     @PluginMethod

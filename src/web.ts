@@ -23,6 +23,7 @@ import type {
   PermissionRequestOptions,
   SafeAreaInsets,
   VideoCodec,
+  VideoStabilizationMode,
   VideoQuality,
 } from './definitions';
 import { DeviceType } from './definitions';
@@ -989,6 +990,22 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
   async getSupportedVideoCodecs(): Promise<{ codecs: VideoCodec[] }> {
     throw this.unimplemented('getSupportedVideoCodecs');
+  }
+
+  async isVideoStabilizationSupported(): Promise<{ supported: boolean }> {
+    throw this.unimplemented('isVideoStabilizationSupported');
+  }
+
+  async getSupportedVideoStabilizationModes(): Promise<{ modes: VideoStabilizationMode[] }> {
+    throw this.unimplemented('getSupportedVideoStabilizationModes');
+  }
+
+  async getVideoStabilizationMode(): Promise<{ mode: VideoStabilizationMode }> {
+    throw this.unimplemented('getVideoStabilizationMode');
+  }
+
+  async setVideoStabilizationMode(): Promise<void> {
+    throw this.unimplemented('setVideoStabilizationMode');
   }
 
   async isRunning(): Promise<{ isRunning: boolean }> {

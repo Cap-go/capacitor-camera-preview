@@ -54,6 +54,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "getSupportedVideoCodecs", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVideoCodec", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setVideoCodec", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isVideoStabilizationSupported", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSupportedVideoStabilizationModes", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getVideoStabilizationMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setVideoStabilizationMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedVideoQualities", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVideoQuality", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setVideoQuality", returnType: CAPPluginReturnPromise),
@@ -1641,6 +1645,31 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     @objc func getSupportedVideoCodecs(_ call: CAPPluginCall) {
         call.resolve(["codecs": self.cameraController.getSupportedVideoCodecs()])
+    }
+
+    @objc func isVideoStabilizationSupported(_ call: CAPPluginCall) {
+        call.resolve(["supported": self.cameraController.isVideoStabilizationSupported()])
+    }
+
+    @objc func getSupportedVideoStabilizationModes(_ call: CAPPluginCall) {
+        call.resolve(["modes": self.cameraController.getSupportedVideoStabilizationModes()])
+    }
+
+    @objc func getVideoStabilizationMode(_ call: CAPPluginCall) {
+        call.resolve(["mode": self.cameraController.getVideoStabilizationMode()])
+    }
+
+    @objc func setVideoStabilizationMode(_ call: CAPPluginCall) {
+        guard let mode = call.getString("mode") else {
+            call.reject("mode is required")
+            return
+        }
+        do {
+            try self.cameraController.setVideoStabilizationMode(mode)
+            call.resolve()
+        } catch {
+            call.reject("Failed to set video stabilization mode: \(error.localizedDescription)")
+        }
     }
 
     @objc func startRecordVideo(_ call: CAPPluginCall) {

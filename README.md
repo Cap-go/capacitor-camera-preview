@@ -382,6 +382,10 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`setVideoCodec(...)`](#setvideocodec)
 * [`getVideoCodec()`](#getvideocodec)
 * [`getSupportedVideoCodecs()`](#getsupportedvideocodecs)
+* [`isVideoStabilizationSupported()`](#isvideostabilizationsupported)
+* [`getSupportedVideoStabilizationModes()`](#getsupportedvideostabilizationmodes)
+* [`getVideoStabilizationMode()`](#getvideostabilizationmode)
+* [`setVideoStabilizationMode(...)`](#setvideostabilizationmode)
 * [`isRunning()`](#isrunning)
 * [`getAvailableDevices()`](#getavailabledevices)
 * [`getZoom()`](#getzoom)
@@ -854,6 +858,69 @@ Returns the video codecs supported by the active camera.
 **Returns:** <code>Promise&lt;{ codecs: VideoCodec[]; }&gt;</code>
 
 **Since:** 8.5.0
+
+--------------------
+
+
+### isVideoStabilizationSupported()
+
+```typescript
+isVideoStabilizationSupported() => Promise<{ supported: boolean; }>
+```
+
+Checks whether video stabilization is supported by the active camera.
+
+**Returns:** <code>Promise&lt;{ supported: boolean; }&gt;</code>
+
+**Since:** 8.5.2
+
+--------------------
+
+
+### getSupportedVideoStabilizationModes()
+
+```typescript
+getSupportedVideoStabilizationModes() => Promise<{ modes: VideoStabilizationMode[]; }>
+```
+
+Returns the video stabilization modes supported by the active camera.
+
+**Returns:** <code>Promise&lt;{ modes: VideoStabilizationMode[]; }&gt;</code>
+
+**Since:** 8.5.2
+
+--------------------
+
+
+### getVideoStabilizationMode()
+
+```typescript
+getVideoStabilizationMode() => Promise<{ mode: VideoStabilizationMode; }>
+```
+
+Gets the current video stabilization mode.
+
+**Returns:** <code>Promise&lt;{ mode: <a href="#videostabilizationmode">VideoStabilizationMode</a>; }&gt;</code>
+
+**Since:** 8.5.2
+
+--------------------
+
+
+### setVideoStabilizationMode(...)
+
+```typescript
+setVideoStabilizationMode(options: { mode: VideoStabilizationMode; }) => Promise<void>
+```
+
+Sets the video stabilization mode for recording.
+Cannot be changed while a recording is in progress.
+
+| Param         | Type                                                                                 | Description                       |
+| ------------- | ------------------------------------------------------------------------------------ | --------------------------------- |
+| **`options`** | <code>{ mode: <a href="#videostabilizationmode">VideoStabilizationMode</a>; }</code> | - The desired stabilization mode. |
+
+**Since:** 8.5.2
 
 --------------------
 
@@ -1596,6 +1663,16 @@ From T, pick a set of properties whose keys are in the union K
 #### RecordingFinishedReason
 
 <code>'manual' | 'maxDuration' | 'maxFileSize'</code>
+
+
+#### VideoStabilizationMode
+
+Video stabilization modes used when recording.
+
+On Android only `off` and `standard` are supported.
+On iOS all listed modes may be available when the device supports video stabilization.
+
+<code>'off' | 'standard' | 'cinematic' | 'cinematicExtended' | 'previewOptimized' | 'cinematicExtendedEnhanced' | 'auto' | 'lowLatency'</code>
 
 
 #### FlashMode
