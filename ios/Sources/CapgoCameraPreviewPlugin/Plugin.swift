@@ -86,6 +86,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "getExposureCompensationRange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureCompensation", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setExposureCompensation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSupportedVideoFrameRates", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getVideoFrameRate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setVideoFrameRate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
     // Camera state tracking
@@ -2433,6 +2436,49 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             call.resolve()
         } catch {
             call.reject("Failed to set exposure compensation: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func getSupportedVideoFrameRates(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Camera not initialized")
+            return
+        }
+        do {
+            let frameRates = try self.cameraController.getSupportedVideoFrameRates()
+            call.resolve(["frameRates": frameRates])
+        } catch {
+            call.reject("Failed to get supported video frame rates: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func getVideoFrameRate(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Camera not initialized")
+            return
+        }
+        do {
+            let frameRate = try self.cameraController.getVideoFrameRate()
+            call.resolve(["frameRate": frameRate])
+        } catch {
+            call.reject("Failed to get video frame rate: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func setVideoFrameRate(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Camera not initialized")
+            return
+        }
+        guard let frameRate = call.getInt("frameRate") else {
+            call.reject("frameRate parameter is required")
+            return
+        }
+        do {
+            try self.cameraController.setVideoFrameRate(frameRate)
+            call.resolve()
+        } catch {
+            call.reject(error.localizedDescription)
         }
     }
 

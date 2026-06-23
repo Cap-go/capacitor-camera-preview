@@ -291,6 +291,56 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     @PluginMethod
+    public void getSupportedVideoFrameRates(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        try {
+            List<Integer> frameRates = cameraXView.getSupportedVideoFrameRates();
+            JSObject ret = new JSObject();
+            JSONArray frameRatesArray = new JSONArray();
+            for (Integer frameRate : frameRates) {
+                frameRatesArray.put(frameRate);
+            }
+            ret.put("frameRates", frameRatesArray);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to get supported video frame rates: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getVideoFrameRate(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        try {
+            int frameRate = cameraXView.getVideoFrameRate();
+            JSObject ret = new JSObject();
+            ret.put("frameRate", frameRate);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to get video frame rate: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void setVideoFrameRate(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        Integer frameRate = call.getInt("frameRate");
+        if (frameRate == null) {
+            call.reject("frameRate parameter is required");
+            return;
+        }
+        cameraXView.setVideoFrameRate(frameRate, call::resolve, call::reject);
+    }
+
+    @PluginMethod
     public void getOrientation(PluginCall call) {
         String o = getDeviceOrientationString();
         JSObject ret = new JSObject();

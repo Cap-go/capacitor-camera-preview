@@ -408,6 +408,9 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`getExposureCompensationRange()`](#getexposurecompensationrange)
 * [`getExposureCompensation()`](#getexposurecompensation)
 * [`setExposureCompensation(...)`](#setexposurecompensation)
+* [`getSupportedVideoFrameRates()`](#getsupportedvideoframerates)
+* [`getVideoFrameRate()`](#getvideoframerate)
+* [`setVideoFrameRate(...)`](#setvideoframerate)
 * [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -1287,6 +1290,56 @@ Sets the exposure compensation (EV bias). Value will be clamped to range.
 | Param         | Type                            |
 | ------------- | ------------------------------- |
 | **`options`** | <code>{ value: number; }</code> |
+
+--------------------
+
+
+### getSupportedVideoFrameRates()
+
+```typescript
+getSupportedVideoFrameRates() => Promise<{ frameRates: number[]; }>
+```
+
+Lists the video frame rates supported by the active camera for the current format.
+Supported values depend on the selected camera, lens, and video quality.
+
+**Returns:** <code>Promise&lt;{ frameRates: number[]; }&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### getVideoFrameRate()
+
+```typescript
+getVideoFrameRate() => Promise<{ frameRate: number; }>
+```
+
+Returns the configured video frame rate for the active camera.
+On Android the actual recording frame rate can still vary in low light or under thermal pressure.
+
+**Returns:** <code>Promise&lt;{ frameRate: number; }&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### setVideoFrameRate(...)
+
+```typescript
+setVideoFrameRate(options: { frameRate: number; }) => Promise<void>
+```
+
+Sets the target video frame rate before recording starts.
+Rejects unsupported values with a clear error.
+
+| Param         | Type                                |
+| ------------- | ----------------------------------- |
+| **`options`** | <code>{ frameRate: number; }</code> |
+
+**Since:** 8.6.0
 
 --------------------
 

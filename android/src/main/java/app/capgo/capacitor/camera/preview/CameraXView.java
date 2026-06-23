@@ -46,6 +46,7 @@ import androidx.annotation.OptIn;
 import androidx.camera.camera2.interop.Camera2CameraControl;
 import androidx.camera.camera2.interop.Camera2CameraInfo;
 import androidx.camera.camera2.interop.CaptureRequestOptions;
+import androidx.camera.camera2.interop.Camera2Interop;
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
@@ -110,6 +111,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -184,6 +186,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
+    private Integer configuredVideoFrameRate = null;
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
     // Capture/stop coordination
     private final Object captureLock = new Object();
@@ -1071,7 +1074,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     ? previewView.getDisplay().getRotation()
                     : android.view.Surface.ROTATION_0;
 
-                Preview preview = new Preview.Builder().setResolutionSelector(resolutionSelector).setTargetRotation(rotation).build();
+                Preview.Builder previewBuilder = new Preview.Builder()
+                    .setResolutionSelector(resolutionSelector)
+                    .setTargetRotation(rotation);
+                previewBuilder = applyTargetFpsToPreviewBuilder(previewBuilder);
+                Preview preview = previewBuilder.build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
                 imageCapture = new ImageCapture.Builder()
                     .setResolutionSelector(resolutionSelector)
@@ -1139,7 +1146,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         recorderBuilder.setVideoCapabilitiesSource(Recorder.VIDEO_CAPABILITIES_SOURCE_CODEC_CAPABILITIES);
                     }
                     Recorder recorder = recorderBuilder.build();
-                    videoCapture = VideoCapture.withOutput(recorder);
+                    VideoCapture.Builder<Recorder> videoCaptureBuilder = new VideoCapture.Builder<>(recorder);
+                    videoCaptureBuilder = applyTargetFpsToVideoCaptureBuilder(videoCaptureBuilder);
+                    videoCapture = videoCaptureBuilder.build();
                 }
 
                 // Unbind any existing use cases and bind new ones
@@ -3353,6 +3362,127 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         } catch (Exception e) {
             Log.w(TAG, "resetExposureCompensationToDefault: Failed to reset exposure compensation", e);
         }
+    }
+
+    // ===================== Video frame rate APIs =====================
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    private Preview.Builder applyTargetFpsToPreviewBuilder(Preview.Builder builder) {
+        if (configuredVideoFrameRate == null) {
+            return builder;
+        }
+
+        Camera2Interop.Extender<Preview> extender = new Camera2Interop.Extender<>(builder);
+        extender.setCaptureRequestOption(
+            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+            new Range<>(configuredVideoFrameRate, configuredVideoFrameRate)
+        );
+        return builder;
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    private VideoCapture.Builder<Recorder> applyTargetFpsToVideoCaptureBuilder(VideoCapture.Builder<Recorder> builder) {
+        if (configuredVideoFrameRate == null) {
+            return builder;
+        }
+
+        Camera2Interop.Extender<VideoCapture<Recorder>> extender = new Camera2Interop.Extender<>(builder);
+        extender.setCaptureRequestOption(
+            CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+            new Range<>(configuredVideoFrameRate, configuredVideoFrameRate)
+        );
+        return builder;
+    }
+
+    private String resolveActiveCameraIdForCharacteristics() throws Exception {
+        if (currentLogicalDeviceId != null) {
+            return currentLogicalDeviceId;
+        }
+        if (camera != null) {
+            return Camera2CameraInfo.from(camera.getCameraInfo()).getCameraId();
+        }
+        throw new Exception("Camera not initialized");
+    }
+
+    private List<Integer> frameRatesFromFpsRanges(Range<Integer>[] ranges) {
+        TreeSet<Integer> rates = new TreeSet<>();
+        int[] standardRates = new int[] { 24, 25, 30, 50, 60, 120 };
+
+        if (ranges == null) {
+            return new ArrayList<>();
+        }
+
+        for (Range<Integer> range : ranges) {
+            int min = range.getLower();
+            int max = range.getUpper();
+            if (min == max) {
+                rates.add(min);
+                continue;
+            }
+
+            rates.add(min);
+            rates.add(max);
+            for (int standardRate : standardRates) {
+                if (standardRate >= min && standardRate <= max) {
+                    rates.add(standardRate);
+                }
+            }
+        }
+
+        return new ArrayList<>(rates);
+    }
+
+    public List<Integer> getSupportedVideoFrameRates() throws Exception {
+        CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        String cameraId = resolveActiveCameraIdForCharacteristics();
+        CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+        Range<Integer>[] ranges = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
+        return frameRatesFromFpsRanges(ranges);
+    }
+
+    public int getVideoFrameRate() throws Exception {
+        if (configuredVideoFrameRate != null) {
+            return configuredVideoFrameRate;
+        }
+
+        CameraManager manager = (CameraManager) context.getSystemService(Context.CAMERA_SERVICE);
+        String cameraId = resolveActiveCameraIdForCharacteristics();
+        CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+        Range<Integer>[] ranges = characteristics.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
+        if (ranges == null || ranges.length == 0) {
+            return 30;
+        }
+        return ranges[0].getUpper();
+    }
+
+    public void setVideoFrameRate(int frameRate, Runnable onSuccess, java.util.function.Consumer<String> onError) {
+        mainExecutor.execute(() -> {
+            try {
+                if (currentRecording != null) {
+                    throw new Exception("Cannot change video frame rate while recording");
+                }
+                if (frameRate <= 0) {
+                    throw new Exception("frameRate must be greater than 0");
+                }
+
+                List<Integer> supportedRates = getSupportedVideoFrameRates();
+                if (!supportedRates.contains(frameRate)) {
+                    throw new Exception(
+                        "Unsupported frame rate " +
+                            frameRate +
+                            ". Supported values: " +
+                            supportedRates
+                    );
+                }
+
+                configuredVideoFrameRate = frameRate;
+                if (isRunning && cameraProvider != null) {
+                    bindCameraUseCases();
+                }
+                onSuccess.run();
+            } catch (Exception e) {
+                onError.accept(e.getMessage());
+            }
+        });
     }
 
     private long showFocusIndicator(float x, float y) {

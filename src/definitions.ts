@@ -1027,6 +1027,37 @@ export interface CameraPreviewPlugin {
   setExposureCompensation(options: { value: number }): Promise<void>;
 
   /**
+   * Lists the video frame rates supported by the active camera for the current format.
+   * Supported values depend on the selected camera, lens, and video quality.
+   *
+   * @platform android, ios
+   * @since 8.6.0
+   */
+  getSupportedVideoFrameRates(): Promise<{
+    frameRates: number[];
+  }>;
+
+  /**
+   * Returns the configured video frame rate for the active camera.
+   * On Android the actual recording frame rate can still vary in low light or under thermal pressure.
+   *
+   * @platform android, ios
+   * @since 8.6.0
+   */
+  getVideoFrameRate(): Promise<{
+    frameRate: number;
+  }>;
+
+  /**
+   * Sets the target video frame rate before recording starts.
+   * Rejects unsupported values with a clear error.
+   *
+   * @platform android, ios
+   * @since 8.6.0
+   */
+  setVideoFrameRate(options: { frameRate: number }): Promise<void>;
+
+  /**
    * Get the native Capacitor plugin version
    *
    * @returns {Promise<{ id: string }>} an Promise with version for this device
