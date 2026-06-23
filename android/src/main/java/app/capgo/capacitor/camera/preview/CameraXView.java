@@ -45,8 +45,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
 import androidx.camera.camera2.interop.Camera2CameraControl;
 import androidx.camera.camera2.interop.Camera2CameraInfo;
-import androidx.camera.camera2.interop.CaptureRequestOptions;
 import androidx.camera.camera2.interop.Camera2Interop;
+import androidx.camera.camera2.interop.CaptureRequestOptions;
 import androidx.camera.camera2.interop.ExperimentalCamera2Interop;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.Camera;
@@ -3466,12 +3466,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                 List<Integer> supportedRates = getSupportedVideoFrameRates();
                 if (!supportedRates.contains(frameRate)) {
-                    throw new Exception(
-                        "Unsupported frame rate " +
-                            frameRate +
-                            ". Supported values: " +
-                            supportedRates
-                    );
+                    throw new Exception("Unsupported frame rate " + frameRate + ". Supported values: " + supportedRates);
                 }
 
                 configuredVideoFrameRate = frameRate;

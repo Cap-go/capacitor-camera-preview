@@ -57,7 +57,6 @@ class CameraController: NSObject {
         }
     }
 
-
     private func setVideoOrientation(_ orientation: AVCaptureVideoOrientation, on connection: AVCaptureConnection) {
         guard connection.isVideoOrientationSupported else { return }
         connection.videoOrientation = orientation
