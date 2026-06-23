@@ -1,4 +1,4 @@
-// swiftlint:disable file_length cyclomatic_complexity identifier_name
+// swiftlint:disable file_length type_body_length cyclomatic_complexity identifier_name function_body_length
 import AVFoundation
 import UIKit
 import CoreLocation
@@ -153,6 +153,7 @@ class CameraController: NSObject {
     private let saneMaxZoomFactor: CGFloat = 25.5
 
     var videoQuality: String = "high"
+    private var configuredVideoFrameRate: Int?
     var videoCodec: String = "avc1"
     var videoStabilizationMode: String = "off"
 
@@ -269,7 +270,7 @@ class CameraController: NSObject {
             ("standard", .standard),
             ("cinematic", .cinematic),
             ("cinematicExtended", .cinematicExtended),
-            ("auto", .auto),
+            ("auto", .auto)
         ]
         if #available(iOS 17.0, *) {
             candidates.append(("previewOptimized", .previewOptimized))
@@ -1120,6 +1121,7 @@ extension CameraController {
     }
 
     func switchCameras() throws {
+        configuredVideoFrameRate = nil
         guard let currentCameraPosition = currentCameraPosition,
               let captureSession = self.captureSession else {
             throw CameraControllerError.captureSessionIsMissing
@@ -2374,6 +2376,7 @@ extension CameraController {
     }
 
     func cleanup() {
+        configuredVideoFrameRate = nil
         stopBarcodeScanner()
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
@@ -2576,6 +2579,129 @@ extension CameraController {
             try device.lockForConfiguration()
             device.setExposureTargetBias(clamped) { _ in }
             device.unlockForConfiguration()
+        } catch {
+            throw CameraControllerError.invalidOperation
+        }
+    }
+
+    private func activeVideoDevice() -> AVCaptureDevice? {
+        switch currentCameraPosition {
+        case .front:
+            return self.frontCamera
+        case .rear:
+            return self.rearCamera
+        default:
+            return nil
+        }
+    }
+
+    private func frameRates(from format: AVCaptureDevice.Format) -> [Int] {
+        var rates = Set<Int>()
+        let standardRates = [24, 25, 30, 50, 60, 120]
+
+        for range in format.videoSupportedFrameRateRanges {
+            let minFps = Int(ceil(range.minFrameRate))
+            let maxFps = Int(floor(range.maxFrameRate))
+
+            if minFps == maxFps {
+                rates.insert(minFps)
+                continue
+            }
+
+            rates.insert(minFps)
+            rates.insert(maxFps)
+
+            for rate in standardRates where rate >= minFps && rate <= maxFps {
+                rates.insert(rate)
+            }
+        }
+
+        return rates.sorted()
+    }
+
+    private func formatSupportsFrameRate(_ format: AVCaptureDevice.Format, frameRate: Int) -> Bool {
+        let fps = Double(frameRate)
+        return format.videoSupportedFrameRateRanges.contains { range in
+            fps >= range.minFrameRate && fps <= range.maxFrameRate
+        }
+    }
+
+    private func frameRate(from duration: CMTime) -> Int {
+        guard duration.value > 0 else { return 30 }
+        return Int(round(Double(duration.timescale) / Double(duration.value)))
+    }
+
+    private func allSupportedFrameRates(for device: AVCaptureDevice) -> [Int] {
+        var rates = Set<Int>()
+        for format in device.formats {
+            for rate in frameRates(from: format) {
+                rates.insert(rate)
+            }
+        }
+        return rates.sorted()
+    }
+
+    func getSupportedVideoFrameRates() throws -> [Int] {
+        guard let device = activeVideoDevice() else {
+            throw CameraControllerError.noCamerasAvailable
+        }
+
+        return allSupportedFrameRates(for: device)
+    }
+
+    func getVideoFrameRate() throws -> Int {
+        if let configuredVideoFrameRate = self.configuredVideoFrameRate {
+            return configuredVideoFrameRate
+        }
+
+        guard let device = activeVideoDevice() else {
+            throw CameraControllerError.noCamerasAvailable
+        }
+
+        return frameRate(from: device.activeVideoMinFrameDuration)
+    }
+
+    func setVideoFrameRate(_ frameRate: Int) throws {
+        guard frameRate > 0 else {
+            throw NSError(domain: "CameraPreview", code: 0, userInfo: [NSLocalizedDescriptionKey: "frameRate must be greater than 0"])
+        }
+
+        if let fileVideoOutput = self.fileVideoOutput, fileVideoOutput.isRecording {
+            throw NSError(domain: "CameraPreview", code: 0, userInfo: [NSLocalizedDescriptionKey: "Cannot change video frame rate while recording"])
+        }
+
+        guard let device = activeVideoDevice() else {
+            throw CameraControllerError.noCamerasAvailable
+        }
+
+        let supportedRates = allSupportedFrameRates(for: device)
+        guard supportedRates.contains(frameRate) else {
+            throw NSError(
+                domain: "CameraPreview",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported frame rate \(frameRate). Supported values: \(supportedRates.map(String.init).joined(separator: ", "))"]
+            )
+        }
+
+        guard let targetFormat = device.formats.first(where: { formatSupportsFrameRate($0, frameRate: frameRate) }) else {
+            throw NSError(
+                domain: "CameraPreview",
+                code: 0,
+                userInfo: [NSLocalizedDescriptionKey: "Unsupported frame rate \(frameRate) for the active camera"]
+            )
+        }
+
+        let frameDuration = CMTime(value: 1, timescale: CMTimeScale(frameRate))
+
+        do {
+            try device.lockForConfiguration()
+            if device.activeFormat != targetFormat {
+                device.activeFormat = targetFormat
+            }
+            device.activeVideoMinFrameDuration = frameDuration
+            device.activeVideoMaxFrameDuration = frameDuration
+            device.unlockForConfiguration()
+            self.configuredVideoFrameRate = frameRate
         } catch {
             throw CameraControllerError.invalidOperation
         }

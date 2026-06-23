@@ -292,6 +292,56 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     @PluginMethod
+    public void getSupportedVideoFrameRates(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        try {
+            List<Integer> frameRates = cameraXView.getSupportedVideoFrameRates();
+            JSObject ret = new JSObject();
+            JSONArray frameRatesArray = new JSONArray();
+            for (Integer frameRate : frameRates) {
+                frameRatesArray.put(frameRate);
+            }
+            ret.put("frameRates", frameRatesArray);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to get supported video frame rates: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void getVideoFrameRate(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        try {
+            int frameRate = cameraXView.getVideoFrameRate();
+            JSObject ret = new JSObject();
+            ret.put("frameRate", frameRate);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to get video frame rate: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void setVideoFrameRate(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        Integer frameRate = call.getInt("frameRate");
+        if (frameRate == null) {
+            call.reject("frameRate parameter is required");
+            return;
+        }
+        cameraXView.setVideoFrameRate(frameRate, call::resolve, call::reject);
+    }
+
+    @PluginMethod
     public void getOrientation(PluginCall call) {
         String o = getDeviceOrientationString();
         JSObject ret = new JSObject();
@@ -2773,14 +2823,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String permissionAlias = disableAudio ? CAMERA_ONLY_PERMISSION_ALIAS : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
         if (PermissionState.GRANTED.equals(getPermissionState(permissionAlias))) {
-            try {
-                applyVideoCodecFromCall(call);
-                applyVideoStabilizationFromCall(call);
-                cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to start video recording: " + e.getMessage());
-            }
+            beginVideoRecording(call);
         } else {
             requestPermissionForAlias(permissionAlias, call, "handleVideoRecordingPermissionResult");
         }
@@ -2858,6 +2901,23 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return bytes > 0L ? bytes : null;
     }
 
+    private void beginVideoRecording(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        try {
+            applyVideoCodecFromCall(call);
+            applyVideoStabilizationFromCall(call);
+            Integer frameRate = call.getInt("frameRate");
+            cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call), frameRate, call::resolve, (message) ->
+                call.reject("Failed to start video recording: " + message)
+            );
+        } catch (Exception e) {
+            call.reject("Failed to start video recording: " + e.getMessage());
+        }
+    }
+
     @PermissionCallback
     private void handleVideoRecordingPermissionResult(PluginCall call) {
         // Use the persisted session value to determine which permission we requested
@@ -2868,14 +2928,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             PermissionState.GRANTED.equals(getPermissionState(CAMERA_ONLY_PERMISSION_ALIAS)) ||
             PermissionState.GRANTED.equals(getPermissionState(CAMERA_WITH_AUDIO_PERMISSION_ALIAS))
         ) {
-            try {
-                applyVideoCodecFromCall(call);
-                applyVideoStabilizationFromCall(call);
-                cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call));
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to start video recording: " + e.getMessage());
-            }
+            beginVideoRecording(call);
         } else {
             call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied");
         }

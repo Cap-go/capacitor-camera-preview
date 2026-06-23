@@ -1563,6 +1563,19 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     throw new Error('setExposureCompensation not supported under the web platform');
   }
 
+  async getSupportedVideoFrameRates(): Promise<{ frameRates: number[] }> {
+    throw new Error('getSupportedVideoFrameRates not supported under the web platform');
+  }
+
+  async getVideoFrameRate(): Promise<{ frameRate: number }> {
+    throw new Error('getVideoFrameRate not supported under the web platform');
+  }
+
+  async setVideoFrameRate(_options: { frameRate: number }): Promise<void> {
+    void _options;
+    throw new Error('setVideoFrameRate not supported under the web platform');
+  }
+
   async deleteFile(_options: { path: string }): Promise<{ success: boolean }> {
     // Mark parameter as intentionally unused to satisfy linter
     void _options;

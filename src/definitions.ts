@@ -363,6 +363,13 @@ export interface CameraPreviewOptions {
    */
   videoCodec?: VideoCodec;
   /**
+   * Target video frame rate in frames per second.
+   * Applied when recording starts. Use `getSupportedVideoFrameRates()` to list supported values.
+   * @platform ios, android
+   * @since 8.6.0
+   */
+  frameRate?: number;
+  /**
    * Preferred video stabilization mode for recording.
    * @platform ios, android
    * @default "off"
@@ -728,7 +735,9 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
-   * @param {CameraPreviewOptions} options - The options for video recording. Supports `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio`.
+   * Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio` on each call.
+   *
+   * @param {CameraPreviewOptions} options - The options for video recording.
    * @returns {Promise<void>} A promise that resolves when video recording starts.
    * @since 0.0.1
    */
@@ -1086,6 +1095,38 @@ export interface CameraPreviewPlugin {
    * @platform ios, android
    */
   setExposureCompensation(options: { value: number }): Promise<void>;
+
+  /**
+   * Lists the video frame rates supported by the active camera for the current format.
+   * Supported values depend on the selected camera, lens, and video quality.
+   *
+   * @platform android, ios
+   * @since 8.6.0
+   */
+  getSupportedVideoFrameRates(): Promise<{
+    frameRates: number[];
+  }>;
+
+  /**
+   * Returns the configured video frame rate for the active camera.
+   * On Android the actual recording frame rate can still vary in low light or under thermal pressure.
+   *
+   * @platform android, ios
+   * @since 8.6.0
+   */
+  getVideoFrameRate(): Promise<{
+    frameRate: number;
+  }>;
+
+  /**
+   * Sets the target video frame rate for the active camera session.
+   * Prefer passing `frameRate` to `startRecordVideo()` when starting a recording.
+   * Rejects unsupported values with a clear error.
+   *
+   * @platform android, ios
+   * @since 8.6.0
+   */
+  setVideoFrameRate(options: { frameRate: number }): Promise<void>;
 
   /**
    * Get the native Capacitor plugin version

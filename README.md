@@ -412,6 +412,9 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`getExposureCompensationRange()`](#getexposurecompensationrange)
 * [`getExposureCompensation()`](#getexposurecompensation)
 * [`setExposureCompensation(...)`](#setexposurecompensation)
+* [`getSupportedVideoFrameRates()`](#getsupportedvideoframerates)
+* [`getVideoFrameRate()`](#getvideoframerate)
+* [`setVideoFrameRate(...)`](#setvideoframerate)
 * [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 * [Type Aliases](#type-aliases)
@@ -759,9 +762,11 @@ startRecordVideo(options: CameraPreviewOptions) => Promise<void>
 
 Starts recording a video.
 
-| Param         | Type                                                                  | Description                                                                                                                           |
-| ------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. Supports `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio`. |
+Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio` on each call.
+
+| Param         | Type                                                                  | Description                        |
+| ------------- | --------------------------------------------------------------------- | ---------------------------------- |
+| **`options`** | <code><a href="#camerapreviewoptions">CameraPreviewOptions</a></code> | - The options for video recording. |
 
 **Since:** 0.0.1
 
@@ -1359,6 +1364,57 @@ Sets the exposure compensation (EV bias). Value will be clamped to range.
 --------------------
 
 
+### getSupportedVideoFrameRates()
+
+```typescript
+getSupportedVideoFrameRates() => Promise<{ frameRates: number[]; }>
+```
+
+Lists the video frame rates supported by the active camera for the current format.
+Supported values depend on the selected camera, lens, and video quality.
+
+**Returns:** <code>Promise&lt;{ frameRates: number[]; }&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### getVideoFrameRate()
+
+```typescript
+getVideoFrameRate() => Promise<{ frameRate: number; }>
+```
+
+Returns the configured video frame rate for the active camera.
+On Android the actual recording frame rate can still vary in low light or under thermal pressure.
+
+**Returns:** <code>Promise&lt;{ frameRate: number; }&gt;</code>
+
+**Since:** 8.6.0
+
+--------------------
+
+
+### setVideoFrameRate(...)
+
+```typescript
+setVideoFrameRate(options: { frameRate: number; }) => Promise<void>
+```
+
+Sets the target video frame rate for the active camera session.
+Prefer passing `frameRate` to `startRecordVideo()` when starting a recording.
+Rejects unsupported values with a clear error.
+
+| Param         | Type                                |
+| ------------- | ----------------------------------- |
+| **`options`** | <code>{ frameRate: number; }</code> |
+
+**Since:** 8.6.0
+
+--------------------
+
+
 ### getPluginVersion()
 
 ```typescript
@@ -1411,6 +1467,7 @@ Defines the configuration options for starting the camera preview.
 | **`maxDuration`**                   | <code>number</code>                                                                | Maximum recording duration in seconds. Recording stops automatically when reached.                                                                                                                                                  |                        |        |
 | **`maxFileSize`**                   | <code>number</code>                                                                | Maximum recording file size in bytes. Recording stops automatically when reached.                                                                                                                                                   |                        |        |
 | **`videoCodec`**                    | <code><a href="#videocodec">VideoCodec</a></code>                                  | Preferred video codec for recording.                                                                                                                                                                                                | <code>"avc1"</code>    |        |
+| **`frameRate`**                     | <code>number</code>                                                                | Target video frame rate in frames per second. Applied when recording starts. Use `getSupportedVideoFrameRates()` to list supported values.                                                                                          |                        | 8.6.0  |
 | **`videoStabilizationMode`**        | <code><a href="#videostabilizationmode">VideoStabilizationMode</a></code>          | Preferred video stabilization mode for recording.                                                                                                                                                                                   | <code>"off"</code>     |        |
 | **`barcodeScanner`**                | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                               |                        | 8.8.0  |
 
