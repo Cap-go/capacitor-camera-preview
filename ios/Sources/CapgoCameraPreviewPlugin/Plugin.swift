@@ -676,6 +676,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("  - disableFocusIndicator: \(call.getBool("disableFocusIndicator") ?? false)")
         print("  - force: \(call.getBool("force") ?? false)")
         print("  - videoQuality: \(call.getString("videoQuality") ?? "high")")
+        print("  - videoStabilizationMode: \(call.getString("videoStabilizationMode") ?? "off")")
 
         let force = call.getBool("force") ?? false
 
@@ -778,6 +779,16 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Default to high if not provided
         let videoQuality = call.getString("videoQuality") ?? "high"
+        if let videoStabilizationMode = call.getString("videoStabilizationMode") {
+            do {
+                try self.cameraController.setVideoStabilizationMode(videoStabilizationMode)
+            } catch {
+                self.pendingStartBarcodeScannerOptions = nil
+                self.isInitializing = false
+                call.reject("Failed to set video stabilization mode: \(error.localizedDescription)")
+                return
+            }
+        }
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
