@@ -2708,7 +2708,7 @@ extension CameraController {
         }
     }
 
-    func captureVideo(maxDuration: Float? = nil, maxFileSize: Int? = nil) throws {
+    func captureVideo(maxDuration: Float? = nil, maxFileSize: Int? = nil, allowHapticsAndSystemSoundsDuringRecording: Bool = false) throws {
         guard let captureSession = self.captureSession, captureSession.isRunning else {
             throw CameraControllerError.captureSessionIsMissing
         }
@@ -2729,6 +2729,7 @@ extension CameraController {
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
                 try audioSession.setActive(true)
+                try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(allowHapticsAndSystemSoundsDuringRecording)
             } catch {
                 print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
             }

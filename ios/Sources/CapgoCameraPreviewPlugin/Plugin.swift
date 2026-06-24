@@ -1699,7 +1699,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             if let frameRate = call.getInt("frameRate") {
                 try self.cameraController.setVideoFrameRate(frameRate)
             }
-            try self.cameraController.captureVideo(maxDuration: maxDuration, maxFileSize: maxFileSize)
+            let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
+            try self.cameraController.captureVideo(
+                maxDuration: maxDuration,
+                maxFileSize: maxFileSize,
+                allowHapticsAndSystemSoundsDuringRecording: allowHapticsAndSystemSoundsDuringRecording
+            )
             call.resolve()
         } catch {
             call.reject(error.localizedDescription)
