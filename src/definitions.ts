@@ -376,6 +376,15 @@ export interface CameraPreviewOptions {
    */
   videoStabilizationMode?: VideoStabilizationMode;
   /**
+   * When `true`, allows haptic feedback and system sounds while recording video with audio.
+   * iOS suppresses haptics during audio input recording unless this is enabled.
+   * Requires `disableAudio: false`.
+   * @platform ios
+   * @default false
+   * @since 8.8.0
+   */
+  allowHapticsAndSystemSoundsDuringRecording?: boolean;
+  /**
    * Starts barcode scanning together with the camera preview.
    * Set to `true` or pass options to scan all supported formats.
    * Omit this option to keep barcode scanning disabled at startup.
@@ -735,7 +744,7 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
-   * Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, and `disableAudio` on each call.
+   * Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, `disableAudio`, and `allowHapticsAndSystemSoundsDuringRecording` on each call.
    *
    * @param {CameraPreviewOptions} options - The options for video recording.
    * @returns {Promise<void>} A promise that resolves when video recording starts.
