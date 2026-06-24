@@ -3314,7 +3314,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     // ===================== White Balance APIs =====================
     public java.util.List<String> getWhiteBalanceModes() {
-        return Arrays.asList("AUTO", "LOCK", "CONTINUOUS");
+        // Camera2 maps AUTO and CONTINUOUS to the same CONTROL_AWB_MODE_AUTO, so only
+        // advertise the modes with distinct behavior (matches getExposureModes()).
+        return Arrays.asList("LOCK", "CONTINUOUS");
     }
 
     public String getWhiteBalanceMode() {
