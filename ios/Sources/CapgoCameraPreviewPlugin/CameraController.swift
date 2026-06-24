@@ -2728,10 +2728,8 @@ extension CameraController {
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
                 try audioSession.setActive(true)
-                if allowHapticsAndSystemSoundsDuringRecording {
-                    if #available(iOS 13.0, *) {
-                        try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(true)
-                    }
+                if #available(iOS 13.0, *) {
+                    try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(allowHapticsAndSystemSoundsDuringRecording)
                 }
             } catch {
                 print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
