@@ -1707,8 +1707,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func stopRecordVideo(_ call: CAPPluginCall) {
-        self.cameraController.stopRecording { (fileURL, error) in
-            guard let fileURL = fileURL else {
+        self.cameraController.stopRecording { (fileURL, reason, error) in
+            guard let fileURL = fileURL, let reason = reason else {
                 print(error ?? "Video capture error")
                 guard let error = error else {
                     call.reject("Video capture error")
@@ -1718,7 +1718,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
 
-            call.resolve(["videoFilePath": fileURL.absoluteString, "reason": "manual"])
+            call.resolve(["videoFilePath": fileURL.absoluteString, "reason": reason])
         }
     }
 
