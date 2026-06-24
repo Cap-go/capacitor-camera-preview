@@ -196,6 +196,49 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     @PluginMethod
+    public void getWhiteBalanceModes(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        JSArray arr = new JSArray();
+        for (String m : cameraXView.getWhiteBalanceModes()) arr.put(m);
+        JSObject ret = new JSObject();
+        ret.put("modes", arr);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getWhiteBalanceMode(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("mode", cameraXView.getWhiteBalanceMode());
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setWhiteBalanceMode(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+        String mode = call.getString("mode");
+        if (mode == null || mode.isEmpty()) {
+            call.reject("mode parameter is required");
+            return;
+        }
+        try {
+            cameraXView.setWhiteBalanceMode(mode);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to set white balance mode: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
     public void getExposureModes(PluginCall call) {
         if (cameraXView == null || !cameraXView.isRunning()) {
             call.reject("Camera is not running");

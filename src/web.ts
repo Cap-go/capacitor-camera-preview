@@ -18,6 +18,7 @@ import type {
   DeviceOrientation,
   GridMode,
   ExposureMode,
+  WhiteBalanceMode,
   FlashMode,
   LensInfo,
   PermissionRequestOptions,
@@ -1561,6 +1562,20 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   async setExposureCompensation(_options: { value: number }): Promise<void> {
     void _options; // Mark as intentionally unused
     throw new Error('setExposureCompensation not supported under the web platform');
+  }
+
+  // White balance stubs (unsupported on web)
+  async getWhiteBalanceModes(): Promise<{ modes: WhiteBalanceMode[] }> {
+    throw new Error('getWhiteBalanceModes not supported under the web platform');
+  }
+
+  async getWhiteBalanceMode(): Promise<{ mode: WhiteBalanceMode }> {
+    throw new Error('getWhiteBalanceMode not supported under the web platform');
+  }
+
+  async setWhiteBalanceMode(_options: { mode: WhiteBalanceMode }): Promise<void> {
+    void _options; // Mark as intentionally unused
+    throw new Error('setWhiteBalanceMode not supported under the web platform');
   }
 
   async getSupportedVideoFrameRates(): Promise<{ frameRates: number[] }> {

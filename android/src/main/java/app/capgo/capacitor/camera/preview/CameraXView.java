@@ -191,6 +191,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Runnable pendingFrameRateBindSuccess;
     private java.util.function.Consumer<String> pendingFrameRateBindError;
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
+    private String currentWhiteBalanceMode = "CONTINUOUS"; // Default behavior
     // Capture/stop coordination
     private final Object captureLock = new Object();
     private volatile boolean isCapturingPhoto = false;
@@ -3308,6 +3309,51 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
             default:
                 throw new Exception("Unsupported exposure mode: " + mode);
+        }
+    }
+
+    // ===================== White Balance APIs =====================
+    public java.util.List<String> getWhiteBalanceModes() {
+        return Arrays.asList("AUTO", "LOCK", "CONTINUOUS");
+    }
+
+    public String getWhiteBalanceMode() {
+        return currentWhiteBalanceMode;
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    public void setWhiteBalanceMode(String mode) throws Exception {
+        if (camera == null) {
+            throw new Exception("Camera not initialized");
+        }
+        if (mode == null) {
+            throw new Exception("mode is required");
+        }
+        String normalized = mode.toUpperCase(Locale.US);
+
+        Camera2CameraControl c2 = Camera2CameraControl.from(camera.getCameraControl());
+        switch (normalized) {
+            case "LOCK": {
+                CaptureRequestOptions opts = new CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true)
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+                    .build();
+                mainExecutor.execute(() -> c2.setCaptureRequestOptions(opts));
+                currentWhiteBalanceMode = "LOCK";
+                break;
+            }
+            case "AUTO":
+            case "CONTINUOUS": {
+                CaptureRequestOptions opts = new CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, false)
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+                    .build();
+                mainExecutor.execute(() -> c2.setCaptureRequestOptions(opts));
+                currentWhiteBalanceMode = normalized;
+                break;
+            }
+            default:
+                throw new Exception("Unsupported white balance mode: " + mode);
         }
     }
 
