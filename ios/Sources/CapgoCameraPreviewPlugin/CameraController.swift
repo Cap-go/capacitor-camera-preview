@@ -150,6 +150,7 @@ class CameraController: NSObject {
 
     var videoFileURL: URL?
     var recordingFinishedCallback: ((URL, String) -> Void)?
+    private var stopRecordingCompletion: ((URL?, String?, Error?) -> Void)?
     private let saneMaxZoomFactor: CGFloat = 25.5
 
     var videoQuality: String = "high"
@@ -2790,21 +2791,26 @@ extension CameraController {
         self.videoFileURL = fileUrl
     }
 
-    func stopRecording(completion: @escaping (URL?, Error?) -> Void) {
+    func stopRecording(completion: @escaping (URL?, String?, Error?) -> Void) {
         guard let captureSession = self.captureSession, captureSession.isRunning else {
-            completion(nil, CameraControllerError.captureSessionIsMissing)
+            completion(nil, nil, CameraControllerError.captureSessionIsMissing)
             return
         }
         guard let fileVideoOutput = self.fileVideoOutput else {
-            completion(nil, CameraControllerError.fileVideoOutputNotFound)
+            completion(nil, nil, CameraControllerError.fileVideoOutputNotFound)
+            return
+        }
+        guard fileVideoOutput.isRecording else {
+            completion(nil, nil, CameraControllerError.invalidOperation)
+            return
+        }
+        guard self.stopRecordingCompletion == nil else {
+            completion(nil, nil, CameraControllerError.invalidOperation)
             return
         }
 
-        // Stop recording video
+        self.stopRecordingCompletion = completion
         fileVideoOutput.stopRecording()
-
-        // Return the video file URL in the completion handler
-        completion(self.videoFileURL, nil)
     }
 }
 
@@ -3200,6 +3206,19 @@ extension UIImage {
 extension CameraController: AVCaptureFileOutputRecordingDelegate {
     func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
         let reason = recordingFinishReason(from: error)
+        let stopCompletion = self.stopRecordingCompletion
+        self.stopRecordingCompletion = nil
+
+        if let stopCompletion = stopCompletion {
+            DispatchQueue.main.async {
+                if reason == "error" {
+                    stopCompletion(nil, nil, error ?? CameraControllerError.unknown)
+                } else {
+                    stopCompletion(outputFileURL, reason, nil)
+                }
+            }
+        }
+
         if reason == "error" {
             print("Error recording movie: \(error?.localizedDescription ?? "unknown")")
             return
