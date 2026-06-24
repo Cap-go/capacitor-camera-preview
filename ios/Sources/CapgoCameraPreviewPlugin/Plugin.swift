@@ -779,16 +779,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Default to high if not provided
         let videoQuality = call.getString("videoQuality") ?? "high"
-        if let videoStabilizationMode = call.getString("videoStabilizationMode") {
-            do {
-                try self.cameraController.setVideoStabilizationMode(videoStabilizationMode)
-            } catch {
-                self.pendingStartBarcodeScannerOptions = nil
-                self.isInitializing = false
-                call.reject("Failed to set video stabilization mode: \(error.localizedDescription)")
-                return
-            }
-        }
+        let videoStabilizationMode = call.getString("videoStabilizationMode")
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
@@ -810,6 +801,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     call.reject("camera already started")
                 }
                 return
+            }
+
+            if let videoStabilizationMode = videoStabilizationMode {
+                do {
+                    try self.cameraController.setVideoStabilizationMode(videoStabilizationMode)
+                } catch {
+                    DispatchQueue.main.async {
+                        self.isInitializing = false
+                        self.pendingStartBarcodeScannerOptions = nil
+                        call.reject("Failed to set video stabilization mode: \(error.localizedDescription)")
+                    }
+                    return
+                }
             }
 
             self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality) { error in
