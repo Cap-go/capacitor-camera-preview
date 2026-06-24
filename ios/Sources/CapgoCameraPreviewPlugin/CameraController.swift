@@ -157,6 +157,8 @@ class CameraController: NSObject {
     private var configuredVideoFrameRate: Int?
     var videoCodec: String = "avc1"
     var videoStabilizationMode: String = "off"
+    private var cachedSupportedVideoStabilizationModes: [String] = []
+    private var isSupportedVideoStabilizationModesCacheValid = false
 
     private static let allVideoQualities = ["low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3"]
 
@@ -223,23 +225,10 @@ class CameraController: NSObject {
     }
 
     func getSupportedVideoStabilizationModes() -> [String] {
-        guard let connection = self.fileVideoOutput?.connection(with: .video),
-              connection.isVideoStabilizationSupported else {
-            return ["off"]
+        if self.isSupportedVideoStabilizationModesCacheValid {
+            return self.cachedSupportedVideoStabilizationModes
         }
-
-        let savedPreferred = connection.preferredVideoStabilizationMode
-        var supported: [String] = []
-
-        for candidate in Self.allVideoStabilizationModeCandidates() {
-            connection.preferredVideoStabilizationMode = candidate.mode
-            if connection.preferredVideoStabilizationMode == candidate.mode {
-                supported.append(candidate.name)
-            }
-        }
-
-        connection.preferredVideoStabilizationMode = savedPreferred
-        return supported.isEmpty ? ["off"] : supported
+        return self.refreshSupportedVideoStabilizationModesCache()
     }
 
     func getVideoStabilizationMode() -> String {
@@ -257,12 +246,96 @@ class CameraController: NSObject {
         guard let avMode = self.avVideoStabilizationMode(from: mode) else {
             throw CameraControllerError.invalidOperation
         }
+
+        if self.isVideoStabilizationOutputAttached() {
+            try self.validateVideoStabilizationMode(mode)
+        }
+
+        self.videoStabilizationMode = mode
+
+        guard self.isVideoStabilizationOutputAttached() else {
+            return
+        }
+
+        self.configureCaptureSession {
+            self.applyVideoStabilizationMode(avMode)
+        }
+    }
+
+    @discardableResult
+    private func refreshSupportedVideoStabilizationModesCache() -> [String] {
+        let modes = self.probeSupportedVideoStabilizationModes()
+        self.cachedSupportedVideoStabilizationModes = modes
+        self.isSupportedVideoStabilizationModesCacheValid = true
+        return modes
+    }
+
+    private func invalidateSupportedVideoStabilizationModesCache() {
+        self.isSupportedVideoStabilizationModesCacheValid = false
+        self.cachedSupportedVideoStabilizationModes = []
+    }
+
+    private func validateVideoStabilizationMode(_ mode: String) throws {
         let supportedModes = self.getSupportedVideoStabilizationModes()
         guard supportedModes.contains(mode) else {
             throw CameraControllerError.invalidOperation
         }
-        self.videoStabilizationMode = mode
-        self.applyVideoStabilizationMode(avMode)
+    }
+
+    private func isVideoStabilizationOutputAttached() -> Bool {
+        guard let captureSession = self.captureSession,
+              let fileVideoOutput = self.fileVideoOutput else {
+            return false
+        }
+        return captureSession.outputs.contains(where: { $0 === fileVideoOutput })
+    }
+
+    private func configureCaptureSession(_ block: () -> Void) {
+        guard let captureSession = self.captureSession else {
+            block()
+            return
+        }
+
+        captureSession.beginConfiguration()
+        defer { captureSession.commitConfiguration() }
+        block()
+    }
+
+    private func activeVideoCaptureDevice() -> AVCaptureDevice? {
+        switch self.currentCameraPosition {
+        case .front:
+            return self.frontCamera
+        case .rear:
+            return self.rearCamera
+        default:
+            return nil
+        }
+    }
+
+    private func probeSupportedVideoStabilizationModes() -> [String] {
+        guard let connection = self.fileVideoOutput?.connection(with: .video),
+              connection.isVideoStabilizationSupported,
+              let device = self.activeVideoCaptureDevice() else {
+            return ["off"]
+        }
+
+        let format = device.activeFormat
+        var supported: [String] = ["off"]
+
+        for candidate in Self.allVideoStabilizationModeCandidates() where candidate.mode != .off {
+            if format.isVideoStabilizationModeSupported(candidate.mode) {
+                supported.append(candidate.name)
+            }
+        }
+
+        return supported
+    }
+
+    private func refreshVideoStabilizationAfterMovieOutputAttached() throws {
+        self.invalidateSupportedVideoStabilizationModesCache()
+        _ = self.refreshSupportedVideoStabilizationModesCache()
+        try self.validateVideoStabilizationMode(self.videoStabilizationMode)
+        self.applyVideoStabilizationMode()
     }
 
     private static func allVideoStabilizationModeCandidates() -> [(name: String, mode: AVCaptureVideoStabilizationMode)] {
@@ -649,7 +722,7 @@ extension CameraController {
                     captureSession.addOutput(fileVideoOutput)
                     // Set orientation immediately
                     self.setVideoOrientation(videoOrientation, on: fileVideoOutput.connections)
-                    self.applyVideoStabilizationMode()
+                    try self.refreshVideoStabilizationAfterMovieOutputAttached()
                 }
 
                 // Set up preview layer session in the same configuration block
@@ -1230,7 +1303,7 @@ extension CameraController {
             captureSession.removeOutput(fileVideoOutput)
             if captureSession.canAddOutput(fileVideoOutput) {
                 captureSession.addOutput(fileVideoOutput)
-                self.applyVideoStabilizationMode()
+                try self.refreshVideoStabilizationAfterMovieOutputAttached()
             }
         }
 
@@ -2372,6 +2445,16 @@ extension CameraController {
             captureSession.addInput(audioInput)
         }
 
+        // Re-attach movie file output so its connection is bound to the new input.
+        if let fileVideoOutput = self.fileVideoOutput,
+           captureSession.outputs.contains(where: { $0 === fileVideoOutput }) {
+            captureSession.removeOutput(fileVideoOutput)
+            if captureSession.canAddOutput(fileVideoOutput) {
+                captureSession.addOutput(fileVideoOutput)
+                try self.refreshVideoStabilizationAfterMovieOutputAttached()
+            }
+        }
+
         // Update video orientation
         self.updateVideoOrientation()
     }
@@ -2413,6 +2496,7 @@ extension CameraController {
 
         // Reset output preparation status
         self.outputsPrepared = false
+        self.invalidateSupportedVideoStabilizationModesCache()
 
         // Reset first frame detection
         self.hasReceivedFirstFrame = false
@@ -2738,15 +2822,21 @@ extension CameraController {
         // Ensure the movie file output is attached to the active session.
         // If the camera was started without cameraMode=true, the output may not have been added yet.
         if !captureSession.outputs.contains(where: { $0 === fileVideoOutput }) {
-            captureSession.beginConfiguration()
-            if captureSession.canAddOutput(fileVideoOutput) {
-                captureSession.addOutput(fileVideoOutput)
-                self.applyVideoStabilizationMode()
-            } else {
-                captureSession.commitConfiguration()
+            var didAddOutput = false
+            self.configureCaptureSession {
+                if captureSession.canAddOutput(fileVideoOutput) {
+                    captureSession.addOutput(fileVideoOutput)
+                    do {
+                        try self.refreshVideoStabilizationAfterMovieOutputAttached()
+                        didAddOutput = true
+                    } catch {
+                        didAddOutput = false
+                    }
+                }
+            }
+            guard didAddOutput else {
                 throw CameraControllerError.invalidOperation
             }
-            captureSession.commitConfiguration()
         }
 
         if let connection = fileVideoOutput.connection(with: .video) {
@@ -2783,7 +2873,9 @@ extension CameraController {
             fileVideoOutput.setOutputSettings([AVVideoCodecKey: codecType], for: connection)
         }
 
-        self.applyVideoStabilizationMode()
+        self.configureCaptureSession {
+            self.applyVideoStabilizationMode()
+        }
 
         // Start recording video
         fileVideoOutput.startRecording(to: fileUrl, recordingDelegate: self)
