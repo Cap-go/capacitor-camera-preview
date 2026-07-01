@@ -502,6 +502,9 @@ export type CameraPreviewFlashMode = 'off' | 'on' | 'auto' | 'torch';
 /** Reusable exposure mode type for cross-platform support. */
 export type ExposureMode = 'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM';
 
+/** Reusable white-balance mode type for cross-platform support. */
+export type WhiteBalanceMode = 'AUTO' | 'LOCK' | 'CONTINUOUS';
+
 /**
  * Defines the options for setting the camera preview's opacity.
  */
@@ -1104,6 +1107,27 @@ export interface CameraPreviewPlugin {
    * @platform ios, android
    */
   setExposureCompensation(options: { value: number }): Promise<void>;
+
+  /**
+   * Returns the white-balance modes supported by the active camera.
+   * Modes can include: 'AUTO', 'LOCK', 'CONTINUOUS'.
+   * @platform android, ios
+   */
+  getWhiteBalanceModes(): Promise<{ modes: WhiteBalanceMode[] }>;
+
+  /**
+   * Returns the current white-balance mode.
+   * @platform android, ios
+   */
+  getWhiteBalanceMode(): Promise<{ mode: WhiteBalanceMode }>;
+
+  /**
+   * Sets the white-balance mode. `CONTINUOUS` keeps auto white balance running
+   * (recommended; avoids a warm/yellow cast), `LOCK` freezes the current gains,
+   * `AUTO` performs a one-time adjustment.
+   * @platform android, ios
+   */
+  setWhiteBalanceMode(options: { mode: WhiteBalanceMode }): Promise<void>;
 
   /**
    * Lists the video frame rates supported by the active camera for the current format.

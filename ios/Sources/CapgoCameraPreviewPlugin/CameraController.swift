@@ -1004,6 +1004,10 @@ extension CameraController {
                     finalDevice.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
                 }
             }
+            // Default white balance to continuous auto (prevents a warm/yellow cast)
+            if finalDevice.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) {
+                finalDevice.whiteBalanceMode = .continuousAutoWhiteBalance
+            }
             // Reset exposure compensation so sessions start neutral
             let minBias = finalDevice.minExposureTargetBias
             let maxBias = finalDevice.maxExposureTargetBias
@@ -2715,6 +2719,98 @@ extension CameraController {
         do {
             try device.lockForConfiguration()
             device.setExposureTargetBias(clamped) { _ in }
+            device.unlockForConfiguration()
+        } catch {
+            throw CameraControllerError.invalidOperation
+        }
+    }
+
+    // MARK: - White Balance Controls
+
+    func getWhiteBalanceModes() throws -> [String] {
+        var currentCamera: AVCaptureDevice?
+        switch currentCameraPosition {
+        case .front:
+            currentCamera = self.frontCamera
+        case .rear:
+            currentCamera = self.rearCamera
+        default:
+            break
+        }
+
+        guard let device = currentCamera else {
+            throw CameraControllerError.noCamerasAvailable
+        }
+
+        var modes: [String] = []
+        if device.isWhiteBalanceModeSupported(.locked) { modes.append("LOCK") }
+        if device.isWhiteBalanceModeSupported(.autoWhiteBalance) { modes.append("AUTO") }
+        if device.isWhiteBalanceModeSupported(.continuousAutoWhiteBalance) { modes.append("CONTINUOUS") }
+        return modes
+    }
+
+    func getWhiteBalanceMode() throws -> String {
+        var currentCamera: AVCaptureDevice?
+        switch currentCameraPosition {
+        case .front:
+            currentCamera = self.frontCamera
+        case .rear:
+            currentCamera = self.rearCamera
+        default:
+            break
+        }
+
+        guard let device = currentCamera else {
+            throw CameraControllerError.noCamerasAvailable
+        }
+
+        switch device.whiteBalanceMode {
+        case .locked:
+            return "LOCK"
+        case .autoWhiteBalance:
+            return "AUTO"
+        case .continuousAutoWhiteBalance:
+            return "CONTINUOUS"
+        @unknown default:
+            return "CONTINUOUS"
+        }
+    }
+
+    func setWhiteBalanceMode(mode: String) throws {
+        var currentCamera: AVCaptureDevice?
+        switch currentCameraPosition {
+        case .front:
+            currentCamera = self.frontCamera
+        case .rear:
+            currentCamera = self.rearCamera
+        default:
+            break
+        }
+
+        guard let device = currentCamera else {
+            throw CameraControllerError.noCamerasAvailable
+        }
+
+        let normalized = mode.uppercased()
+        let desiredMode: AVCaptureDevice.WhiteBalanceMode?
+        switch normalized {
+        case "LOCK":
+            desiredMode = .locked
+        case "AUTO":
+            desiredMode = .autoWhiteBalance
+        case "CONTINUOUS":
+            desiredMode = .continuousAutoWhiteBalance
+        default:
+            desiredMode = .continuousAutoWhiteBalance
+        }
+
+        guard let finalMode = desiredMode, device.isWhiteBalanceModeSupported(finalMode) else {
+            throw CameraControllerError.invalidOperation
+        }
+
+        do {
+            try device.lockForConfiguration()
+            device.whiteBalanceMode = finalMode
             device.unlockForConfiguration()
         } catch {
             throw CameraControllerError.invalidOperation

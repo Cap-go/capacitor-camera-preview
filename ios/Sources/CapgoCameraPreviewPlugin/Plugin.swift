@@ -90,6 +90,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "getExposureCompensationRange", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getExposureCompensation", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setExposureCompensation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getWhiteBalanceModes", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getWhiteBalanceMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setWhiteBalanceMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedVideoFrameRates", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getVideoFrameRate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setVideoFrameRate", returnType: CAPPluginReturnPromise),
@@ -2389,6 +2392,58 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             } catch {
                 call.reject("Failed to set focus: \(error.localizedDescription)")
             }
+        }
+    }
+
+    // MARK: - White Balance Bridge
+
+    @objc func getWhiteBalanceModes(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Camera not initialized")
+            return
+        }
+        do {
+            let modes = try self.cameraController.getWhiteBalanceModes()
+            call.resolve(["modes": modes])
+        } catch {
+            call.reject("Failed to get white balance modes: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func getWhiteBalanceMode(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Camera not initialized")
+            return
+        }
+        do {
+            let mode = try self.cameraController.getWhiteBalanceMode()
+            call.resolve(["mode": mode])
+        } catch {
+            call.reject("Failed to get white balance mode: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func setWhiteBalanceMode(_ call: CAPPluginCall) {
+        guard isInitialized else {
+            call.reject("Camera not initialized")
+            return
+        }
+        guard let mode = call.getString("mode") else {
+            call.reject("mode parameter is required")
+            return
+        }
+        let normalized = mode.uppercased()
+        let allowedModes: Set<String> = ["AUTO", "LOCK", "CONTINUOUS"]
+        guard allowedModes.contains(normalized) else {
+            let allowedList = Array(allowedModes).sorted().joined(separator: ", ")
+            call.reject("Invalid white balance mode: \(mode). Allowed values: \(allowedList)")
+            return
+        }
+        do {
+            try self.cameraController.setWhiteBalanceMode(mode: normalized)
+            call.resolve()
+        } catch {
+            call.reject("Failed to set white balance mode: \(error.localizedDescription)")
         }
     }
 
