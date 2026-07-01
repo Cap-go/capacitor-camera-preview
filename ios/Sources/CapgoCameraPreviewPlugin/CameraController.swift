@@ -105,6 +105,10 @@ class CameraController: NSObject {
 
     var captureSession: AVCaptureSession?
     var disableFocusIndicator: Bool = false
+    private var focusExposureRestoreGeneration: UInt = 0
+    private var focusExposureRestoreTimeoutWorkItem: DispatchWorkItem?
+    private let focusExposureRestoreTimeout: TimeInterval = 3.0
+    private let focusExposureRestorePollInterval: TimeInterval = 0.05
 
     var currentCameraPosition: CameraPosition?
 
@@ -1195,6 +1199,7 @@ extension CameraController {
     }
 
     func switchCameras() throws {
+        self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         guard let currentCameraPosition = currentCameraPosition,
               let captureSession = self.captureSession else {
@@ -2179,46 +2184,116 @@ extension CameraController {
         }
     }
 
-    private func triggerAutoFocus() {
-        var currentCamera: AVCaptureDevice?
-        switch currentCameraPosition {
-        case .front:
-            currentCamera = self.frontCamera
-        case .rear:
-            currentCamera = self.rearCamera
-        default: break
+
+    private func cancelPendingFocusExposureRestore() {
+        self.focusExposureRestoreGeneration &+= 1
+        self.focusExposureRestoreTimeoutWorkItem?.cancel()
+        self.focusExposureRestoreTimeoutWorkItem = nil
+    }
+
+    private func applyOneShotFocusAndExposure(at point: CGPoint, on device: AVCaptureDevice, adjustExposure: Bool) throws {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+
+        if device.isFocusModeSupported(.autoFocus) {
+            device.focusMode = .autoFocus
+        } else if device.isFocusModeSupported(.continuousAutoFocus) {
+            device.focusMode = .continuousAutoFocus
         }
 
-        guard let device = currentCamera else {
+        if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = point
+        }
+
+        if adjustExposure, device.exposureMode != .locked {
+            if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(.autoExpose) {
+                device.exposureMode = .autoExpose
+                device.setExposureTargetBias(0.0) { _ in }
+                device.exposurePointOfInterest = point
+            }
+        }
+
+        device.isSubjectAreaChangeMonitoringEnabled = true
+    }
+
+    private func scheduleFocusExposureRestore(for device: AVCaptureDevice) {
+        self.focusExposureRestoreGeneration &+= 1
+        let generation = self.focusExposureRestoreGeneration
+
+        self.focusExposureRestoreTimeoutWorkItem?.cancel()
+
+        let timeoutWork = DispatchWorkItem { [weak self] in
+            self?.restoreContinuousFocusAndExposureIfCurrent(on: device, generation: generation)
+        }
+        self.focusExposureRestoreTimeoutWorkItem = timeoutWork
+
+        self.pollFocusExposureAdjustmentCompletion(on: device, generation: generation)
+        DispatchQueue.main.asyncAfter(deadline: .now() + self.focusExposureRestoreTimeout, execute: timeoutWork)
+    }
+
+    private func pollFocusExposureAdjustmentCompletion(on device: AVCaptureDevice, generation: UInt) {
+        guard generation == self.focusExposureRestoreGeneration else { return }
+
+        if device.isAdjustingFocus || device.isAdjustingExposure {
+            DispatchQueue.main.asyncAfter(deadline: .now() + self.focusExposureRestorePollInterval) { [weak self] in
+                self?.pollFocusExposureAdjustmentCompletion(on: device, generation: generation)
+            }
             return
         }
 
-        // Focus on the center of the preview (0.5, 0.5)
-        let centerPoint = CGPoint(x: 0.5, y: 0.5)
+        self.restoreContinuousFocusAndExposureIfCurrent(on: device, generation: generation)
+    }
+
+    private func restoreContinuousFocusAndExposureIfCurrent(on device: AVCaptureDevice, generation: UInt) {
+        guard generation == self.focusExposureRestoreGeneration else { return }
+
+        self.focusExposureRestoreTimeoutWorkItem?.cancel()
+        self.focusExposureRestoreTimeoutWorkItem = nil
 
         do {
             try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
 
-            // Set focus mode to auto if supported
-            if device.isFocusModeSupported(.autoFocus) {
-                device.focusMode = .autoFocus
-                if device.isFocusPointOfInterestSupported {
-                    device.focusPointOfInterest = centerPoint
-                }
-            } else if device.isFocusModeSupported(.continuousAutoFocus) {
+            let centerPoint = CGPoint(x: 0.5, y: 0.5)
+
+            if device.isFocusModeSupported(.continuousAutoFocus) {
                 device.focusMode = .continuousAutoFocus
                 if device.isFocusPointOfInterestSupported {
                     device.focusPointOfInterest = centerPoint
                 }
             }
 
-            if device.isExposurePointOfInterestSupported {
-                let exposureMode = try getExposureMode()
-                if exposureMode == "AUTO" || exposureMode == "CONTINUOUS" {
-                    device.exposurePointOfInterest = centerPoint
+            if device.exposureMode != .locked {
+                if device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposureMode = .continuousAutoExposure
+                    if device.isExposurePointOfInterestSupported {
+                        device.exposurePointOfInterest = centerPoint
+                    }
+                    device.setExposureTargetBias(0.0) { _ in }
                 }
             }
-            device.unlockForConfiguration()
+
+            device.isSubjectAreaChangeMonitoringEnabled = false
+        } catch {
+            print("[CameraPreview] Failed to restore continuous focus/exposure: \(error)")
+        }
+    }
+
+    private func triggerAutoFocus() {
+        guard let device = self.activeVideoDevice() else { return }
+
+        let centerPoint = CGPoint(x: 0.5, y: 0.5)
+        let adjustExposure: Bool
+        do {
+            let exposureMode = try self.getExposureMode()
+            adjustExposure = exposureMode == "AUTO" || exposureMode == "CONTINUOUS"
+        } catch {
+            adjustExposure = true
+        }
+
+        do {
+            try self.applyOneShotFocusAndExposure(at: centerPoint, on: device, adjustExposure: adjustExposure)
+            self.scheduleFocusExposureRestore(for: device)
         } catch {
             // Silently ignore errors during autofocus
         }
@@ -2257,33 +2332,8 @@ extension CameraController {
         }
 
         do {
-            try device.lockForConfiguration()
-
-            // Set focus mode to auto if supported
-            if device.isFocusModeSupported(.autoFocus) {
-                device.focusMode = .autoFocus
-            } else if device.isFocusModeSupported(.continuousAutoFocus) {
-                device.focusMode = .continuousAutoFocus
-            }
-
-            // Set the focus point
-            device.focusPointOfInterest = point
-
-            // Skip exposure point if exposure locked
-            if device.exposureMode != .locked {
-
-                // Also set exposure point if supported
-                if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(.autoExpose) {
-                    device.exposureMode = .autoExpose
-                    device.setExposureTargetBias(0.0) { _ in }
-                    device.exposurePointOfInterest = point
-                }
-            }
-
-            // Turn on subject area monitor for switch to continuous focus if needed
-            device.isSubjectAreaChangeMonitoringEnabled = true
-
-            device.unlockForConfiguration()
+            try self.applyOneShotFocusAndExposure(at: point, on: device, adjustExposure: true)
+            self.scheduleFocusExposureRestore(for: device)
         } catch {
             throw CameraControllerError.unknown
         }
@@ -2372,6 +2422,7 @@ extension CameraController {
     }
 
     func swapToDevice(deviceId: String) throws {
+        self.cancelPendingFocusExposureRestore()
         guard let captureSession = self.captureSession else {
             throw CameraControllerError.captureSessionIsMissing
         }
@@ -2460,6 +2511,7 @@ extension CameraController {
     }
 
     func cleanup() {
+        self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         stopBarcodeScanner()
         if let captureSession = self.captureSession {
@@ -2914,38 +2966,16 @@ extension CameraController: UIGestureRecognizerDelegate {
 
     @objc
     func handleTap(_ tap: UITapGestureRecognizer) {
-        guard let device = self.currentCameraPosition == .rear ? rearCamera : frontCamera else { return }
-
-        let point = tap.location(in: tap.view)
-        let devicePoint = self.previewLayer?.captureDevicePointConverted(fromLayerPoint: point)
-
-        // Show focus indicator at the tap point if not disabled
-        if !self.disableFocusIndicator, let view = tap.view {
-            showFocusIndicator(at: point, in: view)
+        guard let devicePoint = self.previewLayer?.captureDevicePointConverted(fromLayerPoint: tap.location(in: tap.view)) else {
+            return
         }
 
         do {
-            try device.lockForConfiguration()
-            defer { device.unlockForConfiguration() }
-
-            let focusMode = AVCaptureDevice.FocusMode.autoFocus
-            if device.isFocusPointOfInterestSupported && device.isFocusModeSupported(focusMode) {
-                device.focusPointOfInterest = CGPoint(x: CGFloat(devicePoint?.x ?? 0), y: CGFloat(devicePoint?.y ?? 0))
-                device.focusMode = focusMode
-            }
-            // Skip exposure point if locked
-            if device.exposureMode != .locked {
-                let exposureMode = AVCaptureDevice.ExposureMode.autoExpose
-                if device.isExposurePointOfInterestSupported && device.isExposureModeSupported(exposureMode) {
-                    device.exposurePointOfInterest = CGPoint(x: CGFloat(devicePoint?.x ?? 0), y: CGFloat(devicePoint?.y ?? 0))
-                    device.exposureMode = exposureMode
-                    device.setExposureTargetBias(0.0) { _ in }
-                }
-            }
-
-            // Turn on subject area monitor for switch to continuous focus if needed
-            device.isSubjectAreaChangeMonitoringEnabled = true
-
+            try self.setFocus(
+                at: devicePoint,
+                showIndicator: !self.disableFocusIndicator,
+                in: tap.view
+            )
         } catch {
             debugPrint(error)
         }
