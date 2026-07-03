@@ -623,7 +623,10 @@ extension CameraController {
         self.photoOutput?.isHighResolutionCaptureEnabled = true
 
         // Create video output
-        self.fileVideoOutput = AVCaptureMovieFileOutput()
+        let movieFileOutput = AVCaptureMovieFileOutput()
+        // MP4 does not support movie fragments; the default 10s interval drops the final partial segment on stop.
+        movieFileOutput.movieFragmentInterval = .invalid
+        self.fileVideoOutput = movieFileOutput
 
         // Create data output for preview
         self.dataOutput = AVCaptureVideoDataOutput()
