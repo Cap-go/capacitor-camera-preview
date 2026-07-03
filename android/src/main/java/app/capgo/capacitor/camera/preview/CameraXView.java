@@ -3284,15 +3284,18 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             throw new Exception("mode is required");
         }
         String normalized = mode.toUpperCase(Locale.US);
+        if (!"LOCK".equals(normalized) && !"CONTINUOUS".equals(normalized)) {
+            throw new Exception("Unsupported exposure mode: " + mode);
+        }
         final String modeToApply = normalized;
         mainExecutor.execute(() -> {
             try {
                 applyExposureMode(modeToApply);
+                currentExposureMode = modeToApply;
             } catch (Exception e) {
                 Log.e(TAG, "setExposureMode: Failed to apply mode", e);
             }
         });
-        currentExposureMode = normalized;
     }
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
@@ -3370,15 +3373,22 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if ("CUSTOM".equals(normalized)) {
             throw new Exception("CUSTOM white balance is not supported; manual gains are not yet exposed");
         }
+        if (
+            !"LOCK".equals(normalized) &&
+            !"AUTO".equals(normalized) &&
+            !"CONTINUOUS".equals(normalized)
+        ) {
+            throw new Exception("Unsupported white balance mode: " + mode);
+        }
         final String modeToApply = normalized;
         mainExecutor.execute(() -> {
             try {
                 applyWhiteBalanceMode(modeToApply);
+                currentWhiteBalanceMode = modeToApply;
             } catch (Exception e) {
                 Log.e(TAG, "setWhiteBalanceMode: Failed to apply mode", e);
             }
         });
-        currentWhiteBalanceMode = normalized;
     }
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
