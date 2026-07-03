@@ -2663,8 +2663,10 @@ extension CameraController {
             desiredMode = .autoWhiteBalance
         case "CONTINUOUS":
             desiredMode = .continuousAutoWhiteBalance
+        case "CUSTOM":
+            throw CameraControllerError.invalidOperation
         default:
-            desiredMode = .continuousAutoWhiteBalance
+            throw CameraControllerError.invalidOperation
         }
 
         guard let finalMode = desiredMode, device.isWhiteBalanceModeSupported(finalMode) else {

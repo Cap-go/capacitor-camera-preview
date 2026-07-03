@@ -1374,7 +1374,8 @@ getWhiteBalanceModes() => Promise<{ modes: WhiteBalanceMode[]; }>
 ```
 
 Returns the white-balance modes supported by the active camera.
-Modes can include: 'AUTO', 'LOCK', 'CONTINUOUS'.
+Modes can include: 'AUTO', 'LOCK', 'CONTINUOUS'. `CUSTOM` is not listed
+until manual gains support is implemented.
 
 **Returns:** <code>Promise&lt;{ modes: WhiteBalanceMode[]; }&gt;</code>
 
@@ -1402,7 +1403,8 @@ setWhiteBalanceMode(options: { mode: WhiteBalanceMode; }) => Promise<void>
 
 Sets the white-balance mode. `CONTINUOUS` keeps auto white balance running
 (recommended; avoids a warm/yellow cast), `LOCK` freezes the current gains,
-`AUTO` performs a one-time adjustment.
+`AUTO` performs a one-time adjustment. `CUSTOM` is reserved and rejected
+until manual gains support is implemented.
 
 | Param         | Type                                                                     |
 | ------------- | ------------------------------------------------------------------------ |
@@ -1808,8 +1810,10 @@ Reusable exposure mode type for cross-platform support.
 #### WhiteBalanceMode
 
 Reusable white-balance mode type for cross-platform support.
+`CUSTOM` is reserved for a future manual white-balance gains API and is not
+returned by `getWhiteBalanceModes()` until implemented.
 
-<code>'AUTO' | 'LOCK' | 'CONTINUOUS'</code>
+<code>'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM'</code>
 
 
 ### Enums
