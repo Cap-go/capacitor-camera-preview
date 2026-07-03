@@ -172,8 +172,46 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   async getOrientation(): Promise<{ orientation: DeviceOrientation }> {
     return { orientation: this.getCurrentOrientation() };
   }
-  getSafeAreaInsets(): Promise<SafeAreaInsets> {
-    throw new Error('Method not implemented.');
+  async getSafeAreaInsets(): Promise<SafeAreaInsets> {
+    const orientationValue = this.getCurrentOrientation();
+    let orientation = 0;
+    if (orientationValue === 'portrait' || orientationValue === 'portrait-upside-down') {
+      orientation = 1;
+    } else if (orientationValue === 'landscape-left' || orientationValue === 'landscape-right') {
+      orientation = 2;
+    }
+
+    const parseInset = (value: string): number => {
+      const parsed = Number.parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const probe = document.createElement('div');
+    probe.style.position = 'fixed';
+    probe.style.visibility = 'hidden';
+    probe.style.pointerEvents = 'none';
+    probe.style.top = '0';
+    probe.style.left = '0';
+    probe.style.paddingTop = 'env(safe-area-inset-top)';
+    probe.style.paddingLeft = 'env(safe-area-inset-left)';
+    probe.style.paddingRight = 'env(safe-area-inset-right)';
+    document.body.appendChild(probe);
+    const styles = getComputedStyle(probe);
+    const topInset = parseInset(styles.paddingTop);
+    const leftInset = parseInset(styles.paddingLeft);
+    const rightInset = parseInset(styles.paddingRight);
+    probe.remove();
+
+    let top = 0;
+    if (orientation === 1) {
+      top = topInset;
+    } else if (orientation === 2) {
+      top = leftInset > 0 ? leftInset : rightInset;
+    } else {
+      top = Math.max(topInset, leftInset, rightInset);
+    }
+
+    return { orientation, top };
   }
 
   async getZoomButtonValues(): Promise<{ values: number[] }> {
