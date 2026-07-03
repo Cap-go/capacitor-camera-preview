@@ -3373,11 +3373,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         if ("CUSTOM".equals(normalized)) {
             throw new Exception("CUSTOM white balance is not supported; manual gains are not yet exposed");
         }
-        if (
-            !"LOCK".equals(normalized) &&
-            !"AUTO".equals(normalized) &&
-            !"CONTINUOUS".equals(normalized)
-        ) {
+        if (!"LOCK".equals(normalized) && !"AUTO".equals(normalized) && !"CONTINUOUS".equals(normalized)) {
             throw new Exception("Unsupported white balance mode: " + mode);
         }
         final String modeToApply = normalized;
