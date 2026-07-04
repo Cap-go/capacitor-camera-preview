@@ -191,6 +191,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Runnable pendingFrameRateBindSuccess;
     private java.util.function.Consumer<String> pendingFrameRateBindError;
     private String currentExposureMode = "CONTINUOUS"; // Default behavior
+    private String currentWhiteBalanceMode = "CONTINUOUS"; // Default behavior
     // Capture/stop coordination
     private final Object captureLock = new Object();
     private volatile boolean isCapturingPhoto = false;
@@ -1183,6 +1184,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 }
 
                 resetExposureCompensationToDefault();
+                reapplyCameraControlModes();
 
                 // Log details about the active camera
                 Log.d(TAG, "Use cases bound. Inspecting active camera and use cases.");
@@ -3278,13 +3280,29 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     public void setExposureMode(String mode) throws Exception {
-        if (camera == null) {
-            throw new Exception("Camera not initialized");
-        }
         if (mode == null) {
             throw new Exception("mode is required");
         }
         String normalized = mode.toUpperCase(Locale.US);
+        if (!"LOCK".equals(normalized) && !"CONTINUOUS".equals(normalized)) {
+            throw new Exception("Unsupported exposure mode: " + mode);
+        }
+        final String modeToApply = normalized;
+        mainExecutor.execute(() -> {
+            try {
+                applyExposureMode(modeToApply);
+                currentExposureMode = modeToApply;
+            } catch (Exception e) {
+                Log.e(TAG, "setExposureMode: Failed to apply mode", e);
+            }
+        });
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    private void applyExposureMode(String normalized) throws Exception {
+        if (camera == null) {
+            throw new Exception("Camera not initialized");
+        }
 
         Camera2CameraControl c2 = Camera2CameraControl.from(camera.getCameraControl());
         switch (normalized) {
@@ -3293,8 +3311,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     .setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
                     .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
                     .build();
-                mainExecutor.execute(() -> c2.setCaptureRequestOptions(opts));
-                currentExposureMode = "LOCK";
+                c2.setCaptureRequestOptions(opts);
                 break;
             }
             case "CONTINUOUS": {
@@ -3302,12 +3319,117 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     .setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, false)
                     .setCaptureRequestOption(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
                     .build();
-                mainExecutor.execute(() -> c2.setCaptureRequestOptions(opts));
-                currentExposureMode = "CONTINUOUS";
+                c2.setCaptureRequestOptions(opts);
                 break;
             }
             default:
-                throw new Exception("Unsupported exposure mode: " + mode);
+                throw new Exception("Unsupported exposure mode: " + normalized);
+        }
+    }
+
+    // ===================== White Balance APIs =====================
+    public java.util.List<String> getWhiteBalanceModes() {
+        if (camera == null) {
+            return Arrays.asList("LOCK", "CONTINUOUS");
+        }
+
+        java.util.List<String> modes = new java.util.ArrayList<>();
+        try {
+            Camera2CameraInfo c2Info = Camera2CameraInfo.from(camera.getCameraInfo());
+            int[] available = c2Info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES);
+            Boolean lockAvailable = c2Info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE);
+
+            if (available != null) {
+                for (int awbMode : available) {
+                    if (awbMode == CaptureRequest.CONTROL_AWB_MODE_AUTO && !modes.contains("CONTINUOUS")) {
+                        modes.add("CONTINUOUS");
+                    }
+                }
+            }
+            if (Boolean.TRUE.equals(lockAvailable) && !modes.contains("LOCK")) {
+                modes.add("LOCK");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getWhiteBalanceModes: Failed to query capabilities, using defaults", e);
+            return Arrays.asList("LOCK", "CONTINUOUS");
+        }
+
+        if (modes.isEmpty()) {
+            return Arrays.asList("LOCK", "CONTINUOUS");
+        }
+        return modes;
+    }
+
+    public String getWhiteBalanceMode() {
+        return currentWhiteBalanceMode;
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    public void setWhiteBalanceMode(String mode) throws Exception {
+        if (mode == null) {
+            throw new Exception("mode is required");
+        }
+        String normalized = mode.toUpperCase(Locale.US);
+        if ("CUSTOM".equals(normalized)) {
+            throw new Exception("CUSTOM white balance is not supported; manual gains are not yet exposed");
+        }
+        if (!"LOCK".equals(normalized) && !"AUTO".equals(normalized) && !"CONTINUOUS".equals(normalized)) {
+            throw new Exception("Unsupported white balance mode: " + mode);
+        }
+        final String modeToApply = normalized;
+        mainExecutor.execute(() -> {
+            try {
+                applyWhiteBalanceMode(modeToApply);
+                currentWhiteBalanceMode = modeToApply;
+            } catch (Exception e) {
+                Log.e(TAG, "setWhiteBalanceMode: Failed to apply mode", e);
+            }
+        });
+    }
+
+    @OptIn(markerClass = ExperimentalCamera2Interop.class)
+    private void applyWhiteBalanceMode(String normalized) throws Exception {
+        if (camera == null) {
+            throw new Exception("Camera not initialized");
+        }
+
+        Camera2CameraControl c2 = Camera2CameraControl.from(camera.getCameraControl());
+        switch (normalized) {
+            case "LOCK": {
+                CaptureRequestOptions opts = new CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true)
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+                    .build();
+                c2.setCaptureRequestOptions(opts);
+                break;
+            }
+            case "AUTO":
+            case "CONTINUOUS": {
+                CaptureRequestOptions opts = new CaptureRequestOptions.Builder()
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, false)
+                    .setCaptureRequestOption(CaptureRequest.CONTROL_AWB_MODE, CaptureRequest.CONTROL_AWB_MODE_AUTO)
+                    .build();
+                c2.setCaptureRequestOptions(opts);
+                break;
+            }
+            default:
+                throw new Exception("Unsupported white balance mode: " + normalized);
+        }
+    }
+
+    private void reapplyCameraControlModes() {
+        if (camera == null) {
+            return;
+        }
+        try {
+            applyExposureMode(currentExposureMode);
+        } catch (Exception e) {
+            Log.w(TAG, "reapplyCameraControlModes: Failed to reapply exposure mode", e);
+        }
+        try {
+            applyWhiteBalanceMode(currentWhiteBalanceMode);
+        } catch (Exception e) {
+            Log.w(TAG, "reapplyCameraControlModes: Failed to reapply white balance mode", e);
         }
     }
 

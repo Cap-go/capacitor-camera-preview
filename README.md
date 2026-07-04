@@ -427,6 +427,9 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`getExposureCompensationRange()`](#getexposurecompensationrange)
 * [`getExposureCompensation()`](#getexposurecompensation)
 * [`setExposureCompensation(...)`](#setexposurecompensation)
+* [`getWhiteBalanceModes()`](#getwhitebalancemodes)
+* [`getWhiteBalanceMode()`](#getwhitebalancemode)
+* [`setWhiteBalanceMode(...)`](#setwhitebalancemode)
 * [`getSupportedVideoFrameRates()`](#getsupportedvideoframerates)
 * [`getVideoFrameRate()`](#getvideoframerate)
 * [`setVideoFrameRate(...)`](#setvideoframerate)
@@ -1379,6 +1382,52 @@ Sets the exposure compensation (EV bias). Value will be clamped to range.
 --------------------
 
 
+### getWhiteBalanceModes()
+
+```typescript
+getWhiteBalanceModes() => Promise<{ modes: WhiteBalanceMode[]; }>
+```
+
+Returns the white-balance modes supported by the active camera.
+Modes can include: 'AUTO', 'LOCK', 'CONTINUOUS'. `CUSTOM` is not listed
+until manual gains support is implemented.
+
+**Returns:** <code>Promise&lt;{ modes: WhiteBalanceMode[]; }&gt;</code>
+
+--------------------
+
+
+### getWhiteBalanceMode()
+
+```typescript
+getWhiteBalanceMode() => Promise<{ mode: WhiteBalanceMode; }>
+```
+
+Returns the current white-balance mode.
+
+**Returns:** <code>Promise&lt;{ mode: <a href="#whitebalancemode">WhiteBalanceMode</a>; }&gt;</code>
+
+--------------------
+
+
+### setWhiteBalanceMode(...)
+
+```typescript
+setWhiteBalanceMode(options: { mode: WhiteBalanceMode; }) => Promise<void>
+```
+
+Sets the white-balance mode. `CONTINUOUS` keeps auto white balance running
+(recommended; avoids a warm/yellow cast), `LOCK` freezes the current gains,
+`AUTO` performs a one-time adjustment. `CUSTOM` is reserved and rejected
+until manual gains support is implemented.
+
+| Param         | Type                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| **`options`** | <code>{ mode: <a href="#whitebalancemode">WhiteBalanceMode</a>; }</code> |
+
+--------------------
+
+
 ### getSupportedVideoFrameRates()
 
 ```typescript
@@ -1770,6 +1819,15 @@ Canonical device orientation values across platforms.
 #### ExposureMode
 
 Reusable exposure mode type for cross-platform support.
+
+<code>'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM'</code>
+
+
+#### WhiteBalanceMode
+
+Reusable white-balance mode type for cross-platform support.
+`CUSTOM` is reserved for a future manual white-balance gains API and is not
+returned by `getWhiteBalanceModes()` until implemented.
 
 <code>'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM'</code>
 

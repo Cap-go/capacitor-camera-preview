@@ -503,6 +503,13 @@ export type CameraPreviewFlashMode = 'off' | 'on' | 'auto' | 'torch';
 export type ExposureMode = 'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM';
 
 /**
+ * Reusable white-balance mode type for cross-platform support.
+ * `CUSTOM` is reserved for a future manual white-balance gains API and is not
+ * returned by `getWhiteBalanceModes()` until implemented.
+ */
+export type WhiteBalanceMode = 'AUTO' | 'LOCK' | 'CONTINUOUS' | 'CUSTOM';
+
+/**
  * Defines the options for setting the camera preview's opacity.
  */
 export interface CameraOpacityOptions {
@@ -1104,6 +1111,29 @@ export interface CameraPreviewPlugin {
    * @platform ios, android
    */
   setExposureCompensation(options: { value: number }): Promise<void>;
+
+  /**
+   * Returns the white-balance modes supported by the active camera.
+   * Modes can include: 'AUTO', 'LOCK', 'CONTINUOUS'. `CUSTOM` is not listed
+   * until manual gains support is implemented.
+   * @platform android, ios
+   */
+  getWhiteBalanceModes(): Promise<{ modes: WhiteBalanceMode[] }>;
+
+  /**
+   * Returns the current white-balance mode.
+   * @platform android, ios
+   */
+  getWhiteBalanceMode(): Promise<{ mode: WhiteBalanceMode }>;
+
+  /**
+   * Sets the white-balance mode. `CONTINUOUS` keeps auto white balance running
+   * (recommended; avoids a warm/yellow cast), `LOCK` freezes the current gains,
+   * `AUTO` performs a one-time adjustment. `CUSTOM` is reserved and rejected
+   * until manual gains support is implemented.
+   * @platform android, ios
+   */
+  setWhiteBalanceMode(options: { mode: WhiteBalanceMode }): Promise<void>;
 
   /**
    * Lists the video frame rates supported by the active camera for the current format.
