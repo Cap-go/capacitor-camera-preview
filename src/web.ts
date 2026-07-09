@@ -717,8 +717,8 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         canvas.width = captureWidth;
         canvas.height = captureHeight;
 
-        // flip horizontally back camera isn't used
-        if (!this.isBackCamera) {
+        // Opt-in selfie-style mirror for front camera captures.
+        if (!this.isBackCamera && options.mirrorFrontCamera === true) {
           context?.translate(captureWidth, 0);
           context?.scale(-1, 1);
         }

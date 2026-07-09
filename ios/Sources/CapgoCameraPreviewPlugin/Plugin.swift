@@ -1265,10 +1265,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let width = call.getInt("width")
         let height = call.getInt("height")
         let photoQualityPrioritization = call.getString("photoQualityPrioritization", "speed")
+        let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
 
         print("[CameraPreview] Raw parameter values - width: \(String(describing: width)), height: \(String(describing: height))")
 
-        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1)")
+        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera)")
         print("[CameraPreview] Current location: \(self.currentLocation?.description ?? "nil")")
         // Safely read frame from main thread for logging
         let (previewWidth, previewHeight): (CGFloat, CGFloat) = {
@@ -1303,9 +1304,21 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     return
                 }
 
-                guard let image = image,
-                      let imageDataWithExif = self.createImageDataWithExif(
-                        from: image,
+                guard let capturedImage = image else {
+                    print("[CameraPreview] Failed to create image data with EXIF")
+                    call.reject("Failed to create image data with EXIF")
+                    return
+                }
+
+                let imageToEncode: UIImage
+                if mirrorFrontCamera, self.cameraPosition == "front" {
+                    imageToEncode = self.cameraController.mirrorImageHorizontally(capturedImage)
+                } else {
+                    imageToEncode = capturedImage
+                }
+
+                guard let imageDataWithExif = self.createImageDataWithExif(
+                        from: imageToEncode,
                         quality: Int(quality),
                         location: withExifLocation ? self.currentLocation : nil,
                         heading: withExifLocation ? self.currentHeading : nil,
@@ -1520,6 +1533,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     @objc func captureSample(_ call: CAPPluginCall) {
         let quality: Int = call.getInt("quality") ?? 85
+        let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
 
         self.cameraController.captureSample { image, error in
             guard let image = image else {
@@ -1528,13 +1542,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
 
-            let imageData: Data?
-            if self.cameraPosition == "front" {
-                let flippedImage = image.withHorizontallyFlippedOrientation()
-                imageData = flippedImage.jpegData(compressionQuality: CGFloat(quality)/100)
-            } else {
-                imageData = image.jpegData(compressionQuality: CGFloat(quality)/100)
+            var outputImage = image
+            if mirrorFrontCamera, self.cameraPosition == "front" {
+                outputImage = self.cameraController.mirrorImageHorizontally(image)
             }
+            let imageData = outputImage.jpegData(compressionQuality: CGFloat(quality)/100)
 
             if self.storeToFile == false {
                 guard let imageBase64 = imageData?.base64EncodedString() else {

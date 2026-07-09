@@ -457,6 +457,14 @@ export interface CameraPreviewPictureOptions {
    * @default "speed"
    */
   photoQualityPrioritization?: 'speed' | 'balanced' | 'quality';
+  /**
+   * If true and the front camera is active, horizontally mirror the captured photo
+   * so it matches a selfie-style preview. Rear camera captures are never mirrored.
+   * Defaults to false to preserve the previous non-mirrored behavior.
+   * @default false
+   * @since 8.10.0
+   */
+  mirrorFrontCamera?: boolean;
 }
 
 /** Represents EXIF data extracted from an image. */
@@ -491,6 +499,14 @@ export interface CameraSampleOptions {
    * @default 85
    */
   quality?: number;
+  /**
+   * If true and the front camera is active, horizontally mirror the captured sample
+   * so it matches a selfie-style preview. Rear camera samples are never mirrored.
+   * Defaults to false to preserve the previous non-mirrored behavior.
+   * @default false
+   * @since 8.10.0
+   */
+  mirrorFrontCamera?: boolean;
 }
 
 /**

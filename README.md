@@ -1565,15 +1565,17 @@ Defines the options for capturing a picture.
 | **`embedTimestamp`**             | <code>boolean</code>                                    | If true, the plugin will embed a timestamp in the top-right corner of the image.                                                                                                                                                                                                                                                                                                      | <code>false</code>   | 7.17.0 |
 | **`embedLocation`**              | <code>boolean</code>                                    | If true, the plugin will embed the current location in the top-right corner of the image. Requires `withExifLocation` to be enabled.                                                                                                                                                                                                                                                  | <code>false</code>   | 7.18.0 |
 | **`photoQualityPrioritization`** | <code>'speed' \| 'balanced' \| 'quality'</code>         | Sets the priority for photo quality vs. capture speed. - "speed": Prioritizes faster capture times, may reduce image quality. - "balanced": Aims for a balance between quality and speed. - "quality": Prioritizes image quality, may reduce capture speed. See https://developer.apple.com/documentation/avfoundation/avcapturephotosettings/photoqualityprioritization for details. | <code>"speed"</code> | 7.21.0 |
+| **`mirrorFrontCamera`**          | <code>boolean</code>                                    | If true and the front camera is active, horizontally mirror the captured photo so it matches a selfie-style preview. Rear camera captures are never mirrored. Defaults to false to preserve the previous non-mirrored behavior.                                                                                                                                                       | <code>false</code>   | 8.10.0 |
 
 
 #### CameraSampleOptions
 
 Defines the options for capturing a sample frame from the camera preview.
 
-| Prop          | Type                | Description                                        | Default         |
-| ------------- | ------------------- | -------------------------------------------------- | --------------- |
-| **`quality`** | <code>number</code> | The quality of the captured sample, from 0 to 100. | <code>85</code> |
+| Prop                    | Type                 | Description                                                                                                                                                                                                                     | Default            | Since  |
+| ----------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ------ |
+| **`quality`**           | <code>number</code>  | The quality of the captured sample, from 0 to 100.                                                                                                                                                                              | <code>85</code>    |        |
+| **`mirrorFrontCamera`** | <code>boolean</code> | If true and the front camera is active, horizontally mirror the captured sample so it matches a selfie-style preview. Rear camera samples are never mirrored. Defaults to false to preserve the previous non-mirrored behavior. | <code>false</code> | 8.10.0 |
 
 
 #### CameraPermissionStatus
