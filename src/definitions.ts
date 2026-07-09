@@ -385,6 +385,15 @@ export interface CameraPreviewOptions {
    */
   allowHapticsAndSystemSoundsDuringRecording?: boolean;
   /**
+   * When `true` and the front camera is active, mirrors the recorded video file
+   * so it matches the selfie-style preview (text and gestures are not reversed).
+   * Does not affect the live preview. Defaults to `false` to preserve existing behavior.
+   * @platform ios, android
+   * @default false
+   * @since 8.10.0
+   */
+  mirrorFrontCamera?: boolean;
+  /**
    * Starts barcode scanning together with the camera preview.
    * Set to `true` or pass options to scan all supported formats.
    * Omit this option to keep barcode scanning disabled at startup.
@@ -751,7 +760,7 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
-   * Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, `disableAudio`, and `allowHapticsAndSystemSoundsDuringRecording` on each call.
+   * Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, `disableAudio`, `allowHapticsAndSystemSoundsDuringRecording`, and `mirrorFrontCamera` on each call.
    *
    * @param {CameraPreviewOptions} options - The options for video recording.
    * @returns {Promise<void>} A promise that resolves when video recording starts.

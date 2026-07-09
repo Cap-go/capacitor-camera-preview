@@ -2945,7 +2945,7 @@ extension CameraController {
         }
     }
 
-    func captureVideo(maxDuration: Float? = nil, maxFileSize: Int? = nil, allowHapticsAndSystemSoundsDuringRecording: Bool = false) throws {
+    func captureVideo(maxDuration: Float? = nil, maxFileSize: Int? = nil, allowHapticsAndSystemSoundsDuringRecording: Bool = false, mirrorFrontCamera: Bool = false) throws {
         guard let captureSession = self.captureSession, captureSession.isRunning else {
             throw CameraControllerError.captureSessionIsMissing
         }
@@ -2997,8 +2997,8 @@ extension CameraController {
             // Goes off accelerometer now
             self.setVideoOrientation(self.getPhysicalOrientation(), on: connection)
 
-            // Front camera: mirror the recorded video so it looks natural (selfie style).
-            if self.currentCameraPosition == .front, connection.isVideoMirroringSupported {
+            // Opt-in: mirror front-camera recordings so the file matches selfie preview.
+            if mirrorFrontCamera, self.currentCameraPosition == .front, connection.isVideoMirroringSupported {
                 connection.isVideoMirrored = true
             } else {
                 connection.isVideoMirrored = false
