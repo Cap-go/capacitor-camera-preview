@@ -53,7 +53,6 @@ import androidx.camera.core.Camera;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ExperimentalGetImage;
-import androidx.camera.core.MirrorMode;
 import androidx.camera.core.ExposureState;
 import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.FocusMeteringResult;
@@ -63,6 +62,7 @@ import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.MeteringPointFactory;
+import androidx.camera.core.MirrorMode;
 import androidx.camera.core.Preview;
 import androidx.camera.core.ResolutionInfo;
 import androidx.camera.core.TorchState;
@@ -3539,11 +3539,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
-    private void applyMirrorFrontCamera(
-        boolean mirrorFrontCamera,
-        Runnable onSuccess,
-        java.util.function.Consumer<String> onError
-    ) {
+    private void applyMirrorFrontCamera(boolean mirrorFrontCamera, Runnable onSuccess, java.util.function.Consumer<String> onError) {
         mainExecutor.execute(() -> {
             try {
                 if (sessionConfig == null) {
