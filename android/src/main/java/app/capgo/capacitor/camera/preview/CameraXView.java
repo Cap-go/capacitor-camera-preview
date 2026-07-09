@@ -62,6 +62,7 @@ import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.MeteringPointFactory;
+import androidx.camera.core.MirrorMode;
 import androidx.camera.core.Preview;
 import androidx.camera.core.ResolutionInfo;
 import androidx.camera.core.TorchState;
@@ -1153,6 +1154,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     VideoCapture.Builder<Recorder> videoCaptureBuilder = new VideoCapture.Builder<>(recorder);
                     videoCaptureBuilder = applyTargetFpsToVideoCaptureBuilder(videoCaptureBuilder);
                     videoCaptureBuilder.setVideoStabilizationEnabled(isVideoStabilizationEnabledForSession());
+                    videoCaptureBuilder.setMirrorMode(
+                        sessionConfig.isMirrorFrontCamera() ? MirrorMode.MIRROR_MODE_ON_FRONT_ONLY : MirrorMode.MIRROR_MODE_OFF
+                    );
                     videoCapture = videoCaptureBuilder.build();
                 }
 
@@ -3577,6 +3581,33 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    private void applyMirrorFrontCamera(boolean mirrorFrontCamera, Runnable onSuccess, java.util.function.Consumer<String> onError) {
+        mainExecutor.execute(() -> {
+            try {
+                if (sessionConfig == null) {
+                    throw new Exception("Camera session is not running");
+                }
+                if (currentRecording != null) {
+                    throw new Exception("Cannot change mirror mode while recording is in progress");
+                }
+                if (sessionConfig.isMirrorFrontCamera() == mirrorFrontCamera) {
+                    onSuccess.run();
+                    return;
+                }
+                sessionConfig.setMirrorFrontCamera(mirrorFrontCamera);
+                if (sessionConfig.isVideoModeEnabled() && isRunning && cameraProvider != null) {
+                    pendingFrameRateBindSuccess = onSuccess;
+                    pendingFrameRateBindError = onError;
+                    bindCameraUseCases();
+                    return;
+                }
+                onSuccess.run();
+            } catch (Exception e) {
+                onError.accept(e.getMessage());
+            }
+        });
+    }
+
     private void completePendingFrameRateBindSuccess() {
         if (pendingFrameRateBindSuccess == null) {
             return;
@@ -5030,6 +5061,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Long maxDurationMillis,
         Long maxFileSize,
         Integer frameRate,
+        boolean mirrorFrontCamera,
         Runnable onSuccess,
         java.util.function.Consumer<String> onError
     ) {
@@ -5042,12 +5074,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
         };
 
-        if (frameRate == null) {
-            mainExecutor.execute(startRecording);
-            return;
-        }
+        Runnable afterMirrorConfigured = () -> {
+            if (frameRate == null) {
+                mainExecutor.execute(startRecording);
+                return;
+            }
+            setVideoFrameRate(frameRate, startRecording, onError);
+        };
 
-        setVideoFrameRate(frameRate, startRecording, onError);
+        applyMirrorFrontCamera(mirrorFrontCamera, afterMirrorConfigured, onError);
     }
 
     /** @noinspection ResultOfMethodCallIgnored*/

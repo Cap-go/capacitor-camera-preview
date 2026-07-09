@@ -1730,10 +1730,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 try self.cameraController.setVideoFrameRate(frameRate)
             }
             let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
+            let mirrorFrontCamera = call.getBool("mirrorFrontCamera") ?? false
             try self.cameraController.captureVideo(
                 maxDuration: maxDuration,
                 maxFileSize: maxFileSize,
-                allowHapticsAndSystemSoundsDuringRecording: allowHapticsAndSystemSoundsDuringRecording
+                allowHapticsAndSystemSoundsDuringRecording: allowHapticsAndSystemSoundsDuringRecording,
+                mirrorFrontCamera: mirrorFrontCamera
             )
             call.resolve()
         } catch {

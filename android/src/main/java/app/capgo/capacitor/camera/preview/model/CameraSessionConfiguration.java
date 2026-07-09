@@ -30,6 +30,7 @@ public class CameraSessionConfiguration {
     private String videoStabilizationMode = "off";
     private boolean enablePhysicalDeviceSelection = false;
     private boolean barcodeScannerEnabled = false;
+    private boolean mirrorFrontCamera = false;
 
     public CameraSessionConfiguration(
         String deviceId,
@@ -167,6 +168,14 @@ public class CameraSessionConfiguration {
 
     public void setVideoStabilizationMode(String mode) {
         this.videoStabilizationMode = mode != null ? mode : "off";
+    }
+
+    public boolean isMirrorFrontCamera() {
+        return mirrorFrontCamera;
+    }
+
+    public void setMirrorFrontCamera(boolean mirrorFrontCamera) {
+        this.mirrorFrontCamera = mirrorFrontCamera;
     }
 
     public boolean isPhysicalDeviceSelectionEnabled() {

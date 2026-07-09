@@ -2955,8 +2955,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             applyVideoCodecFromCall(call);
             applyVideoStabilizationFromCall(call);
             Integer frameRate = call.getInt("frameRate");
-            cameraXView.startRecordVideo(getMaxDurationMillis(call), getMaxFileSize(call), frameRate, call::resolve, (message) ->
-                call.reject("Failed to start video recording: " + message)
+            boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera", false));
+            cameraXView.startRecordVideo(
+                getMaxDurationMillis(call),
+                getMaxFileSize(call),
+                frameRate,
+                mirrorFrontCamera,
+                call::resolve,
+                (message) -> call.reject("Failed to start video recording: " + message)
             );
         } catch (Exception e) {
             call.reject("Failed to start video recording: " + e.getMessage());
