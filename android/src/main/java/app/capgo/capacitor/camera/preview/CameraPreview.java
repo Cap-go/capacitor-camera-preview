@@ -527,8 +527,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         Integer height = call.getInt("height");
         final boolean embedTimestamp = Boolean.TRUE.equals(call.getBoolean("embedTimestamp"));
         final boolean embedLocation = Boolean.TRUE.equals(call.getBoolean("embedLocation"));
+        final boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera"));
 
-        cameraXView.capturePhoto(quality, saveToGallery, width, height, location, embedTimestamp, embedLocation);
+        cameraXView.capturePhoto(quality, saveToGallery, width, height, location, embedTimestamp, embedLocation, mirrorFrontCamera);
     }
 
     @PluginMethod
@@ -540,7 +541,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         bridge.saveCall(call);
         sampleCallbackId = call.getCallbackId();
         Integer quality = Objects.requireNonNull(call.getInt("quality", 85));
-        cameraXView.captureSample(quality);
+        final boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera"));
+        cameraXView.captureSample(quality, mirrorFrontCamera);
     }
 
     @PluginMethod

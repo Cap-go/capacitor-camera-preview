@@ -1448,6 +1448,19 @@ extension CameraController {
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
 
+    /// Horizontally mirrors image pixels (selfie-style). Prefer this over orientation-only flips.
+    func mirrorImageHorizontally(_ image: UIImage) -> UIImage {
+        let base = image.fixedOrientation() ?? image
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = base.scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: base.size, format: format).image { ctx in
+            ctx.cgContext.translateBy(x: base.size.width, y: 0)
+            ctx.cgContext.scaleBy(x: -1, y: 1)
+            base.draw(in: CGRect(origin: .zero, size: base.size))
+        }
+    }
+
     /// Draws timestamp and/or location pills at the top-right. Pass nil to skip either line.
     func drawTimestampAndLocation(on image: UIImage, when: String?, where whereStr: String?) -> UIImage {
         let base = image.fixedOrientation() ?? image
@@ -2190,7 +2203,6 @@ extension CameraController {
             throw CameraControllerError.invalidOperation
         }
     }
-
 
     private func cancelPendingFocusExposureRestore() {
         self.focusExposureRestoreGeneration &+= 1
