@@ -2026,7 +2026,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Integer height,
         Location location,
         final boolean embedTimestamp,
-        final boolean embedLocation
+        final boolean embedLocation,
+        final boolean mirrorFrontCamera
     ) {
         if (imageCapture == null) {
             if (listener != null) {
@@ -2060,7 +2061,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 ", embedTimestamp: " +
                 embedTimestamp +
                 ", embedLocation: " +
-                embedLocation
+                embedLocation +
+                ", mirrorFrontCamera: " +
+                mirrorFrontCamera
         );
 
         boolean dispatched = false;
@@ -2116,6 +2119,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             if (width != null || height != null) {
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
                                 bitmap = applyExifOrientation(bitmap, exifInterface);
+                                bitmap = maybeMirrorFrontCameraBitmap(bitmap, mirrorFrontCamera);
                                 Bitmap resizedBitmap = resizeBitmapToMaxDimensions(bitmap, width, height);
                                 if (embedTimestamp || embedLocation) {
                                     resizedBitmap = drawTimestampAndLocationOntoBitmap(
@@ -2144,6 +2148,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 // No explicit size/ratio: crop to match current preview content
                                 Bitmap originalBitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
                                 originalBitmap = applyExifOrientation(originalBitmap, exifInterface);
+                                originalBitmap = maybeMirrorFrontCameraBitmap(originalBitmap, mirrorFrontCamera);
                                 Bitmap previewCropped = cropBitmapToMatchPreview(originalBitmap);
                                 if (embedTimestamp || embedLocation) {
                                     previewCropped = drawTimestampAndLocationOntoBitmap(
@@ -2399,6 +2404,29 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             default:
                 return 0;
         }
+    }
+
+    private boolean shouldMirrorFrontCamera(boolean mirrorFrontCamera) {
+        return mirrorFrontCamera && sessionConfig != null && "front".equals(sessionConfig.getPosition());
+    }
+
+    private Bitmap maybeMirrorFrontCameraBitmap(Bitmap bitmap, boolean mirrorFrontCamera) {
+        if (bitmap == null || !shouldMirrorFrontCamera(mirrorFrontCamera)) {
+            return bitmap;
+        }
+        return mirrorBitmapHorizontally(bitmap);
+    }
+
+    private Bitmap mirrorBitmapHorizontally(Bitmap bitmap) {
+        Matrix matrix = new Matrix();
+        matrix.preScale(-1.0f, 1.0f);
+        Bitmap mirrored = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        if (mirrored != bitmap) {
+            try {
+                bitmap.recycle();
+            } catch (Exception ignore) {}
+        }
+        return mirrored;
     }
 
     private Bitmap applyExifOrientation(Bitmap bitmap, ExifInterface exif) {
@@ -2763,7 +2791,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     // Note: We avoid temporary files for EXIF writes. When we transform pixels (resize/crop),
     // we recompress JPEG in-memory and update EXIF info only in the returned JSON, not in the bytes.
 
-    public void captureSample(int quality) {
+    public void captureSample(int quality, final boolean mirrorFrontCamera) {
         if (sampleImageCapture == null) {
             if (listener != null) {
                 listener.onSampleTakenError("Camera not ready");
@@ -2775,7 +2803,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             Log.d(TAG, "captureSample: Ignored because stop is pending");
             return;
         }
-        Log.d(TAG, "captureSample: Starting sample capture with quality: " + quality);
+        Log.d(TAG, "captureSample: Starting sample capture with quality: " + quality + ", mirrorFrontCamera: " + mirrorFrontCamera);
 
         boolean dispatched = false;
         try {
@@ -2797,6 +2825,20 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         try {
                             // Convert ImageProxy to byte array
                             byte[] bytes = imageProxyToByteArray(image);
+                            if (shouldMirrorFrontCamera(mirrorFrontCamera)) {
+                                Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                                if (bitmap != null) {
+                                    Bitmap mirrored = mirrorBitmapHorizontally(bitmap);
+                                    ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                                    mirrored.compress(Bitmap.CompressFormat.JPEG, quality, stream);
+                                    bytes = stream.toByteArray();
+                                    if (mirrored != bitmap) {
+                                        try {
+                                            bitmap.recycle();
+                                        } catch (Exception ignore) {}
+                                    }
+                                }
+                            }
                             String base64 = Base64.encodeToString(bytes, Base64.NO_WRAP);
 
                             if (listener != null) {
