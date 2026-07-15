@@ -83,7 +83,7 @@ class CameraController: NSObject {
             }
 
             // 2. Reset Exposure to the center ONLY if it is not explicitly locked by the user
-            if self.preferredExposureMode != "LOCK" {
+            if self.shouldAutoAdjustExposureOnFocus {
                 if device.isExposureModeSupported(.continuousAutoExposure) {
                     device.exposureMode = .continuousAutoExposure
                     if device.isExposurePointOfInterestSupported {
@@ -109,6 +109,10 @@ class CameraController: NSObject {
     /// `.locked` after one-shot metering, so device.exposureMode alone cannot tell whether
     /// the user explicitly locked exposure via setExposureMode("LOCK").
     private var preferredExposureMode: String = "CONTINUOUS"
+    /// AUTO/CONTINUOUS allow tap/restore to reset metering + EV; LOCK/CUSTOM must keep user settings.
+    private var shouldAutoAdjustExposureOnFocus: Bool {
+        preferredExposureMode == "AUTO" || preferredExposureMode == "CONTINUOUS"
+    }
     private var focusExposureRestoreGeneration: UInt = 0
     private var focusExposureRestoreTimeoutWorkItem: DispatchWorkItem?
     private let focusExposureRestoreTimeout: TimeInterval = 3.0
@@ -2228,8 +2232,8 @@ extension CameraController {
             device.focusPointOfInterest = point
         }
 
-        // Prefer app-level lock: `.autoExpose` leaves device.exposureMode as `.locked`.
-        if adjustExposure, self.preferredExposureMode != "LOCK" {
+        // Prefer app-level mode: `.autoExpose` leaves device.exposureMode as `.locked`.
+        if adjustExposure, self.shouldAutoAdjustExposureOnFocus {
             if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(.autoExpose) {
                 device.exposureMode = .autoExpose
                 device.setExposureTargetBias(0.0) { _ in }
@@ -2287,9 +2291,9 @@ extension CameraController {
                 }
             }
 
-            // Restore continuous AE unless the user explicitly locked exposure.
+            // Restore continuous AE for AUTO/CONTINUOUS only (preserve LOCK/CUSTOM).
             // Do not trust device.exposureMode here: one-shot `.autoExpose` ends in `.locked`.
-            if self.preferredExposureMode != "LOCK" {
+            if self.shouldAutoAdjustExposureOnFocus {
                 if device.isExposureModeSupported(.continuousAutoExposure) {
                     device.exposureMode = .continuousAutoExposure
                     if device.isExposurePointOfInterestSupported {
@@ -2309,7 +2313,7 @@ extension CameraController {
         guard let device = self.activeVideoDevice() else { return }
 
         let centerPoint = CGPoint(x: 0.5, y: 0.5)
-        let adjustExposure = self.preferredExposureMode == "AUTO" || self.preferredExposureMode == "CONTINUOUS"
+        let adjustExposure = self.shouldAutoAdjustExposureOnFocus
 
         do {
             try self.applyOneShotFocusAndExposure(at: centerPoint, on: device, adjustExposure: adjustExposure)
