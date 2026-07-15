@@ -82,8 +82,8 @@ class CameraController: NSObject {
                 }
             }
 
-            // 2. Reset Exposure to the center ONLY if it is not explicitly locked
-            if device.exposureMode != .locked {
+            // 2. Reset Exposure to the center ONLY if it is not explicitly locked by the user
+            if self.preferredExposureMode != "LOCK" {
                 if device.isExposureModeSupported(.continuousAutoExposure) {
                     device.exposureMode = .continuousAutoExposure
                     if device.isExposurePointOfInterestSupported {
@@ -105,6 +105,10 @@ class CameraController: NSObject {
 
     var captureSession: AVCaptureSession?
     var disableFocusIndicator: Bool = false
+    /// App-level exposure preference. AVFoundation's `.autoExpose` auto-transitions to
+    /// `.locked` after one-shot metering, so device.exposureMode alone cannot tell whether
+    /// the user explicitly locked exposure via setExposureMode("LOCK").
+    private var preferredExposureMode: String = "CONTINUOUS"
     private var focusExposureRestoreGeneration: UInt = 0
     private var focusExposureRestoreTimeoutWorkItem: DispatchWorkItem?
     private let focusExposureRestoreTimeout: TimeInterval = 3.0
@@ -2224,7 +2228,8 @@ extension CameraController {
             device.focusPointOfInterest = point
         }
 
-        if adjustExposure, device.exposureMode != .locked {
+        // Prefer app-level lock: `.autoExpose` leaves device.exposureMode as `.locked`.
+        if adjustExposure, self.preferredExposureMode != "LOCK" {
             if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(.autoExpose) {
                 device.exposureMode = .autoExpose
                 device.setExposureTargetBias(0.0) { _ in }
@@ -2282,7 +2287,9 @@ extension CameraController {
                 }
             }
 
-            if device.exposureMode != .locked {
+            // Restore continuous AE unless the user explicitly locked exposure.
+            // Do not trust device.exposureMode here: one-shot `.autoExpose` ends in `.locked`.
+            if self.preferredExposureMode != "LOCK" {
                 if device.isExposureModeSupported(.continuousAutoExposure) {
                     device.exposureMode = .continuousAutoExposure
                     if device.isExposurePointOfInterestSupported {
@@ -2302,13 +2309,7 @@ extension CameraController {
         guard let device = self.activeVideoDevice() else { return }
 
         let centerPoint = CGPoint(x: 0.5, y: 0.5)
-        let adjustExposure: Bool
-        do {
-            let exposureMode = try self.getExposureMode()
-            adjustExposure = exposureMode == "AUTO" || exposureMode == "CONTINUOUS"
-        } catch {
-            adjustExposure = true
-        }
+        let adjustExposure = self.preferredExposureMode == "AUTO" || self.preferredExposureMode == "CONTINUOUS"
 
         do {
             try self.applyOneShotFocusAndExposure(at: centerPoint, on: device, adjustExposure: adjustExposure)
@@ -2564,6 +2565,7 @@ extension CameraController {
 
         self.captureSession = nil
         self.currentCameraPosition = nil
+        self.preferredExposureMode = "CONTINUOUS"
 
         // Reset output preparation status
         self.outputsPrepared = false
@@ -2610,22 +2612,12 @@ extension CameraController {
             break
         }
 
-        guard let device = currentCamera else {
+        guard currentCamera != nil else {
             throw CameraControllerError.noCamerasAvailable
         }
 
-        switch device.exposureMode {
-        case .locked:
-            return "LOCK"
-        case .autoExpose:
-            return "AUTO"
-        case .continuousAutoExposure:
-            return "CONTINUOUS"
-        case .custom:
-            return "CUSTOM"
-        @unknown default:
-            return "CONTINUOUS"
-        }
+        // App preference, not device.exposureMode: one-shot `.autoExpose` ends as `.locked`.
+        return self.preferredExposureMode
     }
 
     func setExposureMode(mode: String) throws {
@@ -2670,6 +2662,12 @@ extension CameraController {
                 device.setExposureTargetBias(0.0) { _ in }
             }
             device.unlockForConfiguration()
+            switch normalized {
+            case "LOCK", "AUTO", "CONTINUOUS", "CUSTOM":
+                self.preferredExposureMode = normalized
+            default:
+                self.preferredExposureMode = "CONTINUOUS"
+            }
         } catch {
             throw CameraControllerError.invalidOperation
         }
