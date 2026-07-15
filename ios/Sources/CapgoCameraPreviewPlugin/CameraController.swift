@@ -1298,12 +1298,13 @@ extension CameraController {
             self.rearCameraInput = newInput
             self.currentCameraPosition = .rear
         }
-        // (Lightweight focus config; non-fatal on failure)
+        // (Lightweight focus/exposure config; non-fatal on failure)
         try? targetDevice.lockForConfiguration()
         if targetDevice.isFocusModeSupported(.continuousAutoFocus) {
             targetDevice.focusMode = .continuousAutoFocus
         }
         targetDevice.unlockForConfiguration()
+        try? self.applyPreferredExposureMode(to: targetDevice)
 
         // Restore audio input if it existed
         if let audioInput = existingAudioInput, captureSession.canAddInput(audioInput) {
@@ -2503,14 +2504,15 @@ extension CameraController {
                 self.rearCameraInput = newInput
                 self.rearCamera = targetDevice
                 self.currentCameraPosition = .rear
-
-                // Configure rear camera
-                try targetDevice.lockForConfiguration()
-                if targetDevice.isFocusModeSupported(.continuousAutoFocus) {
-                    targetDevice.focusMode = .continuousAutoFocus
-                }
-                targetDevice.unlockForConfiguration()
             }
+
+            // Lightweight focus/exposure config; non-fatal on failure
+            try? targetDevice.lockForConfiguration()
+            if targetDevice.isFocusModeSupported(.continuousAutoFocus) {
+                targetDevice.focusMode = .continuousAutoFocus
+            }
+            targetDevice.unlockForConfiguration()
+            try? self.applyPreferredExposureMode(to: targetDevice)
         } else {
             throw CameraControllerError.invalidOperation
         }
@@ -2581,6 +2583,39 @@ extension CameraController {
     }
 
     // MARK: - Exposure Controls
+
+    private func applyPreferredExposureMode(to device: AVCaptureDevice) throws {
+        let mode = self.preferredExposureMode
+        let desiredMode: AVCaptureDevice.ExposureMode
+        switch mode {
+        case "LOCK":
+            desiredMode = .locked
+        case "AUTO":
+            desiredMode = .autoExpose
+        case "CUSTOM":
+            desiredMode = .custom
+        default:
+            desiredMode = .continuousAutoExposure
+        }
+
+        guard device.isExposureModeSupported(desiredMode) else {
+            // Fall back to continuous when the preferred mode is unavailable on this lens.
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                try device.lockForConfiguration()
+                device.exposureMode = .continuousAutoExposure
+                device.setExposureTargetBias(0.0) { _ in }
+                device.unlockForConfiguration()
+            }
+            return
+        }
+
+        try device.lockForConfiguration()
+        device.exposureMode = desiredMode
+        if desiredMode == .autoExpose || desiredMode == .continuousAutoExposure {
+            device.setExposureTargetBias(0.0) { _ in }
+        }
+        device.unlockForConfiguration()
+    }
 
     func getExposureModes() throws -> [String] {
         var currentCamera: AVCaptureDevice?
@@ -2658,20 +2693,15 @@ extension CameraController {
             throw CameraControllerError.invalidOperation
         }
 
+        switch normalized {
+        case "LOCK", "AUTO", "CONTINUOUS", "CUSTOM":
+            self.preferredExposureMode = normalized
+        default:
+            self.preferredExposureMode = "CONTINUOUS"
+        }
+
         do {
-            try device.lockForConfiguration()
-            device.exposureMode = finalMode
-            // Reset EV to 0 when switching to AUTO or CONTINUOUS
-            if finalMode == .autoExpose || finalMode == .continuousAutoExposure {
-                device.setExposureTargetBias(0.0) { _ in }
-            }
-            device.unlockForConfiguration()
-            switch normalized {
-            case "LOCK", "AUTO", "CONTINUOUS", "CUSTOM":
-                self.preferredExposureMode = normalized
-            default:
-                self.preferredExposureMode = "CONTINUOUS"
-            }
+            try self.applyPreferredExposureMode(to: device)
         } catch {
             throw CameraControllerError.invalidOperation
         }
