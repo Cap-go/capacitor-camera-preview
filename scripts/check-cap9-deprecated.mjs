@@ -36,7 +36,13 @@ const RULES = [
   {
     id: "getConfigValue",
     pattern: /\bgetConfigValue\s*\(/,
-    exts: [".java", ".kt", ".swift"],
+    exts: [".java", ".kt"],
+  },
+  {
+    id: "getConfigValue",
+    pattern: /\bgetConfigValue\s*\(/,
+    exts: [".swift"],
+    ignoreLine: /\bfunc\s+getConfigValue\b|\bfrom\s*:/,
   },
   {
     id: "@NativePlugin",
@@ -65,12 +71,6 @@ const RULES = [
     pattern: /\breleaseCall\s*\(/,
     exts: [".java", ".kt", ".swift"],
     ignoreLine: /\breleaseCall\s*\(/,
-  },
-  {
-    id: "savedCallWithID",
-    pattern: /\bsavedCall\s*\(\s*withID\s*:/,
-    exts: [".swift"],
-    ignoreLine: /\bsavedCall\s*\(\s*withID\s*:/,
   },
   {
     id: "pluginRequestPermission",
@@ -182,6 +182,14 @@ function collectScanRoots(pluginDir, pkg) {
   return roots;
 }
 
+function lineNumberAtOffset(txt, offset) {
+  let line = 1;
+  for (let i = 0; i < offset && i < txt.length; i++) {
+    if (txt.charCodeAt(i) === 10) line++;
+  }
+  return line;
+}
+
 function scanFile(filePath, rule) {
   const ext = path.extname(filePath);
   if (!rule.exts.includes(ext)) return [];
@@ -189,15 +197,18 @@ function scanFile(filePath, rule) {
   const txt = readText(filePath);
   const lines = txt.split(/\r?\n/);
   const hits = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  const flags = rule.pattern.flags.includes("g") ? rule.pattern.flags : `${rule.pattern.flags}g`;
+  const re = new RegExp(rule.pattern.source, flags);
+  let match;
+  while ((match = re.exec(txt)) !== null) {
+    const lineNum = lineNumberAtOffset(txt, match.index);
+    const line = lines[lineNum - 1] ?? "";
     if (filePath.endsWith("Package.swift") && CORDova_SPM_LINE.test(line)) {
       continue;
     }
     if (rule.ignoreLine?.test(line)) continue;
-    if (rule.pattern.test(line)) {
-      hits.push({ line: i + 1, text: line.trim() });
-    }
+    hits.push({ line: lineNum, text: line.trim() });
+    if (match[0].length === 0) re.lastIndex++;
   }
   return hits;
 }
