@@ -102,7 +102,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       } finally {
         try {
           stream?.getTracks().forEach((t) => t.stop());
-        } catch (_e) {
+        } catch {
           /* no-op */
         }
       }
@@ -203,14 +203,14 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     const rightInset = parseInset(styles.paddingRight);
     probe.remove();
 
-    let top = 0;
-    if (orientation === 1) {
-      top = topInset;
-    } else if (orientation === 2) {
-      top = leftInset > 0 ? leftInset : rightInset;
-    } else {
-      top = Math.max(topInset, leftInset, rightInset);
-    }
+    const top =
+      orientation === 1
+        ? topInset
+        : orientation === 2
+          ? leftInset > 0
+            ? leftInset
+            : rightInset
+          : Math.max(topInset, leftInset, rightInset);
 
     return { orientation, top };
   }
@@ -439,7 +439,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
           }
           this.videoElement.style.setProperty('top', `${y}px`, 'important');
           // Force a style recalculation
-          this.videoElement.offsetHeight;
+          void this.videoElement.offsetHeight;
           console.log('Positioning video:', {
             positioning,
             viewportHeight: window.innerHeight,
@@ -998,7 +998,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
       await video.play();
     } catch (error) {
-      throw new Error(`Failed to flip camera: ${error}`);
+      throw new Error(`Failed to flip camera: ${error}`, { cause: error });
     }
   }
 
@@ -1231,7 +1231,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         advanced: [{ zoom: zoomLevel } as any],
       });
     } catch (error) {
-      throw new Error(`Failed to set zoom: ${error}`);
+      throw new Error(`Failed to set zoom: ${error}`, { cause: error });
     }
   }
 
@@ -1285,7 +1285,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
       await video.play();
     } catch (error) {
-      throw new Error(`Failed to swap to device ${options.deviceId}: ${error}`);
+      throw new Error(`Failed to swap to device ${options.deviceId}: ${error}`, { cause: error });
     }
   }
 

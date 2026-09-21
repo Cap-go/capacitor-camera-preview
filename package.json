@@ -71,7 +71,9 @@
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^2.0.0",
     "@types/node": "^24.10.1",
-    "eslint": "^8.57.1",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "^10.0.0",
     "eslint-plugin-import": "^2.31.0",
     "husky": "^9.1.7",
     "prettier": "^3.6.2",
@@ -84,9 +86,6 @@
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"
-  },
-  "eslintConfig": {
-    "extends": "@ionic/eslint-config/recommended"
   },
   "prettier": "@ionic/prettier-config",
   "swiftlint": "@ionic/swiftlint-config",
