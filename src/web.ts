@@ -998,7 +998,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
       await video.play();
     } catch (error) {
-      throw new Error(`Failed to flip camera: ${error}`, { cause: error });
+      const err = new Error(`Failed to flip camera: ${String(error)}`);
+      (err as Error & { cause?: unknown }).cause = error;
+      throw err;
     }
   }
 
@@ -1231,7 +1233,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         advanced: [{ zoom: zoomLevel } as any],
       });
     } catch (error) {
-      throw new Error(`Failed to set zoom: ${error}`, { cause: error });
+      const err = new Error(`Failed to set zoom: ${String(error)}`);
+      (err as Error & { cause?: unknown }).cause = error;
+      throw err;
     }
   }
 
@@ -1285,7 +1289,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
       await video.play();
     } catch (error) {
-      throw new Error(`Failed to swap to device ${options.deviceId}: ${error}`, { cause: error });
+      const err = new Error(`Failed to swap to device ${options.deviceId}: ${String(error)}`);
+      (err as Error & { cause?: unknown }).cause = error;
+      throw err;
     }
   }
 
