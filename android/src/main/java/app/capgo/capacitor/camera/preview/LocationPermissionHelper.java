@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import androidx.core.app.ActivityCompat;
-import com.getcapacitor.PermissionState;
 
 /**
  * Runtime location permission checks for EXIF capture.
@@ -23,7 +22,7 @@ public final class LocationPermissionHelper {
         );
     }
 
-    public static boolean canCaptureWithExifLocation(PermissionState capacitorPermissionState, Context context) {
+    public static boolean canCaptureWithExifLocation(Context context) {
         return canCaptureWithExifLocation(hasRuntimeLocationPermissions(context));
     }
 

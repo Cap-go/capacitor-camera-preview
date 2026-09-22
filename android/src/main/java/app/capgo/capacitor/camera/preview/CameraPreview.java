@@ -455,9 +455,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean withExifLocation = Boolean.TRUE.equals(call.getBoolean("withExifLocation", false));
 
         if (withExifLocation) {
-            if (
-                LocationPermissionHelper.canCaptureWithExifLocation(getPermissionState(CAMERA_WITH_LOCATION_PERMISSION_ALIAS), getContext())
-            ) {
+            if (LocationPermissionHelper.canCaptureWithExifLocation(getContext())) {
                 getLocationAndCapture(call);
             } else if (getPermissionState(CAMERA_WITH_LOCATION_PERMISSION_ALIAS) != PermissionState.GRANTED) {
                 requestPermissionForAlias(CAMERA_WITH_LOCATION_PERMISSION_ALIAS, call, "captureWithLocationPermission");
@@ -473,7 +471,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     @SuppressLint("MissingPermission")
     @PermissionCallback
     private void captureWithLocationPermission(PluginCall call) {
-        if (LocationPermissionHelper.canCaptureWithExifLocation(getPermissionState(CAMERA_WITH_LOCATION_PERMISSION_ALIAS), getContext())) {
+        if (LocationPermissionHelper.canCaptureWithExifLocation(getContext())) {
             getLocationAndCapture(call);
         } else {
             Logger.warn("Location permission denied or unavailable. Capturing photo without location data.");
