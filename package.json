@@ -62,11 +62,11 @@
     "changelog:ai": "node scripts/generate-ai-changelog.mjs"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.0.0",
-    "@capacitor/cli": "^8.0.0",
-    "@capacitor/core": "^8.0.0",
+    "@capacitor/android": "next",
+    "@capacitor/cli": "next",
+    "@capacitor/core": "next",
     "@capacitor/docgen": "^0.3.1",
-    "@capacitor/ios": "^8.0.0",
+    "@capacitor/ios": "next",
     "@ionic/eslint-config": "^0.4.0",
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^2.0.0",
@@ -83,7 +83,7 @@
     "prettier-pretty-check": "^0.2.0"
   },
   "peerDependencies": {
-    "@capacitor/core": ">=8.0.0"
+    "@capacitor/core": ">=9.0.0-alpha.7"
   },
   "eslintConfig": {
     "extends": "@ionic/eslint-config/recommended"
