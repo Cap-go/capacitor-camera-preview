@@ -481,7 +481,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
-    @RequiresPermission(allOf = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION })
+    @RequiresPermission(anyOf = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION })
     private void getLocationAndCapture(PluginCall call) {
         if (getActivity() == null) {
             Logger.warn("Activity unavailable for location lookup. Capturing photo without location data.");

@@ -18,16 +18,16 @@ public final class LocationPermissionHelper {
 
     public static boolean hasRuntimeLocationPermissions(Context context) {
         return (
-            ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         );
     }
 
     public static boolean canCaptureWithExifLocation(PermissionState capacitorPermissionState, Context context) {
-        return canCaptureWithExifLocation(capacitorPermissionState, hasRuntimeLocationPermissions(context));
+        return canCaptureWithExifLocation(hasRuntimeLocationPermissions(context));
     }
 
-    static boolean canCaptureWithExifLocation(PermissionState capacitorPermissionState, boolean hasRuntimeLocationPermissions) {
-        return capacitorPermissionState == PermissionState.GRANTED && hasRuntimeLocationPermissions;
+    static boolean canCaptureWithExifLocation(boolean hasRuntimeLocationPermissions) {
+        return hasRuntimeLocationPermissions;
     }
 }
