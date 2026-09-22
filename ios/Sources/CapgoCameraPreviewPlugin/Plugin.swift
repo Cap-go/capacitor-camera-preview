@@ -1233,7 +1233,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     print("[CameraPreview] Location permission not determined, requesting...")
                     // Save the call for the delegate callback
                     print("[CameraPreview] Saving call for location authorization flow")
-                    call.keepAlive = true
+                    self.bridge?.saveCall(call)
                     self.permissionCallID = call.callbackId
                     self.waitingForLocation = true
 
@@ -2029,14 +2029,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     print("[CameraPreview] Location authorized, getting location for capture")
                     self.getCurrentLocation { _ in
                         self.performCapture(call: call)
-                        call.keepAlive = false
+                        self.bridge?.releaseCall(call)
                         self.permissionCallID = nil
                         self.waitingForLocation = false
                     }
                 case .denied, .restricted:
                     print("[CameraPreview] Location denied, rejecting capture")
                     call.reject("Location permission denied")
-                    call.keepAlive = false
+                    self.bridge?.releaseCall(call)
                     self.permissionCallID = nil
                     self.waitingForLocation = false
                 case .notDetermined:
@@ -2045,7 +2045,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 @unknown default:
                     print("[CameraPreview] Unknown status, rejecting capture")
                     call.reject("Unknown location permission status")
-                    call.keepAlive = false
+                    self.bridge?.releaseCall(call)
                     self.permissionCallID = nil
                     self.waitingForLocation = false
                 }

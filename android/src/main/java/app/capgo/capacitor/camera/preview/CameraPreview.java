@@ -135,10 +135,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     static final String CAMERA_WITH_LOCATION_PERMISSION_ALIAS = "cameraWithLocation";
     static final String MICROPHONE_ONLY_PERMISSION_ALIAS = "microphoneOnly";
 
-    private PluginCall pendingCaptureCall;
-    private PluginCall pendingSampleCall;
-    private PluginCall pendingCameraStartedCall;
-    private PluginCall pendingStopRecordCall;
+    private String captureCallbackId = "";
+    private String sampleCallbackId = "";
+    private String cameraStartCallbackId = "";
     private final Object pendingStartLock = new Object();
     private PluginCall pendingStartCall;
     private int previousOrientationRequest = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
@@ -514,8 +513,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     private void proceedWithCapture(PluginCall call, Location location) {
-        call.setKeepAlive(true);
-        pendingCaptureCall = call;
+        bridge.saveCall(call);
+        captureCallbackId = call.getCallbackId();
 
         Integer quality = Objects.requireNonNull(call.getInt("quality", 85));
         final boolean saveToGallery = Boolean.TRUE.equals(call.getBoolean("saveToGallery"));
@@ -534,8 +533,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("Camera is not running");
             return;
         }
-        call.setKeepAlive(true);
-        pendingSampleCall = call;
+        bridge.saveCall(call);
+        sampleCallbackId = call.getCallbackId();
         Integer quality = Objects.requireNonNull(call.getInt("quality", 85));
         final boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera"));
         cameraXView.captureSample(quality, mirrorFrontCamera);
@@ -1643,8 +1642,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     clearActiveBarcodeScanner();
                 }
 
-                call.setKeepAlive(true);
-                pendingCameraStartedCall = call;
+                bridge.saveCall(call);
+                cameraStartCallbackId = call.getCallbackId();
                 cameraXView.startSession(config);
 
                 // Setup orientation listener to mirror iOS screenResize emission
@@ -1900,7 +1899,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @Override
     public void onPictureTaken(String base64, JSONObject exif) {
-        PluginCall pluginCall = pendingCaptureCall;
+        PluginCall pluginCall = bridge.getSavedCall(captureCallbackId);
         if (pluginCall == null) {
             Log.e("CameraPreview", "onPictureTaken: captureCallbackId is null");
             return;
@@ -1909,20 +1908,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         result.put("value", base64);
         result.put("exif", exif);
         pluginCall.resolve(result);
-        pluginCall.setKeepAlive(false);
-        pendingCaptureCall = null;
+        bridge.releaseCall(pluginCall);
     }
 
     @Override
     public void onPictureTakenError(String message) {
-        PluginCall pluginCall = pendingCaptureCall;
+        PluginCall pluginCall = bridge.getSavedCall(captureCallbackId);
         if (pluginCall == null) {
             Log.e("CameraPreview", "onPictureTakenError: captureCallbackId is null");
             return;
         }
         pluginCall.reject(message);
-        pluginCall.setKeepAlive(false);
-        pendingCaptureCall = null;
+        bridge.releaseCall(pluginCall);
     }
 
     @Override
@@ -2105,7 +2102,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         // Re-apply WebView transparency after the preview is bound (idempotent safety net for resume).
         applyTransparentBackgroundsForToBack();
 
-        PluginCall call = pendingCameraStartedCall;
+        PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
         if (call != null) {
             // Convert pixel values back to logical units
             DisplayMetrics metrics = getBridge().getActivity().getResources().getDisplayMetrics();
@@ -2275,27 +2272,27 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     private void resolveCameraStartCall(PluginCall call, JSObject result) {
         call.resolve(result);
-        call.setKeepAlive(false);
-        pendingCameraStartedCall = null; // Prevent re-use
+        bridge.releaseCall(call);
+        cameraStartCallbackId = null; // Prevent re-use
         resetPendingStartBarcodeScanner();
     }
 
     private void rejectCameraStartCall(PluginCall call, String message) {
         call.reject(message);
-        call.setKeepAlive(false);
-        pendingCameraStartedCall = null;
+        bridge.releaseCall(call);
+        cameraStartCallbackId = null;
         resetPendingStartBarcodeScanner();
     }
 
     @Override
     public void onSampleTaken(String result) {
-        PluginCall call = pendingSampleCall;
+        PluginCall call = bridge.getSavedCall(sampleCallbackId);
         if (call != null) {
             JSObject ret = new JSObject();
             ret.put("value", result);
             call.resolve(ret);
-            call.setKeepAlive(false);
-            pendingSampleCall = null;
+            bridge.releaseCall(call);
+            sampleCallbackId = null;
         } else {
             Log.w("CameraPreview", "onSampleTaken: no pending call to resolve");
         }
@@ -2303,11 +2300,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @Override
     public void onSampleTakenError(String message) {
-        PluginCall call = pendingSampleCall;
+        PluginCall call = bridge.getSavedCall(sampleCallbackId);
         if (call != null) {
             call.reject(message);
-            call.setKeepAlive(false);
-            pendingSampleCall = null;
+            bridge.releaseCall(call);
+            sampleCallbackId = null;
         } else {
             Log.e("CameraPreview", "Sample taken error (no pending call): " + message);
         }
@@ -2353,11 +2350,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             }
         }
 
-        PluginCall call = pendingCameraStartedCall;
+        PluginCall call = bridge.getSavedCall(cameraStartCallbackId);
         if (call != null) {
             call.reject(message);
-            call.setKeepAlive(false);
-            pendingCameraStartedCall = null;
+            bridge.releaseCall(call);
+            cameraStartCallbackId = null;
             resetPendingStartBarcodeScanner();
         }
 
@@ -2738,30 +2735,28 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
 
         try {
-            call.setKeepAlive(true);
-            pendingStopRecordCall = call;
+            bridge.saveCall(call);
+            final String cbId = call.getCallbackId();
             cameraXView.stopRecordVideo(
                 new CameraXView.VideoRecordingCallback() {
                     @Override
                     public void onSuccess(String filePath, String reason) {
-                        PluginCall saved = pendingStopRecordCall;
-                        pendingStopRecordCall = null;
+                        PluginCall saved = bridge.getSavedCall(cbId);
                         if (saved != null) {
                             JSObject result = new JSObject();
                             result.put("videoFilePath", filePath);
                             result.put("reason", reason);
                             saved.resolve(result);
-                            saved.setKeepAlive(false);
+                            bridge.releaseCall(saved);
                         }
                     }
 
                     @Override
                     public void onError(String message) {
-                        PluginCall saved = pendingStopRecordCall;
-                        pendingStopRecordCall = null;
+                        PluginCall saved = bridge.getSavedCall(cbId);
                         if (saved != null) {
                             saved.reject("Failed to stop video recording: " + message);
-                            saved.setKeepAlive(false);
+                            bridge.releaseCall(saved);
                         }
                     }
                 }
