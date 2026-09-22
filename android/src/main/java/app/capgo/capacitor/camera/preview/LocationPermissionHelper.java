@@ -24,6 +24,10 @@ public final class LocationPermissionHelper {
     }
 
     public static boolean canCaptureWithExifLocation(PermissionState capacitorPermissionState, Context context) {
-        return capacitorPermissionState == PermissionState.GRANTED && hasRuntimeLocationPermissions(context);
+        return canCaptureWithExifLocation(capacitorPermissionState, hasRuntimeLocationPermissions(context));
+    }
+
+    static boolean canCaptureWithExifLocation(PermissionState capacitorPermissionState, boolean hasRuntimeLocationPermissions) {
+        return capacitorPermissionState == PermissionState.GRANTED && hasRuntimeLocationPermissions;
     }
 }
