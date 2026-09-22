@@ -66,6 +66,8 @@ import androidx.camera.core.MirrorMode;
 import androidx.camera.core.Preview;
 import androidx.camera.core.ResolutionInfo;
 import androidx.camera.core.TorchState;
+import androidx.camera.core.UseCaseGroup;
+import androidx.camera.core.ViewPort;
 import androidx.camera.core.ZoomState;
 import androidx.camera.core.resolutionselector.AspectRatioStrategy;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
@@ -125,6 +127,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private static final String TAG = "CameraPreview CameraXView";
     private static final String FOCUS_INDICATOR_TAG = "cpcp_focus_indicator";
+    private static final Size DEFAULT_MAX_CAPTURE_RESOLUTION = new Size(1920, 1080);
 
     public interface CameraXViewListener {
         void onPictureTaken(String base64, JSONObject exif);
@@ -186,6 +189,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private static volatile boolean enumeratedDeviceCacheRefreshInProgress = false;
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
+    private boolean viewportCropEnabled = false;
+    private boolean pendingViewportRebind = false;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private Integer configuredVideoFrameRate = null;
     private Range<Integer> configuredVideoFrameRateRange = null;
@@ -619,6 +624,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void performImmediateStop() {
         isRunning = false;
+        viewportCropEnabled = false;
+        pendingViewportRebind = false;
         currentDeviceId = null;
         currentPhysicalDeviceId = null;
         currentLogicalDeviceId = null;
@@ -1061,37 +1068,21 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 CameraBindingPlan bindingPlan = buildCameraBindingPlan(sessionConfig);
                 currentCameraSelector = bindingPlan.selector;
 
-                ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
-                    ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
-                );
-
-                if (sessionConfig.getAspectRatio() != null) {
-                    int aspectRatio;
-                    if ("16:9".equals(sessionConfig.getAspectRatio())) {
-                        aspectRatio = AspectRatio.RATIO_16_9;
-                    } else {
-                        // "4:3"
-                        aspectRatio = AspectRatio.RATIO_4_3;
-                    }
-                    resolutionSelectorBuilder.setAspectRatioStrategy(
-                        new AspectRatioStrategy(aspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO)
-                    );
-                }
-
-                ResolutionSelector resolutionSelector = resolutionSelectorBuilder.build();
+                ResolutionSelector previewResolutionSelector = buildPreviewResolutionSelector();
+                ResolutionSelector imageCaptureResolutionSelector = buildImageCaptureResolutionSelector();
 
                 int rotation = previewView != null && previewView.getDisplay() != null
                     ? previewView.getDisplay().getRotation()
                     : android.view.Surface.ROTATION_0;
 
                 Preview.Builder previewBuilder = new Preview.Builder()
-                    .setResolutionSelector(resolutionSelector)
+                    .setResolutionSelector(previewResolutionSelector)
                     .setTargetRotation(rotation);
                 previewBuilder = applyTargetFpsToPreviewBuilder(previewBuilder);
                 Preview preview = previewBuilder.build();
                 // Keep reference to preview use case for later re-binding (e.g., when enabling video)
                 imageCapture = new ImageCapture.Builder()
-                    .setResolutionSelector(resolutionSelector)
+                    .setResolutionSelector(imageCaptureResolutionSelector)
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .setFlashMode(currentFlashMode)
                     .setTargetRotation(rotation)
@@ -1637,13 +1628,154 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         return 1.0f;
     }
 
-    private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
-        if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
-            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
-        } else if (barcodeAnalysis != null) {
-            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, barcodeAnalysis);
+    private ResolutionSelector buildPreviewResolutionSelector() {
+        ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
+            ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+        );
+        applySessionAspectRatioStrategy(resolutionSelectorBuilder);
+        return resolutionSelectorBuilder.build();
+    }
+
+    private ResolutionSelector buildImageCaptureResolutionSelector() {
+        Size targetResolution = resolveImageCaptureTargetResolution();
+        ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
+            new ResolutionStrategy(targetResolution, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
+        );
+        applySessionAspectRatioStrategy(resolutionSelectorBuilder);
+        return resolutionSelectorBuilder.build();
+    }
+
+    private void applySessionAspectRatioStrategy(ResolutionSelector.Builder resolutionSelectorBuilder) {
+        if (sessionConfig == null || sessionConfig.getAspectRatio() == null) {
+            return;
+        }
+
+        int aspectRatio;
+        if ("16:9".equals(sessionConfig.getAspectRatio())) {
+            aspectRatio = AspectRatio.RATIO_16_9;
         } else {
-            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture);
+            aspectRatio = AspectRatio.RATIO_4_3;
+        }
+        resolutionSelectorBuilder.setAspectRatioStrategy(new AspectRatioStrategy(aspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO));
+    }
+
+    private Size resolveImageCaptureTargetResolution() {
+        int width = getEffectivePreviewWidth();
+        int height = getEffectivePreviewHeight();
+        if (width <= 0 || height <= 0) {
+            return DEFAULT_MAX_CAPTURE_RESOLUTION;
+        }
+
+        int maxDim = Math.max(width, height);
+        if (maxDim > DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth()) {
+            float scale = (float) DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth() / maxDim;
+            width = Math.max(1, Math.round(width * scale));
+            height = Math.max(1, Math.round(height * scale));
+        }
+
+        return new Size(width, height);
+    }
+
+    private int getEffectivePreviewWidth() {
+        if (previewView != null && previewView.getWidth() > 0) {
+            return previewView.getWidth();
+        }
+        if (previewContainer != null && previewContainer.getWidth() > 0) {
+            return previewContainer.getWidth();
+        }
+        return sessionConfig != null ? sessionConfig.getWidth() : 0;
+    }
+
+    private int getEffectivePreviewHeight() {
+        if (previewView != null && previewView.getHeight() > 0) {
+            return previewView.getHeight();
+        }
+        if (previewContainer != null && previewContainer.getHeight() > 0) {
+            return previewContainer.getHeight();
+        }
+        return sessionConfig != null ? sessionConfig.getHeight() : 0;
+    }
+
+    private ViewPort buildViewPort(int rotation) {
+        if (previewView != null) {
+            ViewPort previewViewPort = previewView.getViewPort(rotation);
+            if (previewViewPort != null) {
+                return previewViewPort;
+            }
+        }
+
+        int width = getEffectivePreviewWidth();
+        int height = getEffectivePreviewHeight();
+        if (width <= 0 || height <= 0) {
+            return null;
+        }
+
+        String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
+        int scaleType = "cover".equals(aspectMode) ? ViewPort.FILL_CENTER : ViewPort.FIT;
+        return new ViewPort.Builder(new Rational(width, height), rotation).setScaleType(scaleType).build();
+    }
+
+    private void scheduleViewportRebindWhenLayoutReady() {
+        if (previewView == null || !pendingViewportRebind) {
+            return;
+        }
+
+        previewView.post(() -> {
+            if (!pendingViewportRebind || !isRunning || previewView == null) {
+                return;
+            }
+            if (previewView.getWidth() > 0 && previewView.getHeight() > 0) {
+                Log.d(TAG, "scheduleViewportRebindWhenLayoutReady: PreviewView layout ready, rebinding with ViewPort");
+                bindCameraUseCases();
+            }
+        });
+    }
+
+    private boolean captureRequiresSoftwareTransform(
+        Integer width,
+        Integer height,
+        boolean embedTimestamp,
+        boolean embedLocation,
+        boolean mirrorFrontCamera
+    ) {
+        return (width != null || height != null || embedTimestamp || embedLocation || shouldMirrorFrontCamera(mirrorFrontCamera));
+    }
+
+    private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
+        int rotation = previewView != null && previewView.getDisplay() != null
+            ? previewView.getDisplay().getRotation()
+            : android.view.Surface.ROTATION_0;
+        ViewPort viewPort = buildViewPort(rotation);
+
+        if (viewPort != null) {
+            UseCaseGroup.Builder groupBuilder = new UseCaseGroup.Builder()
+                .setViewPort(viewPort)
+                .addUseCase(preview)
+                .addUseCase(imageCapture);
+
+            if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
+                groupBuilder.addUseCase(videoCapture);
+            }
+
+            camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, groupBuilder.build());
+            viewportCropEnabled = true;
+            pendingViewportRebind = false;
+            Log.d(TAG, "bindConfiguredUseCases: Bound preview and imageCapture with shared ViewPort");
+        } else {
+            viewportCropEnabled = false;
+            pendingViewportRebind = true;
+            scheduleViewportRebindWhenLayoutReady();
+            Log.w(TAG, "bindConfiguredUseCases: ViewPort unavailable, falling back to legacy binding without viewport crop");
+
+            if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
+                camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
+            } else {
+                camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture);
+            }
+        }
+
+        if (barcodeAnalysis != null) {
+            cameraProvider.bindToLifecycle(this, bindingPlan.selector, barcodeAnalysis);
         }
 
         CameraInfo cameraInfo = camera.getCameraInfo();
@@ -2125,7 +2257,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             // Build EXIF JSON from captured bytes (location applied by metadata if provided)
                             JSONObject exifData = getExifData(exifInterface);
 
-                            if (width != null || height != null) {
+                            boolean requiresSoftwareTransform = captureRequiresSoftwareTransform(
+                                width,
+                                height,
+                                embedTimestamp,
+                                embedLocation,
+                                mirrorFrontCamera
+                            );
+
+                            if (!requiresSoftwareTransform && viewportCropEnabled && quality >= 95) {
+                                Log.d(TAG, "capturePhoto: Using ViewPort fast path without software decode/crop/re-encode");
+                            } else if (width != null || height != null) {
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
                                 bitmap = applyExifOrientation(bitmap, exifInterface);
                                 bitmap = maybeMirrorFrontCameraBitmap(bitmap, mirrorFrontCamera);
@@ -2154,33 +2296,36 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 finalWidthOut = resizedBitmap.getWidth();
                                 finalHeightOut = resizedBitmap.getHeight();
                             } else {
-                                // No explicit size/ratio: crop to match current preview content
+                                // No explicit size: crop to preview unless ViewPort already matched FOV
                                 Bitmap originalBitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
                                 originalBitmap = applyExifOrientation(originalBitmap, exifInterface);
                                 originalBitmap = maybeMirrorFrontCameraBitmap(originalBitmap, mirrorFrontCamera);
-                                Bitmap previewCropped = cropBitmapToMatchPreview(originalBitmap);
+                                Bitmap processedBitmap = viewportCropEnabled ? originalBitmap : cropBitmapToMatchPreview(originalBitmap);
+                                if (viewportCropEnabled) {
+                                    Log.d(TAG, "capturePhoto: Skipping software preview crop (ViewPort active)");
+                                }
                                 if (embedTimestamp || embedLocation) {
-                                    previewCropped = drawTimestampAndLocationOntoBitmap(
-                                        previewCropped,
+                                    processedBitmap = drawTimestampAndLocationOntoBitmap(
+                                        processedBitmap,
                                         exifInterface,
                                         embedTimestamp,
                                         embedLocation
                                     );
                                 }
                                 ByteArrayOutputStream stream = new ByteArrayOutputStream();
-                                previewCropped.compress(Bitmap.CompressFormat.JPEG, quality, stream);
+                                processedBitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream);
                                 bytes = stream.toByteArray();
                                 transformedPixels = true;
                                 // Update EXIF JSON to reflect cropped dimensions; no in-place EXIF write to bytes
                                 try {
-                                    exifData.put("PixelXDimension", previewCropped.getWidth());
-                                    exifData.put("PixelYDimension", previewCropped.getHeight());
-                                    exifData.put("ImageWidth", previewCropped.getWidth());
-                                    exifData.put("ImageLength", previewCropped.getHeight());
+                                    exifData.put("PixelXDimension", processedBitmap.getWidth());
+                                    exifData.put("PixelYDimension", processedBitmap.getHeight());
+                                    exifData.put("ImageWidth", processedBitmap.getWidth());
+                                    exifData.put("ImageLength", processedBitmap.getHeight());
                                     exifData.put("Orientation", Integer.toString(ExifInterface.ORIENTATION_NORMAL));
                                 } catch (Exception ignore) {}
-                                finalWidthOut = previewCropped.getWidth();
-                                finalHeightOut = previewCropped.getHeight();
+                                finalWidthOut = processedBitmap.getWidth();
+                                finalHeightOut = processedBitmap.getHeight();
                             }
 
                             // After any transform, inject EXIF back into the in-memory JPEG bytes (no temp file)
