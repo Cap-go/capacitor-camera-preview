@@ -33,6 +33,7 @@ import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Range;
+import android.util.Rational;
 import android.util.Size;
 import android.view.View;
 import android.view.ViewGroup;
@@ -191,6 +192,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private boolean viewportCropEnabled = false;
     private boolean pendingViewportRebind = false;
     private Size viewportBoundSize = null;
+    private View.OnLayoutChangeListener viewportRebindListener = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private Integer configuredVideoFrameRate = null;
     private Range<Integer> configuredVideoFrameRateRange = null;
@@ -627,6 +629,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         viewportCropEnabled = false;
         pendingViewportRebind = false;
         viewportBoundSize = null;
+        clearViewportRebindListener();
         currentDeviceId = null;
         currentPhysicalDeviceId = null;
         currentLogicalDeviceId = null;
@@ -809,6 +812,18 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
                 Log.d(TAG, "PreviewView layout changed, updating grid bounds");
                 updateGridOverlayBounds();
+                if (
+                    isRunning &&
+                    viewportCropEnabled &&
+                    viewportBoundSize != null &&
+                    (v.getWidth() != viewportBoundSize.getWidth() || v.getHeight() != viewportBoundSize.getHeight())
+                ) {
+                    pendingViewportRebind = true;
+                    if (!isCapturingPhoto) {
+                        pendingViewportRebind = false;
+                        bindCameraUseCases();
+                    }
+                }
             }
         });
 
@@ -1040,6 +1055,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             }
             previewContainer = null;
         }
+        clearViewportRebindListener();
         if (previewView != null) {
             previewView = null;
         }
@@ -1720,37 +1736,53 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         );
     }
 
+    private void clearViewportRebindListener() {
+        if (previewView != null && viewportRebindListener != null) {
+            previewView.removeOnLayoutChangeListener(viewportRebindListener);
+            viewportRebindListener = null;
+        }
+    }
+
+    private void maybePerformPendingViewportRebind() {
+        if (!pendingViewportRebind || !isRunning || isCapturingPhoto) {
+            return;
+        }
+        pendingViewportRebind = false;
+        bindCameraUseCases();
+    }
+
     private void scheduleViewportRebindWhenLayoutReady() {
-        if (previewView == null || !pendingViewportRebind) {
+        if (previewView == null || !pendingViewportRebind || viewportRebindListener != null) {
             return;
         }
 
-        previewView.addOnLayoutChangeListener(
-            new View.OnLayoutChangeListener() {
-                @Override
-                public void onLayoutChange(
-                    View v,
-                    int left,
-                    int top,
-                    int right,
-                    int bottom,
-                    int oldLeft,
-                    int oldTop,
-                    int oldRight,
-                    int oldBottom
-                ) {
-                    if (!pendingViewportRebind || !isRunning || previewView == null) {
-                        v.removeOnLayoutChangeListener(this);
-                        return;
-                    }
-                    if (previewView.getWidth() > 0 && previewView.getHeight() > 0) {
-                        v.removeOnLayoutChangeListener(this);
-                        Log.d(TAG, "scheduleViewportRebindWhenLayoutReady: PreviewView layout ready, rebinding with ViewPort");
-                        bindCameraUseCases();
-                    }
+        viewportRebindListener = new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(
+                View v,
+                int left,
+                int top,
+                int right,
+                int bottom,
+                int oldLeft,
+                int oldTop,
+                int oldRight,
+                int oldBottom
+            ) {
+                if (!pendingViewportRebind || !isRunning || previewView == null) {
+                    v.removeOnLayoutChangeListener(this);
+                    viewportRebindListener = null;
+                    return;
+                }
+                if (previewView.getWidth() > 0 && previewView.getHeight() > 0) {
+                    v.removeOnLayoutChangeListener(this);
+                    viewportRebindListener = null;
+                    Log.d(TAG, "scheduleViewportRebindWhenLayoutReady: PreviewView layout ready, rebinding with ViewPort");
+                    bindCameraUseCases();
                 }
             }
-        );
+        };
+        previewView.addOnLayoutChangeListener(viewportRebindListener);
     }
 
     private boolean captureRequiresSoftwareTransform(
@@ -2262,6 +2294,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 performImmediateStop();
                             }
                         }
+                        maybePerformPendingViewportRebind();
                         endOperation("capturePhoto");
                     }
 
@@ -2429,6 +2462,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                     performImmediateStop();
                                 }
                             }
+                            maybePerformPendingViewportRebind();
                             endOperation("capturePhoto");
                         }
                     }
@@ -2449,6 +2483,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         performImmediateStop();
                     }
                 }
+                maybePerformPendingViewportRebind();
                 endOperation("capturePhoto");
             }
         }
