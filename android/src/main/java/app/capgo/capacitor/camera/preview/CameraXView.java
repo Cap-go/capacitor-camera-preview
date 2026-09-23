@@ -189,9 +189,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private static volatile boolean enumeratedDeviceCacheRefreshInProgress = false;
     private boolean isRunning = false;
     private Size currentPreviewResolution = null;
-    private boolean viewportCropEnabled = false;
-    private boolean pendingViewportRebind = false;
-    private Size viewportBoundSize = null;
+    private volatile boolean viewportCropEnabled = false;
+    private volatile boolean pendingViewportRebind = false;
+    private volatile Size viewportBoundSize = null;
     private View.OnLayoutChangeListener viewportRebindListener = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private Integer configuredVideoFrameRate = null;
@@ -629,7 +629,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         viewportCropEnabled = false;
         pendingViewportRebind = false;
         viewportBoundSize = null;
-        clearViewportRebindListener();
         currentDeviceId = null;
         currentPhysicalDeviceId = null;
         currentLogicalDeviceId = null;
@@ -1744,11 +1743,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private void maybePerformPendingViewportRebind() {
-        if (!pendingViewportRebind || !isRunning || isCapturingPhoto) {
-            return;
-        }
-        pendingViewportRebind = false;
-        bindCameraUseCases();
+        mainExecutor.execute(() -> {
+            if (!pendingViewportRebind || !isRunning || isCapturingPhoto) {
+                return;
+            }
+            pendingViewportRebind = false;
+            bindCameraUseCases();
+        });
     }
 
     private void scheduleViewportRebindWhenLayoutReady() {
@@ -1807,11 +1808,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 .addUseCase(preview)
                 .addUseCase(imageCapture);
 
-            if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
-                groupBuilder.addUseCase(videoCapture);
-            }
-
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, groupBuilder.build());
+            if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
+                cameraProvider.bindToLifecycle(this, bindingPlan.selector, videoCapture);
+            }
             viewportCropEnabled = true;
             pendingViewportRebind = false;
             Log.d(TAG, "bindConfiguredUseCases: Bound preview and imageCapture with shared ViewPort");
@@ -2672,30 +2672,32 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         int originalWidth = bitmap.getWidth();
         int originalHeight = bitmap.getHeight();
         float originalAspectRatio = (float) originalWidth / originalHeight;
+        int boundedMaxWidth = maxWidth != null ? Math.min(maxWidth, originalWidth) : originalWidth;
+        int boundedMaxHeight = maxHeight != null ? Math.min(maxHeight, originalHeight) : originalHeight;
 
         int targetWidth;
         int targetHeight = originalHeight;
 
         if (maxWidth != null && maxHeight != null) {
             // Both dimensions specified - fit within both maximums
-            float maxAspectRatio = (float) maxWidth / maxHeight;
+            float maxAspectRatio = (float) boundedMaxWidth / boundedMaxHeight;
             if (originalAspectRatio > maxAspectRatio) {
                 // Original is wider - fit by width
-                targetWidth = maxWidth;
-                targetHeight = (int) (maxWidth / originalAspectRatio);
+                targetWidth = boundedMaxWidth;
+                targetHeight = (int) (boundedMaxWidth / originalAspectRatio);
             } else {
                 // Original is taller - fit by height
-                targetWidth = (int) (maxHeight * originalAspectRatio);
-                targetHeight = maxHeight;
+                targetWidth = (int) (boundedMaxHeight * originalAspectRatio);
+                targetHeight = boundedMaxHeight;
             }
         } else if (maxWidth != null) {
             // Only width specified - maintain aspect ratio
-            targetWidth = maxWidth;
-            targetHeight = (int) (maxWidth / originalAspectRatio);
+            targetWidth = boundedMaxWidth;
+            targetHeight = (int) (boundedMaxWidth / originalAspectRatio);
         } else {
             // Only height specified - maintain aspect ratio
-            targetWidth = (int) (maxHeight * originalAspectRatio);
-            targetHeight = maxHeight;
+            targetWidth = (int) (boundedMaxHeight * originalAspectRatio);
+            targetHeight = boundedMaxHeight;
         }
 
         return Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true);
