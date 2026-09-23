@@ -33,7 +33,6 @@ import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Range;
-import android.util.Rational;
 import android.util.Size;
 import android.view.View;
 import android.view.ViewGroup;
@@ -191,6 +190,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private Size currentPreviewResolution = null;
     private boolean viewportCropEnabled = false;
     private boolean pendingViewportRebind = false;
+    private Size viewportBoundSize = null;
     private ListenableFuture<FocusMeteringResult> currentFocusFuture = null; // Track current focus operation
     private Integer configuredVideoFrameRate = null;
     private Range<Integer> configuredVideoFrameRateRange = null;
@@ -626,6 +626,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         isRunning = false;
         viewportCropEnabled = false;
         pendingViewportRebind = false;
+        viewportBoundSize = null;
         currentDeviceId = null;
         currentPhysicalDeviceId = null;
         currentLogicalDeviceId = null;
@@ -1180,6 +1181,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
                     bindingPlan = buildLogicalFallbackPlan(sessionConfig, bindingPlan);
                     currentCameraSelector = bindingPlan.selector;
+                    cameraProvider.unbindAll();
                     bindConfiguredUseCases(bindingPlan, preview);
                 }
 
@@ -1673,7 +1675,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             height = Math.max(1, Math.round(height * scale));
         }
 
-        return new Size(width, height);
+        // ResolutionStrategy bound sizes use the sensor coordinate frame.
+        return new Size(Math.max(width, height), Math.min(width, height));
     }
 
     private int getEffectivePreviewWidth() {
@@ -1697,22 +1700,24 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private ViewPort buildViewPort(int rotation) {
-        if (previewView != null) {
-            ViewPort previewViewPort = previewView.getViewPort(rotation);
-            if (previewViewPort != null) {
-                return previewViewPort;
-            }
-        }
-
-        int width = getEffectivePreviewWidth();
-        int height = getEffectivePreviewHeight();
-        if (width <= 0 || height <= 0) {
+        if (previewView == null || previewView.getWidth() <= 0 || previewView.getHeight() <= 0) {
             return null;
         }
+        ViewPort viewPort = previewView.getViewPort(rotation);
+        if (viewPort != null) {
+            viewportBoundSize = new Size(previewView.getWidth(), previewView.getHeight());
+        }
+        return viewPort;
+    }
 
-        String aspectMode = sessionConfig != null ? sessionConfig.getAspectMode() : "contain";
-        int scaleType = "cover".equals(aspectMode) ? ViewPort.FILL_CENTER : ViewPort.FIT;
-        return new ViewPort.Builder(new Rational(width, height), rotation).setScaleType(scaleType).build();
+    private boolean isViewportCropCurrent() {
+        return (
+            viewportCropEnabled &&
+            viewportBoundSize != null &&
+            previewView != null &&
+            previewView.getWidth() == viewportBoundSize.getWidth() &&
+            previewView.getHeight() == viewportBoundSize.getHeight()
+        );
     }
 
     private void scheduleViewportRebindWhenLayoutReady() {
@@ -1720,15 +1725,32 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
 
-        previewView.post(() -> {
-            if (!pendingViewportRebind || !isRunning || previewView == null) {
-                return;
+        previewView.addOnLayoutChangeListener(
+            new View.OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(
+                    View v,
+                    int left,
+                    int top,
+                    int right,
+                    int bottom,
+                    int oldLeft,
+                    int oldTop,
+                    int oldRight,
+                    int oldBottom
+                ) {
+                    if (!pendingViewportRebind || !isRunning || previewView == null) {
+                        v.removeOnLayoutChangeListener(this);
+                        return;
+                    }
+                    if (previewView.getWidth() > 0 && previewView.getHeight() > 0) {
+                        v.removeOnLayoutChangeListener(this);
+                        Log.d(TAG, "scheduleViewportRebindWhenLayoutReady: PreviewView layout ready, rebinding with ViewPort");
+                        bindCameraUseCases();
+                    }
+                }
             }
-            if (previewView.getWidth() > 0 && previewView.getHeight() > 0) {
-                Log.d(TAG, "scheduleViewportRebindWhenLayoutReady: PreviewView layout ready, rebinding with ViewPort");
-                bindCameraUseCases();
-            }
-        });
+        );
     }
 
     private boolean captureRequiresSoftwareTransform(
@@ -1763,6 +1785,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             Log.d(TAG, "bindConfiguredUseCases: Bound preview and imageCapture with shared ViewPort");
         } else {
             viewportCropEnabled = false;
+            viewportBoundSize = null;
             pendingViewportRebind = true;
             scheduleViewportRebindWhenLayoutReady();
             Log.w(TAG, "bindConfiguredUseCases: ViewPort unavailable, falling back to legacy binding without viewport crop");
@@ -2265,7 +2288,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 mirrorFrontCamera
                             );
 
-                            if (!requiresSoftwareTransform && viewportCropEnabled && quality >= 95) {
+                            if (
+                                !requiresSoftwareTransform &&
+                                isViewportCropCurrent() &&
+                                quality >= 95 &&
+                                exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED) ==
+                                ExifInterface.ORIENTATION_NORMAL
+                            ) {
                                 Log.d(TAG, "capturePhoto: Using ViewPort fast path without software decode/crop/re-encode");
                             } else if (width != null || height != null) {
                                 Bitmap bitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
@@ -2300,8 +2329,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 Bitmap originalBitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
                                 originalBitmap = applyExifOrientation(originalBitmap, exifInterface);
                                 originalBitmap = maybeMirrorFrontCameraBitmap(originalBitmap, mirrorFrontCamera);
-                                Bitmap processedBitmap = viewportCropEnabled ? originalBitmap : cropBitmapToMatchPreview(originalBitmap);
-                                if (viewportCropEnabled) {
+                                Bitmap processedBitmap = isViewportCropCurrent()
+                                    ? originalBitmap
+                                    : cropBitmapToMatchPreview(originalBitmap);
+                                if (isViewportCropCurrent()) {
                                     Log.d(TAG, "capturePhoto: Skipping software preview crop (ViewPort active)");
                                 }
                                 if (embedTimestamp || embedLocation) {
