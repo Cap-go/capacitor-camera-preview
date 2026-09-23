@@ -21,11 +21,11 @@
     "@angular/platform-browser": "^19.2.6",
     "@angular/platform-browser-dynamic": "^19.2.6",
     "@angular/router": "^19.2.6",
-    "@capacitor/android": "^8.0.0",
+    "@capacitor/android": "^8.5.2",
     "@capacitor/app": "^8.0.0",
-    "@capacitor/core": "^8.0.0",
+    "@capacitor/core": "^8.5.2",
     "@capacitor/haptics": "^8.0.0",
-    "@capacitor/ios": "^8.0.0",
+    "@capacitor/ios": "^8.5.2",
     "@capacitor/keyboard": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0",
     "@capgo/camera-preview": "file:..",
@@ -51,7 +51,7 @@
     "@angular/cli": "^19.2.7",
     "@angular/compiler-cli": "^19.2.6",
     "@angular/language-service": "^19.2.6",
-    "@capacitor/cli": "^8.0.0",
+    "@capacitor/cli": "^8.5.2",
     "@ionic/angular-toolkit": "^12.2.0",
     "@types/jasmine": "~5.1.8",
     "@typescript-eslint/eslint-plugin": "^8.33.1",
@@ -70,7 +70,7 @@
     "prettier": "^3.5.3",
     "prettier-plugin-organize-imports": "^4.1.0",
     "prettier-plugin-packagejson": "^3.0.0",
-    "typescript": "~5.8.0"
+    "typescript": "^6.0.3"
   },
   "description": "An Ionic project"
 }
