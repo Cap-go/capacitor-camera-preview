@@ -40,6 +40,9 @@ android {
     lintOptions {
         abortOnError = false
     }
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
 }
 
 repositories {
@@ -69,7 +72,8 @@ dependencies {
     implementation 'com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1'
 
     testImplementation "junit:junit:$junitVersion"
-    testImplementation 'org.mockito:mockito-core:5.14.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation 'androidx.test:core:1.6.1'
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
 }
