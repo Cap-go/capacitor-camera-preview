@@ -29,7 +29,6 @@ import android.view.ViewGroup;
 import android.webkit.WebView;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
-import androidx.core.app.ActivityCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -456,10 +455,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean withExifLocation = Boolean.TRUE.equals(call.getBoolean("withExifLocation", false));
 
         if (withExifLocation) {
-            if (getPermissionState(CAMERA_WITH_LOCATION_PERMISSION_ALIAS) != PermissionState.GRANTED) {
+            if (LocationPermissionHelper.canCaptureWithExifLocation(getContext())) {
+                getLocationAndCapture(call);
+            } else if (getPermissionState(CAMERA_WITH_LOCATION_PERMISSION_ALIAS) != PermissionState.GRANTED) {
                 requestPermissionForAlias(CAMERA_WITH_LOCATION_PERMISSION_ALIAS, call, "captureWithLocationPermission");
             } else {
-                getLocationAndCapture(call);
+                Logger.warn("Location permission unavailable. Capturing photo without location data.");
+                captureWithoutLocation(call);
             }
         } else {
             captureWithoutLocation(call);
@@ -469,35 +471,40 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     @SuppressLint("MissingPermission")
     @PermissionCallback
     private void captureWithLocationPermission(PluginCall call) {
-        if (getPermissionState(CAMERA_WITH_LOCATION_PERMISSION_ALIAS) == PermissionState.GRANTED) {
-            if (
-                ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) !=
-                    PackageManager.PERMISSION_GRANTED ||
-                ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) !=
-                PackageManager.PERMISSION_GRANTED
-            ) {
-                return;
-            }
+        if (LocationPermissionHelper.canCaptureWithExifLocation(getContext())) {
             getLocationAndCapture(call);
         } else {
-            Logger.warn("Location permission denied. Capturing photo without location data.");
+            Logger.warn("Location permission denied or unavailable. Capturing photo without location data.");
             captureWithoutLocation(call);
         }
     }
 
-    @RequiresPermission(allOf = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION })
+    @RequiresPermission(anyOf = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION })
     private void getLocationAndCapture(PluginCall call) {
+        if (getActivity() == null) {
+            Logger.warn("Activity unavailable for location lookup. Capturing photo without location data.");
+            captureWithoutLocation(call);
+            return;
+        }
+
         if (fusedLocationClient == null) {
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(getContext());
         }
         fusedLocationClient
             .getLastLocation()
-            .addOnSuccessListener(getActivity(), (location) -> {
-                lastLocation = location;
-                proceedWithCapture(call, lastLocation);
-            })
-            .addOnFailureListener((e) -> {
-                Logger.error("Failed to get location: " + e.getMessage());
+            .addOnCompleteListener((task) -> {
+                if (task.isCanceled()) {
+                    Logger.warn("Location lookup cancelled. Capturing photo without location data.");
+                    proceedWithCapture(call, null);
+                    return;
+                }
+                if (task.isSuccessful()) {
+                    lastLocation = task.getResult();
+                    proceedWithCapture(call, lastLocation);
+                    return;
+                }
+                Exception error = task.getException();
+                Logger.error("Failed to get location: " + (error != null ? error.getMessage() : "unknown error"));
                 proceedWithCapture(call, null);
             });
     }
