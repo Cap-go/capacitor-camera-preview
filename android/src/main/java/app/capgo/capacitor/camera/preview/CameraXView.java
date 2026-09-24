@@ -1809,12 +1809,24 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 .addUseCase(imageCapture);
 
             camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, groupBuilder.build());
+            boolean viewportBindingActive = true;
             if (sessionConfig.isVideoModeEnabled() && videoCapture != null) {
-                cameraProvider.bindToLifecycle(this, bindingPlan.selector, videoCapture);
+                try {
+                    cameraProvider.bindToLifecycle(this, bindingPlan.selector, videoCapture);
+                } catch (Exception videoBindError) {
+                    Log.w(TAG, "bindConfiguredUseCases: ViewPort video binding failed; retrying without ViewPort", videoBindError);
+                    cameraProvider.unbindAll();
+                    viewportBindingActive = false;
+                    viewportCropEnabled = false;
+                    viewportBoundSize = null;
+                    camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
+                }
             }
-            viewportCropEnabled = true;
-            pendingViewportRebind = false;
-            Log.d(TAG, "bindConfiguredUseCases: Bound preview and imageCapture with shared ViewPort");
+            if (viewportBindingActive) {
+                viewportCropEnabled = true;
+                pendingViewportRebind = false;
+                Log.d(TAG, "bindConfiguredUseCases: Bound preview and imageCapture with shared ViewPort");
+            }
         } else {
             viewportCropEnabled = false;
             viewportBoundSize = null;
