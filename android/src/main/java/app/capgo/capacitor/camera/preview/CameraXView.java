@@ -818,7 +818,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     (v.getWidth() != viewportBoundSize.getWidth() || v.getHeight() != viewportBoundSize.getHeight())
                 ) {
                     pendingViewportRebind = true;
-                    if (!isCapturingPhoto) {
+                    if (!shouldDeferViewportRebind()) {
                         pendingViewportRebind = false;
                         bindCameraUseCases();
                     }
@@ -1735,6 +1735,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         );
     }
 
+    private boolean shouldDeferViewportRebind() {
+        return isCapturingPhoto || currentRecording != null;
+    }
+
     private void clearViewportRebindListener() {
         if (previewView != null && viewportRebindListener != null) {
             previewView.removeOnLayoutChangeListener(viewportRebindListener);
@@ -1744,7 +1748,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void maybePerformPendingViewportRebind() {
         mainExecutor.execute(() -> {
-            if (!pendingViewportRebind || !isRunning || isCapturingPhoto) {
+            if (!pendingViewportRebind || !isRunning || shouldDeferViewportRebind()) {
                 return;
             }
             pendingViewportRebind = false;
@@ -1778,6 +1782,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 if (previewView.getWidth() > 0 && previewView.getHeight() > 0) {
                     v.removeOnLayoutChangeListener(this);
                     viewportRebindListener = null;
+                    if (shouldDeferViewportRebind()) {
+                        Log.d(
+                            TAG,
+                            "scheduleViewportRebindWhenLayoutReady: Layout ready but deferring ViewPort rebind (capture/recording active)"
+                        );
+                        return;
+                    }
                     Log.d(TAG, "scheduleViewportRebindWhenLayoutReady: PreviewView layout ready, rebinding with ViewPort");
                     bindCameraUseCases();
                 }
@@ -5416,6 +5427,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         currentRecording = null;
         currentVideoFile = null;
         currentVideoCallback = null;
+        maybePerformPendingViewportRebind();
     }
 
     private boolean isRecordingLimitReached(int error) {
