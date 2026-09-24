@@ -1820,6 +1820,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     viewportCropEnabled = false;
                     viewportBoundSize = null;
                     camera = cameraProvider.bindToLifecycle(this, bindingPlan.selector, preview, imageCapture, videoCapture);
+                    pendingViewportRebind = false;
                 }
             }
             if (viewportBindingActive) {
