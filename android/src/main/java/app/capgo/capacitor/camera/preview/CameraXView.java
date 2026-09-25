@@ -204,6 +204,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     // Capture/stop coordination
     private final Object captureLock = new Object();
     private volatile boolean isCapturingPhoto = false;
+    private volatile boolean viewportRebindInFlight = false;
     private volatile boolean stopRequested = false;
     private volatile boolean previewDetachedOnDeferredStop = false;
     private volatile boolean isBarcodeScannerActive = false;
@@ -1074,7 +1075,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private void bindCameraUseCases() {
         if (cameraProvider == null) return;
         mainExecutor.execute(() -> {
+            boolean acquiredRebindGuard = false;
             try {
+                if (previewView != null && (previewView.getWidth() <= 0 || previewView.getHeight() <= 0) && !isRunning) {
+                    pendingViewportRebind = true;
+                    scheduleViewportRebindWhenLayoutReady();
+                    return;
+                }
+
                 Log.d(
                     TAG,
                     "Building camera selector with deviceId: " +
@@ -1180,6 +1188,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     } catch (Exception e) {
                         Log.w(TAG, "bindCameraUseCases: Failed to read exposure compensation before rebind", e);
                     }
+                }
+
+                synchronized (captureLock) {
+                    if (shouldDeferViewportRebind()) {
+                        pendingViewportRebind = true;
+                        return;
+                    }
+                    viewportRebindInFlight = true;
+                    acquiredRebindGuard = true;
                 }
 
                 // Unbind any existing use cases and bind new ones
@@ -1368,6 +1385,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 restoreWebViewBackground();
                 completePendingFrameRateBindError("Error binding camera: " + e.getMessage());
                 if (listener != null) listener.onCameraStartError(this, "Error binding camera: " + e.getMessage());
+            } finally {
+                if (acquiredRebindGuard) {
+                    synchronized (captureLock) {
+                        viewportRebindInFlight = false;
+                    }
+                    maybePerformPendingViewportRebind();
+                }
             }
         });
     }
@@ -1748,7 +1772,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 int oldRight,
                 int oldBottom
             ) {
-                if (!pendingViewportRebind || !isRunning || previewView == null) {
+                if (!pendingViewportRebind || previewView == null || stopRequested) {
                     v.removeOnLayoutChangeListener(this);
                     viewportRebindListener = null;
                     return;
@@ -2263,6 +2287,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         boolean dispatched = false;
         try {
             synchronized (captureLock) {
+                if (viewportRebindInFlight) {
+                    if (listener != null) {
+                        listener.onPictureTakenError("Camera is reconfiguring, try again");
+                    }
+                    return;
+                }
                 isCapturingPhoto = true;
             }
 
@@ -4199,9 +4229,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public String getFlashMode() {
-        if (torchRequested) {
-            return "torch";
-        }
         // If torch is enabled, report torch regardless of ImageCapture flash mode
         try {
             if (camera != null) {
