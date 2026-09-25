@@ -172,6 +172,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private String currentPhysicalDeviceId;
     private String currentLogicalDeviceId;
     private int currentFlashMode = ImageCapture.FLASH_MODE_OFF;
+    private boolean torchRequested = false;
     private CameraSessionConfiguration sessionConfig;
     private CameraXViewListener listener;
     private final Context context;
@@ -1172,6 +1173,15 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     videoCapture = videoCaptureBuilder.build();
                 }
 
+                Integer exposureCompensationIndexToRestore = null;
+                if (camera != null) {
+                    try {
+                        exposureCompensationIndexToRestore = camera.getCameraInfo().getExposureState().getExposureCompensationIndex();
+                    } catch (Exception e) {
+                        Log.w(TAG, "bindCameraUseCases: Failed to read exposure compensation before rebind", e);
+                    }
+                }
+
                 // Unbind any existing use cases and bind new ones
                 cameraProvider.unbindAll();
 
@@ -1200,8 +1210,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     bindConfiguredUseCases(bindingPlan, preview);
                 }
 
-                resetExposureCompensationToDefault();
-                reapplyCameraControlModes();
+                restoreCameraControlStateAfterRebind(exposureCompensationIndexToRestore);
 
                 // Log details about the active camera
                 Log.d(TAG, "Use cases bound. Inspecting active camera and use cases.");
@@ -1654,7 +1663,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private ResolutionSelector buildImageCaptureResolutionSelector() {
-        Size targetResolution = resolveImageCaptureTargetResolution();
+        Size targetResolution = new Size(
+            Math.max(DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth(), DEFAULT_MAX_CAPTURE_RESOLUTION.getHeight()),
+            Math.min(DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth(), DEFAULT_MAX_CAPTURE_RESOLUTION.getHeight())
+        );
         ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
             new ResolutionStrategy(targetResolution, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
         );
@@ -1674,44 +1686,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             aspectRatio = AspectRatio.RATIO_4_3;
         }
         resolutionSelectorBuilder.setAspectRatioStrategy(new AspectRatioStrategy(aspectRatio, AspectRatioStrategy.FALLBACK_RULE_AUTO));
-    }
-
-    private Size resolveImageCaptureTargetResolution() {
-        int width = getEffectivePreviewWidth();
-        int height = getEffectivePreviewHeight();
-        if (width <= 0 || height <= 0) {
-            return DEFAULT_MAX_CAPTURE_RESOLUTION;
-        }
-
-        int maxDim = Math.max(width, height);
-        if (maxDim > DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth()) {
-            float scale = (float) DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth() / maxDim;
-            width = Math.max(1, Math.round(width * scale));
-            height = Math.max(1, Math.round(height * scale));
-        }
-
-        // ResolutionStrategy bound sizes use the sensor coordinate frame.
-        return new Size(Math.max(width, height), Math.min(width, height));
-    }
-
-    private int getEffectivePreviewWidth() {
-        if (previewView != null && previewView.getWidth() > 0) {
-            return previewView.getWidth();
-        }
-        if (previewContainer != null && previewContainer.getWidth() > 0) {
-            return previewContainer.getWidth();
-        }
-        return sessionConfig != null ? sessionConfig.getWidth() : 0;
-    }
-
-    private int getEffectivePreviewHeight() {
-        if (previewView != null && previewView.getHeight() > 0) {
-            return previewView.getHeight();
-        }
-        if (previewContainer != null && previewContainer.getHeight() > 0) {
-            return previewContainer.getHeight();
-        }
-        return sessionConfig != null ? sessionConfig.getHeight() : 0;
     }
 
     private ViewPort buildViewPort(int rotation) {
@@ -3721,6 +3695,38 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         }
     }
 
+    private void restoreCameraControlStateAfterRebind(Integer exposureCompensationIndex) {
+        if (camera == null) {
+            return;
+        }
+        if (exposureCompensationIndex != null) {
+            try {
+                ExposureState state = camera.getCameraInfo().getExposureState();
+                Range<Integer> range = state.getExposureCompensationRange();
+                int idx = exposureCompensationIndex;
+                if (idx < range.getLower()) {
+                    idx = range.getLower();
+                }
+                if (idx > range.getUpper()) {
+                    idx = range.getUpper();
+                }
+                camera.getCameraControl().setExposureCompensationIndex(idx);
+            } catch (Exception e) {
+                Log.w(TAG, "restoreCameraControlStateAfterRebind: Failed to restore exposure compensation", e);
+            }
+        } else {
+            resetExposureCompensationToDefault();
+        }
+        reapplyCameraControlModes();
+        if (torchRequested) {
+            try {
+                camera.getCameraControl().enableTorch(true);
+            } catch (Exception e) {
+                Log.w(TAG, "restoreCameraControlStateAfterRebind: Failed to restore torch", e);
+            }
+        }
+    }
+
     public float[] getExposureCompensationRange() throws Exception {
         if (camera == null) {
             throw new Exception("Camera not initialized");
@@ -4193,6 +4199,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     public String getFlashMode() {
+        if (torchRequested) {
+            return "torch";
+        }
         // If torch is enabled, report torch regardless of ImageCapture flash mode
         try {
             if (camera != null) {
@@ -4216,6 +4225,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     public void setFlashMode(String mode) {
         // Handle torch separately via CameraControl
         if ("torch".equals(mode)) {
+            torchRequested = true;
             try {
                 if (camera != null) {
                     camera.getCameraControl().enableTorch(true);
@@ -4234,6 +4244,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
 
+        torchRequested = false;
         // For non-torch modes, ensure torch is disabled
         try {
             if (camera != null) {
