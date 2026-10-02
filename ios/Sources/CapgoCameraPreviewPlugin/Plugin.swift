@@ -129,6 +129,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var isPresentingPermissionAlert: Bool = false
     private var pendingStartBarcodeScannerOptions: (formats: [String], detectionInterval: Int)?
     private var hasResolvedStartCall: Bool = false
+    private var startGeneration: UInt = 0
+    private var firstFrameTimeoutWorkItem: DispatchWorkItem?
+    private var pendingStartCall: CAPPluginCall?
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
@@ -685,7 +688,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // If force is true, kill everything and restart no matter what
         if force {
+            if let pendingStartCall = self.pendingStartCall, !self.hasResolvedStartCall {
+                self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
+            }
             if self.isInitializing || self.isInitialized || self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+                self.startGeneration += 1
+                self.cancelFirstFrameTimeout()
                 // Force stop everything synchronously
                 DispatchQueue.main.sync {
                     self.cameraController.removeGridOverlay()
@@ -732,6 +740,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.isInitializing = true
         self.hasResolvedStartCall = false
+        self.pendingStartCall = call
+        self.startGeneration += 1
+        let startToken = self.startGeneration
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -819,18 +830,36 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             }
 
-            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality) { error in
+            self.cameraController.onCameraInterrupted = { [weak self] reason, audioDropped in
+                self?.notifyListeners("cameraInterrupted", data: [
+                    "reason": reason,
+                    "audioDropped": audioDropped
+                ])
+            }
+            self.cameraController.onCameraInterruptionEnded = { [weak self] in
+                self?.notifyListeners("cameraInterruptionEnded", data: [:])
+            }
+            self.cameraController.onStartFailure = { [weak self] error in
+                guard let self = self, startToken == self.startGeneration, !self.hasResolvedStartCall else { return }
+                DispatchQueue.main.async {
+                    self.failPendingStart(call, message: error.localizedDescription)
+                }
+            }
+
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality, startToken: startToken) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
-                        self.isInitializing = false
-                        self.pendingStartBarcodeScannerOptions = nil
-                        call.reject(error.localizedDescription)
+                        guard startToken == self.startGeneration else { return }
+                        self.failPendingStart(call, message: error.localizedDescription)
                     }
                     return
                 }
 
                 DispatchQueue.main.async {
+                    guard startToken == self.startGeneration, !self.hasResolvedStartCall else {
+                        return
+                    }
                     if self.rotateWhenOrientationChanged == true {
                         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                         self.isGeneratingDeviceOrientationNotifications = true
@@ -839,16 +868,15 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                                                                name: UIDevice.orientationDidChangeNotification,
                                                                object: nil)
                     }
-                    self.completeStartCamera(call: call)
+                    self.completeStartCamera(call: call, startToken: startToken)
                 }
             }
         }
 
         let handleDenied: (AVAuthorizationStatus) -> Void = { _ in
             DispatchQueue.main.async {
-                self.isInitializing = false
-                self.pendingStartBarcodeScannerOptions = nil
-                call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied")
+                guard startToken == self.startGeneration else { return }
+                self.failPendingStart(call, message: "camera permission denied. enable camera access in Settings.", errorCode: "cameraPermissionDenied")
             }
         }
 
@@ -859,6 +887,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             beginStart()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
+                guard startToken == self.startGeneration else { return }
                 if granted {
                     beginStart()
                 } else {
@@ -873,7 +902,71 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    private func completeStartCamera(call: CAPPluginCall) {
+    private func cancelFirstFrameTimeout() {
+        self.firstFrameTimeoutWorkItem?.cancel()
+        self.firstFrameTimeoutWorkItem = nil
+    }
+
+    private func teardownAfterFailedStart() {
+        self.cameraController.removeGridOverlay()
+        if let previewView = self.previewView {
+            previewView.removeFromSuperview()
+            self.previewView = nil
+        }
+        if let webView = self.webView {
+            webView.isOpaque = true
+            self.restoreWebViewBackground(webView)
+        }
+        NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+        if self.isGeneratingDeviceOrientationNotifications {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            self.isGeneratingDeviceOrientationNotifications = false
+        }
+        self.cameraController.invalidateActivePrepare()
+        self.cameraController.cleanup()
+    }
+
+    private func failPendingStart(_ call: CAPPluginCall, message: String, errorCode: String? = nil) {
+        let applyFailure = { [weak self] in
+            guard let self = self else { return }
+            guard !self.hasResolvedStartCall else { return }
+            self.hasResolvedStartCall = true
+            self.pendingStartCall = nil
+            self.cancelFirstFrameTimeout()
+            self.cameraController.firstFrameReadyCallback = nil
+            self.cameraController.onStartFailure = nil
+            self.teardownAfterFailedStart()
+            self.isInitializing = false
+            self.isInitialized = false
+            self.pendingStartBarcodeScannerOptions = nil
+            if let errorCode = errorCode {
+                call.reject(message, errorCode)
+            } else {
+                call.reject(message)
+            }
+        }
+
+        if Thread.isMainThread {
+            applyFailure()
+        } else {
+            DispatchQueue.main.sync {
+                applyFailure()
+            }
+        }
+    }
+
+    private func scheduleFirstFrameTimeout(for call: CAPPluginCall, startToken: UInt) {
+        self.cancelFirstFrameTimeout()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, startToken == self.startGeneration, !self.hasResolvedStartCall else { return }
+            self.failPendingStart(call, message: "Camera preview failed to start: timed out waiting for the first frame")
+        }
+        self.firstFrameTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: workItem)
+    }
+
+    private func completeStartCamera(call: CAPPluginCall, startToken: UInt) {
+        guard startToken == self.startGeneration else { return }
         // Create and configure the preview view first
         self.updateCameraFrame()
 
@@ -913,9 +1006,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Set up callback to wait for first frame before resolving
         self.cameraController.firstFrameReadyCallback = { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, startToken == self.startGeneration else { return }
 
             DispatchQueue.main.async {
+                guard startToken == self.startGeneration else { return }
                 var returnedObject = JSObject()
                 returnedObject["width"] = self.previewView.frame.width as any JSValue
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
@@ -925,9 +1019,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        self.scheduleFirstFrameTimeout(for: call, startToken: startToken)
+
         // If already received first frame (unlikely but possible), resolve immediately on main thread
         if self.cameraController.hasReceivedFirstFrame {
             DispatchQueue.main.async {
+                guard startToken == self.startGeneration else { return }
                 var returnedObject = JSObject()
                 returnedObject["width"] = self.previewView.frame.width as any JSValue
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
@@ -955,7 +1052,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
         guard !hasResolvedStartCall else { return }
         hasResolvedStartCall = true
+        pendingStartCall = nil
+        cancelFirstFrameTimeout()
         cameraController.firstFrameReadyCallback = nil
+        cameraController.onStartFailure = nil
 
         if let options = pendingStartBarcodeScannerOptions {
             do {
@@ -1044,6 +1144,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // UI operations must be on main thread
         DispatchQueue.main.async {
+            if !self.hasResolvedStartCall, let pendingStartCall = self.pendingStartCall {
+                self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
+            }
+
             // If a photo capture is in-flight, defer cleanup until it finishes,
             // but hide the preview immediately so UI can close.
             self.cameraController.removeGridOverlay()
@@ -1059,6 +1163,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.restoreWebViewBackground(webView)
             }
 
+            self.startGeneration += 1
+            self.cancelFirstFrameTimeout()
             self.isInitialized = false
             self.isInitializing = false
 
