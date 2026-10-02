@@ -169,6 +169,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private weak var observedCaptureSession: AVCaptureSession?
     private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
     private var activePrepareToken: UInt = 0
+    private var audioInputEnabledByUser = false
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -992,6 +993,8 @@ extension CameraController {
 
     private func configureDeviceInputs(cameraPosition: String, deviceId: String?, disableAudio: Bool) throws {
         guard let captureSession = self.captureSession else { throw CameraControllerError.captureSessionIsMissing }
+
+        self.audioInputEnabledByUser = !disableAudio
 
         // Ensure cameras are discovered before configuring inputs
         ensureCamerasDiscovered()
@@ -2630,6 +2633,30 @@ extension CameraController {
         self.observedCaptureSession = nil
     }
 
+    private func restoreAudioInputIfNeeded(for session: AVCaptureSession) {
+        guard self.audioInputEnabledByUser, self.audioInput == nil, !self.isPhoneCallActive() else { return }
+        guard self.captureSession === session else { return }
+
+        do {
+            session.beginConfiguration()
+            if self.audioDevice == nil {
+                self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
+            }
+            guard let audioDevice = self.audioDevice else {
+                session.commitConfiguration()
+                return
+            }
+            let input = try AVCaptureDeviceInput(device: audioDevice)
+            if session.canAddInput(input) {
+                session.addInput(input)
+                self.audioInput = input
+            }
+            session.commitConfiguration()
+        } catch {
+            print("[CameraPreview] Failed to restore audio input after interruption: \(error)")
+        }
+    }
+
     private func dropAudioInputAndRestartSession(for session: AVCaptureSession) {
         guard self.captureSession === session else { return }
 
@@ -2697,6 +2724,7 @@ extension CameraController {
         guard let session = notification.object as? AVCaptureSession else { return }
         self.sessionRecoveryQueue.async { [weak self] in
             guard let self = self, self.captureSession === session else { return }
+            self.restoreAudioInputIfNeeded(for: session)
             if !session.isRunning {
                 session.startRunning()
             }
@@ -2748,6 +2776,7 @@ extension CameraController {
         self.captureSession = nil
         self.currentCameraPosition = nil
         self.preferredExposureMode = "CONTINUOUS"
+        self.audioInputEnabledByUser = false
 
         // Reset output preparation status
         self.outputsPrepared = false
