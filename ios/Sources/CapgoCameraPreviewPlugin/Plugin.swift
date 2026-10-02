@@ -927,20 +927,31 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     private func failPendingStart(_ call: CAPPluginCall, message: String, errorCode: String? = nil) {
-        guard !self.hasResolvedStartCall else { return }
-        self.hasResolvedStartCall = true
-        self.pendingStartCall = nil
-        self.cancelFirstFrameTimeout()
-        self.cameraController.firstFrameReadyCallback = nil
-        self.cameraController.onStartFailure = nil
-        self.teardownAfterFailedStart()
-        self.isInitializing = false
-        self.isInitialized = false
-        self.pendingStartBarcodeScannerOptions = nil
-        if let errorCode = errorCode {
-            call.reject(message, errorCode)
+        let applyFailure = { [weak self] in
+            guard let self = self else { return }
+            guard !self.hasResolvedStartCall else { return }
+            self.hasResolvedStartCall = true
+            self.pendingStartCall = nil
+            self.cancelFirstFrameTimeout()
+            self.cameraController.firstFrameReadyCallback = nil
+            self.cameraController.onStartFailure = nil
+            self.teardownAfterFailedStart()
+            self.isInitializing = false
+            self.isInitialized = false
+            self.pendingStartBarcodeScannerOptions = nil
+            if let errorCode = errorCode {
+                call.reject(message, errorCode)
+            } else {
+                call.reject(message)
+            }
+        }
+
+        if Thread.isMainThread {
+            applyFailure()
         } else {
-            call.reject(message)
+            DispatchQueue.main.sync {
+                applyFailure()
+            }
         }
     }
 

@@ -2639,11 +2639,11 @@ extension CameraController {
 
         do {
             session.beginConfiguration()
+            defer { session.commitConfiguration() }
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
             guard let audioDevice = self.audioDevice else {
-                session.commitConfiguration()
                 return
             }
             let input = try AVCaptureDeviceInput(device: audioDevice)
@@ -2651,7 +2651,6 @@ extension CameraController {
                 session.addInput(input)
                 self.audioInput = input
             }
-            session.commitConfiguration()
         } catch {
             print("[CameraPreview] Failed to restore audio input after interruption: \(error)")
         }
