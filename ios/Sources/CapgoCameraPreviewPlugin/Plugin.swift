@@ -129,6 +129,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var isPresentingPermissionAlert: Bool = false
     private var pendingStartBarcodeScannerOptions: (formats: [String], detectionInterval: Int)?
     private var hasResolvedStartCall: Bool = false
+    private var startGeneration: UInt = 0
+    private var firstFrameTimeoutWorkItem: DispatchWorkItem?
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
@@ -686,6 +688,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // If force is true, kill everything and restart no matter what
         if force {
             if self.isInitializing || self.isInitialized || self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+                self.startGeneration += 1
+                self.cancelFirstFrameTimeout()
                 // Force stop everything synchronously
                 DispatchQueue.main.sync {
                     self.cameraController.removeGridOverlay()
@@ -732,6 +736,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.isInitializing = true
         self.hasResolvedStartCall = false
+        self.startGeneration += 1
+        let startToken = self.startGeneration
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -819,18 +825,37 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             }
 
+            self.cameraController.onCameraInterrupted = { [weak self] reason, audioDropped in
+                self?.notifyListeners("cameraInterrupted", data: [
+                    "reason": reason,
+                    "audioDropped": audioDropped
+                ])
+            }
+            self.cameraController.onCameraInterruptionEnded = { [weak self] in
+                self?.notifyListeners("cameraInterruptionEnded", data: [:])
+            }
+            self.cameraController.onStartFailure = { [weak self] error in
+                guard let self = self, startToken == self.startGeneration, !self.hasResolvedStartCall else { return }
+                DispatchQueue.main.async {
+                    self.failPendingStart(call, message: error.localizedDescription)
+                }
+            }
+
             self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
-                        self.isInitializing = false
-                        self.pendingStartBarcodeScannerOptions = nil
-                        call.reject(error.localizedDescription)
+                        guard startToken == self.startGeneration else { return }
+                        self.failPendingStart(call, message: error.localizedDescription)
                     }
                     return
                 }
 
                 DispatchQueue.main.async {
+                    guard startToken == self.startGeneration else {
+                        self.isInitializing = false
+                        return
+                    }
                     if self.rotateWhenOrientationChanged == true {
                         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                         self.isGeneratingDeviceOrientationNotifications = true
@@ -839,7 +864,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                                                                name: UIDevice.orientationDidChangeNotification,
                                                                object: nil)
                     }
-                    self.completeStartCamera(call: call)
+                    self.completeStartCamera(call: call, startToken: startToken)
                 }
             }
         }
@@ -873,7 +898,35 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    private func completeStartCamera(call: CAPPluginCall) {
+    private func cancelFirstFrameTimeout() {
+        self.firstFrameTimeoutWorkItem?.cancel()
+        self.firstFrameTimeoutWorkItem = nil
+    }
+
+    private func failPendingStart(_ call: CAPPluginCall, message: String) {
+        guard !self.hasResolvedStartCall else { return }
+        self.hasResolvedStartCall = true
+        self.cancelFirstFrameTimeout()
+        self.cameraController.firstFrameReadyCallback = nil
+        self.cameraController.onStartFailure = nil
+        self.isInitializing = false
+        self.isInitialized = false
+        self.pendingStartBarcodeScannerOptions = nil
+        call.reject(message)
+    }
+
+    private func scheduleFirstFrameTimeout(for call: CAPPluginCall, startToken: UInt) {
+        self.cancelFirstFrameTimeout()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, startToken == self.startGeneration, !self.hasResolvedStartCall else { return }
+            self.failPendingStart(call, message: "Camera preview failed to start: timed out waiting for the first frame")
+        }
+        self.firstFrameTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: workItem)
+    }
+
+    private func completeStartCamera(call: CAPPluginCall, startToken: UInt) {
+        guard startToken == self.startGeneration else { return }
         // Create and configure the preview view first
         self.updateCameraFrame()
 
@@ -913,9 +966,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Set up callback to wait for first frame before resolving
         self.cameraController.firstFrameReadyCallback = { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, startToken == self.startGeneration else { return }
 
             DispatchQueue.main.async {
+                guard startToken == self.startGeneration else { return }
                 var returnedObject = JSObject()
                 returnedObject["width"] = self.previewView.frame.width as any JSValue
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
@@ -925,9 +979,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        self.scheduleFirstFrameTimeout(for: call, startToken: startToken)
+
         // If already received first frame (unlikely but possible), resolve immediately on main thread
         if self.cameraController.hasReceivedFirstFrame {
             DispatchQueue.main.async {
+                guard startToken == self.startGeneration else { return }
                 var returnedObject = JSObject()
                 returnedObject["width"] = self.previewView.frame.width as any JSValue
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
@@ -955,7 +1012,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
         guard !hasResolvedStartCall else { return }
         hasResolvedStartCall = true
+        cancelFirstFrameTimeout()
         cameraController.firstFrameReadyCallback = nil
+        cameraController.onStartFailure = nil
 
         if let options = pendingStartBarcodeScannerOptions {
             do {
@@ -1059,6 +1118,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.restoreWebViewBackground(webView)
             }
 
+            self.startGeneration += 1
+            self.cancelFirstFrameTimeout()
             self.isInitialized = false
             self.isInitializing = false
 

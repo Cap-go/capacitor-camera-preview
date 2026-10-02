@@ -4,6 +4,7 @@ import UIKit
 import CoreLocation
 import UniformTypeIdentifiers
 import CoreMotion
+import CallKit
 
 class CameraController: NSObject {
     private func getVideoOrientation() -> AVCaptureVideoOrientation {
@@ -150,6 +151,13 @@ class CameraController: NSObject {
     // Add callback for detecting when first frame is ready
     var firstFrameReadyCallback: (() -> Void)?
     var hasReceivedFirstFrame = false
+
+    var onCameraInterrupted: ((String, Bool) -> Void)?
+    var onCameraInterruptionEnded: (() -> Void)?
+    var onStartFailure: ((Error) -> Void)?
+
+    private let callObserver = CXCallObserver()
+    private weak var observedCaptureSession: AVCaptureSession?
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -758,6 +766,8 @@ extension CameraController {
                 NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
                 NotificationCenter.default.addObserver(self, selector: #selector(self.subjectAreaDidChange), name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
 
+                self.registerCaptureSessionObservers(for: captureSession)
+
                 // Start the session - all outputs are already configured
                 captureSession.startRunning()
 
@@ -991,8 +1001,8 @@ extension CameraController {
             throw CameraControllerError.inputsAreInvalid
         }
 
-        // Add audio input if needed
-        if !disableAudio {
+        // Add audio input if needed (skip while a phone call owns the audio session)
+        if self.shouldAttachAudioInput(disableAudio: disableAudio) {
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
@@ -2536,10 +2546,134 @@ extension CameraController {
         self.updateVideoOrientation()
     }
 
+    private func isPhoneCallActive() -> Bool {
+        self.callObserver.calls.contains { !$0.hasEnded }
+    }
+
+    private func shouldAttachAudioInput(disableAudio: Bool) -> Bool {
+        return !disableAudio && !self.isPhoneCallActive()
+    }
+
+    private static let insufficientAudioPriorityOSStatus = 561017449
+
+    private func isAudioPriorityError(_ error: NSError) -> Bool {
+        var current: NSError? = error
+        while let err = current {
+            if err.domain == NSOSStatusErrorDomain && err.code == CameraController.insufficientAudioPriorityOSStatus {
+                return true
+            }
+            current = err.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+
+    private func registerCaptureSessionObservers(for session: AVCaptureSession) {
+        self.unregisterCaptureSessionObservers()
+        self.observedCaptureSession = session
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.handleCaptureSessionRuntimeError(_:)),
+            name: .AVCaptureSessionRuntimeError,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.handleCaptureSessionWasInterrupted(_:)),
+            name: .AVCaptureSessionWasInterrupted,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.handleCaptureSessionInterruptionEnded(_:)),
+            name: .AVCaptureSessionInterruptionEnded,
+            object: session
+        )
+    }
+
+    private func unregisterCaptureSessionObservers() {
+        guard let session = self.observedCaptureSession else { return }
+        NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionRuntimeError, object: session)
+        NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionWasInterrupted, object: session)
+        NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionInterruptionEnded, object: session)
+        self.observedCaptureSession = nil
+    }
+
+    private func dropAudioInputAndRestartSession() {
+        guard let captureSession = self.captureSession else { return }
+
+        captureSession.beginConfiguration()
+        for input in captureSession.inputs {
+            guard let deviceInput = input as? AVCaptureDeviceInput else { continue }
+            if deviceInput.device.hasMediaType(.audio) {
+                captureSession.removeInput(deviceInput)
+            }
+        }
+        self.audioInput = nil
+        captureSession.commitConfiguration()
+
+        if captureSession.isRunning {
+            captureSession.stopRunning()
+        }
+        captureSession.startRunning()
+    }
+
+    @objc private func handleCaptureSessionRuntimeError(_ notification: Notification) {
+        guard let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError else { return }
+        print("[CameraPreview] AVCaptureSession runtime error: \(error)")
+
+        let audioConflict = self.isAudioPriorityError(error)
+        if audioConflict {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.dropAudioInputAndRestartSession()
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.onCameraInterrupted?("runtimeError", audioConflict)
+            if !audioConflict && !self.hasReceivedFirstFrame {
+                self.onStartFailure?(error)
+            }
+        }
+    }
+
+    @objc private func handleCaptureSessionWasInterrupted(_ notification: Notification) {
+        var audioRelated = false
+        if let reasonValue = notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
+           let reason = AVCaptureSession.InterruptionReason(rawValue: reasonValue),
+           reason == .audioDeviceInUseByAnotherClient {
+            audioRelated = true
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                self?.dropAudioInputAndRestartSession()
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onCameraInterrupted?("interrupted", audioRelated)
+        }
+    }
+
+    @objc private func handleCaptureSessionInterruptionEnded(_ notification: Notification) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self, let session = self.captureSession else { return }
+            if !session.isRunning {
+                session.startRunning()
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onCameraInterruptionEnded?()
+        }
+    }
+
     func cleanup() {
         self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         stopBarcodeScanner()
+        self.unregisterCaptureSessionObservers()
+        self.onCameraInterrupted = nil
+        self.onCameraInterruptionEnded = nil
+        self.onStartFailure = nil
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
