@@ -1271,7 +1271,8 @@ Adds a listener for capture session interruptions (for example an active phone c
 addListener(eventName: 'cameraInterruptionEnded', listenerFunc: () => void) => Promise<PluginListenerHandle>
 ```
 
-Adds a listener fired when a capture session interruption ends and preview resumes.
+Adds a listener fired when a capture session interruption ends.
+Native recovery may still be restarting the session; wait for preview frames before assuming the stream is live.
 
 | Param              | Type                                   |
 | ------------------ | -------------------------------------- |

@@ -6,7 +6,16 @@ import UniformTypeIdentifiers
 import CoreMotion
 import CallKit
 
-class CameraController: NSObject {
+class CameraController: NSObject, CXCallObserverDelegate {
+    override init() {
+        super.init()
+        self.callObserver.setDelegate(self, queue: nil)
+    }
+
+    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        // Delegate registration keeps callObserver.calls populated for active-call checks.
+    }
+
     private func getVideoOrientation() -> AVCaptureVideoOrientation {
         var orientation: AVCaptureVideoOrientation = .portrait
         if Thread.isMainThread {
@@ -158,6 +167,8 @@ class CameraController: NSObject {
 
     private let callObserver = CXCallObserver()
     private weak var observedCaptureSession: AVCaptureSession?
+    private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
+    private var activePrepareToken: UInt = 0
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -666,14 +677,28 @@ extension CameraController {
         self.outputsPrepared = true
     }
 
-    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", completionHandler: @escaping (Error?) -> Void) {
+    func invalidateActivePrepare() {
+        self.activePrepareToken = 0
+    }
+
+    private func isPrepareTokenValid(_ token: UInt) -> Bool {
+        return token != 0 && token == self.activePrepareToken
+    }
+
+    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
+
+        self.activePrepareToken = startToken
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else {
                 DispatchQueue.main.async {
                     completionHandler(CameraControllerError.unknown)
                 }
+                return
+            }
+
+            guard self.isPrepareTokenValid(startToken) else {
                 return
             }
 
@@ -768,12 +793,17 @@ extension CameraController {
 
                 self.registerCaptureSessionObservers(for: captureSession)
 
+                guard self.isPrepareTokenValid(startToken) else {
+                    return
+                }
+
                 // Start the session - all outputs are already configured
                 captureSession.startRunning()
 
                 // Bring to full opacity after a tiny moment to smooth any visual artifacts
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                    if let layer = self?.previewLayer {
+                    guard let self = self, self.isPrepareTokenValid(startToken) else { return }
+                    if let layer = self.previewLayer {
                         CATransaction.begin()
                         CATransaction.setAnimationDuration(0.1)
                         layer.opacity = 1.0
@@ -783,6 +813,7 @@ extension CameraController {
 
                 // Success callback
                 DispatchQueue.main.async {
+                    guard self.isPrepareTokenValid(startToken) else { return }
                     completionHandler(nil)
                 }
             } catch {
@@ -790,6 +821,7 @@ extension CameraController {
                     self.motionManager.stopAccelerometerUpdates()
                 }
                 DispatchQueue.main.async {
+                    guard self.isPrepareTokenValid(startToken) else { return }
                     completionHandler(error)
                 }
             }
@@ -2624,7 +2656,7 @@ extension CameraController {
         let audioConflict = self.isAudioPriorityError(error)
         guard let session = notification.object as? AVCaptureSession else { return }
         if audioConflict {
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self.sessionRecoveryQueue.async { [weak self] in
                 self?.dropAudioInputAndRestartSession(for: session)
             }
         }
@@ -2633,7 +2665,13 @@ extension CameraController {
             guard let self = self else { return }
             self.onCameraInterrupted?("runtimeError", audioConflict)
             if !audioConflict && !self.hasReceivedFirstFrame {
-                self.onStartFailure?(error)
+                self.sessionRecoveryQueue.async { [weak self] in
+                    guard let self = self, self.captureSession === session else { return }
+                    session.stopRunning()
+                    DispatchQueue.main.async {
+                        self.onStartFailure?(error)
+                    }
+                }
             }
         }
     }
@@ -2645,7 +2683,7 @@ extension CameraController {
            let reason = AVCaptureSession.InterruptionReason(rawValue: reasonValue),
            reason == .audioDeviceInUseByAnotherClient {
             audioRelated = true
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self.sessionRecoveryQueue.async { [weak self] in
                 self?.dropAudioInputAndRestartSession(for: session)
             }
         }
@@ -2657,7 +2695,7 @@ extension CameraController {
 
     @objc private func handleCaptureSessionInterruptionEnded(_ notification: Notification) {
         guard let session = notification.object as? AVCaptureSession else { return }
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        self.sessionRecoveryQueue.async { [weak self] in
             guard let self = self, self.captureSession === session else { return }
             if !session.isRunning {
                 session.startRunning()
@@ -2670,6 +2708,7 @@ extension CameraController {
     }
 
     func cleanup() {
+        self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         stopBarcodeScanner()

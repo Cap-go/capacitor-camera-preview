@@ -1096,7 +1096,8 @@ export interface CameraPreviewPlugin {
   ): Promise<PluginListenerHandle>;
 
   /**
-   * Adds a listener fired when a capture session interruption ends and preview resumes.
+   * Adds a listener fired when a capture session interruption ends.
+   * Native recovery may still be restarting the session; wait for preview frames before assuming the stream is live.
    *
    * @since 8.11.7
    * @platform ios
