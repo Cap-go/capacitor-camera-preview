@@ -1311,7 +1311,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
 
                 let imageToEncode: UIImage
-                if mirrorFrontCamera, self.cameraPosition == "front" {
+                if mirrorFrontCamera, self.cameraController.currentCameraPosition == .front {
                     imageToEncode = self.cameraController.mirrorImageHorizontally(capturedImage)
                 } else {
                     imageToEncode = capturedImage
@@ -1543,7 +1543,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
 
             var outputImage = image
-            if mirrorFrontCamera, self.cameraPosition == "front" {
+            if mirrorFrontCamera, self.cameraController.currentCameraPosition == .front {
                 outputImage = self.cameraController.mirrorImageHorizontally(image)
             }
             let imageData = outputImage.jpegData(compressionQuality: CGFloat(quality)/100)
