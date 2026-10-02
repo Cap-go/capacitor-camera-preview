@@ -2598,23 +2598,23 @@ extension CameraController {
         self.observedCaptureSession = nil
     }
 
-    private func dropAudioInputAndRestartSession() {
-        guard let captureSession = self.captureSession else { return }
+    private func dropAudioInputAndRestartSession(for session: AVCaptureSession) {
+        guard self.captureSession === session else { return }
 
-        captureSession.beginConfiguration()
-        for input in captureSession.inputs {
+        session.beginConfiguration()
+        for input in session.inputs {
             guard let deviceInput = input as? AVCaptureDeviceInput else { continue }
             if deviceInput.device.hasMediaType(.audio) {
-                captureSession.removeInput(deviceInput)
+                session.removeInput(deviceInput)
             }
         }
         self.audioInput = nil
-        captureSession.commitConfiguration()
+        session.commitConfiguration()
 
-        if captureSession.isRunning {
-            captureSession.stopRunning()
+        if session.isRunning {
+            session.stopRunning()
         }
-        captureSession.startRunning()
+        session.startRunning()
     }
 
     @objc private func handleCaptureSessionRuntimeError(_ notification: Notification) {
@@ -2622,9 +2622,10 @@ extension CameraController {
         print("[CameraPreview] AVCaptureSession runtime error: \(error)")
 
         let audioConflict = self.isAudioPriorityError(error)
+        guard let session = notification.object as? AVCaptureSession else { return }
         if audioConflict {
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.dropAudioInputAndRestartSession()
+                self?.dropAudioInputAndRestartSession(for: session)
             }
         }
 
@@ -2638,13 +2639,14 @@ extension CameraController {
     }
 
     @objc private func handleCaptureSessionWasInterrupted(_ notification: Notification) {
+        guard let session = notification.object as? AVCaptureSession else { return }
         var audioRelated = false
         if let reasonValue = notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
            let reason = AVCaptureSession.InterruptionReason(rawValue: reasonValue),
            reason == .audioDeviceInUseByAnotherClient {
             audioRelated = true
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                self?.dropAudioInputAndRestartSession()
+                self?.dropAudioInputAndRestartSession(for: session)
             }
         }
 
@@ -2654,15 +2656,16 @@ extension CameraController {
     }
 
     @objc private func handleCaptureSessionInterruptionEnded(_ notification: Notification) {
+        guard let session = notification.object as? AVCaptureSession else { return }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self, let session = self.captureSession else { return }
+            guard let self = self, self.captureSession === session else { return }
             if !session.isRunning {
                 session.startRunning()
             }
-        }
-
-        DispatchQueue.main.async { [weak self] in
-            self?.onCameraInterruptionEnded?()
+            DispatchQueue.main.async {
+                guard self.captureSession === session else { return }
+                self.onCameraInterruptionEnded?()
+            }
         }
     }
 

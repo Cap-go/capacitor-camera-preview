@@ -131,6 +131,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var hasResolvedStartCall: Bool = false
     private var startGeneration: UInt = 0
     private var firstFrameTimeoutWorkItem: DispatchWorkItem?
+    private var pendingStartCall: CAPPluginCall?
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
@@ -736,6 +737,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.isInitializing = true
         self.hasResolvedStartCall = false
+        self.pendingStartCall = call
         self.startGeneration += 1
         let startToken = self.startGeneration
 
@@ -853,7 +855,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
                 DispatchQueue.main.async {
                     guard startToken == self.startGeneration else {
-                        self.isInitializing = false
                         return
                     }
                     if self.rotateWhenOrientationChanged == true {
@@ -906,6 +907,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func failPendingStart(_ call: CAPPluginCall, message: String) {
         guard !self.hasResolvedStartCall else { return }
         self.hasResolvedStartCall = true
+        self.pendingStartCall = nil
         self.cancelFirstFrameTimeout()
         self.cameraController.firstFrameReadyCallback = nil
         self.cameraController.onStartFailure = nil
@@ -1012,6 +1014,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
         guard !hasResolvedStartCall else { return }
         hasResolvedStartCall = true
+        pendingStartCall = nil
         cancelFirstFrameTimeout()
         cameraController.firstFrameReadyCallback = nil
         cameraController.onStartFailure = nil
@@ -1103,6 +1106,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // UI operations must be on main thread
         DispatchQueue.main.async {
+            if !self.hasResolvedStartCall, let pendingStartCall = self.pendingStartCall {
+                self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
+            }
+
             // If a photo capture is in-flight, defer cleanup until it finishes,
             // but hide the preview immediately so UI can close.
             self.cameraController.removeGridOverlay()
