@@ -19,6 +19,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ROOT = fs.realpathSync.native(REPO_ROOT)
 
 const PLUGIN_REL_PATTERN = /^packages\/[\w-]+(?:\/[\w-]+)*$/
 
@@ -110,11 +111,16 @@ const RULES = [
 const CORDova_SPM_LINE
   = /\.product\s*\(\s*name\s*:\s*"Cordova"\s*,\s*package\s*:\s*"capacitor-swift-pm"\s*\)/
 
-/** Returns whether `targetPath` resolves inside `rootDir`. */
-function isUnderRoot(targetPath, rootDir) {
-  const resolved = path.resolve(targetPath)
-  const rel = path.relative(rootDir, resolved)
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+/** Returns whether `targetPath` resolves inside the repository root. */
+function isUnderRoot(targetPath) {
+  let canonical
+  try {
+    canonical = fs.realpathSync.native(targetPath)
+  }
+  catch {
+    return false
+  }
+  return canonical === ROOT || canonical.startsWith(`${ROOT}${path.sep}`)
 }
 
 function parseArgs(argv) {
@@ -164,7 +170,7 @@ function walkFiles(rootDir, exts) {
   const stack = [rootDir]
   while (stack.length) {
     const dir = stack.pop()
-    if (!dir || !isUnderRoot(dir, REPO_ROOT)) {
+    if (!dir || !isUnderRoot(dir)) {
       continue
     }
     let entries
@@ -301,6 +307,10 @@ function checkPluginDir(pluginDir) {
   const allExts = [...new Set(RULES.flatMap(r => r.exts))]
   const files = []
   for (const root of scanRoots) {
+    if (!isUnderRoot(root)) {
+      console.warn(`[cap9-deprecated] skip scan root outside repo: ${root}`)
+      continue
+    }
     if (root.endsWith('Package.swift')) {
       files.push(root)
       continue
