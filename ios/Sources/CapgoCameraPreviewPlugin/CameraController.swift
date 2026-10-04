@@ -13,7 +13,13 @@ class CameraController: NSObject, CXCallObserverDelegate {
     }
 
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
-        // Delegate registration keeps callObserver.calls populated for active-call checks.
+        guard call.hasEnded,
+              callObserver.calls.allSatisfy({ $0.hasEnded }),
+              let session = self.captureSession else { return }
+        self.sessionRecoveryQueue.async { [weak self] in
+            guard let self = self, self.captureSession === session else { return }
+            self.restoreAudioInputIfNeeded(for: session)
+        }
     }
 
     private func getVideoOrientation() -> AVCaptureVideoOrientation {
