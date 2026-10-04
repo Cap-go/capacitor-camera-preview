@@ -4,7 +4,7 @@
  *
  * Fails when plugin native sources still use APIs removed in Capacitor 9.
  * Bridge.saveCall / getSavedCall / setKeepAlive are ALLOWED — Cap 9 keeps Bridge.
- * NEVER strip bridge.saveCall. Run: npx @capacitor/plugin-migration-v8-to-v9@latest first.
+ * NEVER strip bridge.saveCall. Run: bunx @capacitor/plugin-migration-v8-to-v9@latest first.
  * Does not flag Cordova SwiftPM product dependencies (still required on Cap 8).
  *
  * Usage:
@@ -111,8 +111,8 @@ const RULES = [
 const CORDova_SPM_LINE
   = /\.product\s*\(\s*name\s*:\s*"Cordova"\s*,\s*package\s*:\s*"capacitor-swift-pm"\s*\)/
 
-/** Returns whether `targetPath` resolves inside the repository root. */
-function isUnderRoot(targetPath) {
+/** Returns whether `targetPath` resolves inside `rootDir` (both canonical). */
+function isUnderRoot(targetPath, rootDir = ROOT) {
   let canonical
   try {
     canonical = fs.realpathSync.native(targetPath)
@@ -120,7 +120,21 @@ function isUnderRoot(targetPath) {
   catch {
     return false
   }
-  return canonical === ROOT || canonical.startsWith(`${ROOT}${path.sep}`)
+  return canonical === rootDir || canonical.startsWith(`${rootDir}${path.sep}`)
+}
+
+function scanContainmentRoot(pluginDir) {
+  let pluginCanonical
+  try {
+    pluginCanonical = fs.realpathSync.native(pluginDir)
+  }
+  catch {
+    return null
+  }
+  if (isUnderRoot(pluginDir)) {
+    return ROOT
+  }
+  return pluginCanonical
 }
 
 function parseArgs(argv) {
@@ -164,13 +178,13 @@ function exists(p) {
   }
 }
 
-/** @param {string} rootDir @param {string[]} exts */
-function walkFiles(rootDir, exts) {
+/** @param {string} rootDir @param {string[]} exts @param {string} boundary */
+function walkFiles(rootDir, exts, boundary = ROOT) {
   const out = []
   const stack = [rootDir]
   while (stack.length) {
     const dir = stack.pop()
-    if (!dir || !isUnderRoot(dir)) {
+    if (!dir || !isUnderRoot(dir, boundary)) {
       continue
     }
     let entries
@@ -303,19 +317,25 @@ function checkPluginDir(pluginDir) {
     return true
   }
 
+  const boundary = scanContainmentRoot(pluginDir)
+  if (!boundary) {
+    console.error(`[cap9-deprecated] ERROR: cannot resolve plugin directory ${pluginDir}`)
+    return false
+  }
+
   const scanRoots = collectScanRoots(pluginDir, pkg)
   const allExts = [...new Set(RULES.flatMap(r => r.exts))]
   const files = []
   for (const root of scanRoots) {
-    if (!isUnderRoot(root)) {
-      console.warn(`[cap9-deprecated] skip scan root outside repo: ${root}`)
-      continue
+    if (!isUnderRoot(root, boundary)) {
+      console.error(`[cap9-deprecated] ERROR: scan root escapes allowed tree: ${root}`)
+      return false
     }
     if (root.endsWith('Package.swift')) {
       files.push(root)
       continue
     }
-    files.push(...walkFiles(root, allExts))
+    files.push(...walkFiles(root, allExts, boundary))
   }
 
   const violations = []
