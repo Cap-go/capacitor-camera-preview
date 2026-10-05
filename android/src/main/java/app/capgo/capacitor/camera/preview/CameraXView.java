@@ -696,43 +696,46 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void setupCamera() {
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(context);
-        cameraProviderFuture.addListener(() -> {
-            try {
-                if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
-                    if (listener != null) {
-                        listener.onCameraStartError(this, "Camera binding cancelled: lifecycle destroyed (before provider)");
+        cameraProviderFuture.addListener(
+            () -> {
+                try {
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                        if (listener != null) {
+                            listener.onCameraStartError(this, "Camera binding cancelled: lifecycle destroyed (before provider)");
+                        }
+                        return;
                     }
-                    return;
-                }
-                if (stopRequested) {
-                    if (listener != null) {
-                        listener.onCameraStartError(this, "Camera binding cancelled: stop requested (before provider)");
+                    if (stopRequested) {
+                        if (listener != null) {
+                            listener.onCameraStartError(this, "Camera binding cancelled: stop requested (before provider)");
+                        }
+                        return;
                     }
-                    return;
-                }
-                cameraProvider = cameraProviderFuture.get();
-                if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
-                    if (listener != null) {
-                        listener.onCameraStartError(this, "Camera binding cancelled: lifecycle destroyed (after provider)");
+                    cameraProvider = cameraProviderFuture.get();
+                    if (lifecycleRegistry.getCurrentState() == Lifecycle.State.DESTROYED) {
+                        if (listener != null) {
+                            listener.onCameraStartError(this, "Camera binding cancelled: lifecycle destroyed (after provider)");
+                        }
+                        return;
                     }
-                    return;
-                }
-                if (stopRequested) {
-                    if (listener != null) {
-                        listener.onCameraStartError(this, "Camera binding cancelled: stop requested (after provider)");
+                    if (stopRequested) {
+                        if (listener != null) {
+                            listener.onCameraStartError(this, "Camera binding cancelled: stop requested (after provider)");
+                        }
+                        return;
                     }
-                    return;
+                    setupPreviewView();
+                    bindCameraUseCases();
+                } catch (Exception e) {
+                    // Restore webView background on error
+                    restoreWebViewBackground();
+                    if (listener != null) {
+                        listener.onCameraStartError(this, "Error initializing camera: " + e.getMessage());
+                    }
                 }
-                setupPreviewView();
-                bindCameraUseCases();
-            } catch (Exception e) {
-                // Restore webView background on error
-                restoreWebViewBackground();
-                if (listener != null) {
-                    listener.onCameraStartError(this, "Error initializing camera: " + e.getMessage());
-                }
-            }
-        }, mainExecutor);
+            },
+            mainExecutor
+        );
     }
 
     private void setupPreviewView() {
@@ -782,11 +785,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
         );
 
-        previewView.getPreviewStreamState().observe(this, (streamState) -> {
-            if (sessionConfig != null && sessionConfig.isToBack() && streamState == PreviewView.StreamState.STREAMING) {
-                notifyCameraStartedIfNeeded("streaming");
-            }
-        });
+        previewView
+            .getPreviewStreamState()
+            .observe(this, (streamState) -> {
+                if (sessionConfig != null && sessionConfig.isToBack() && streamState == PreviewView.StreamState.STREAMING) {
+                    notifyCameraStartedIfNeeded("streaming");
+                }
+            });
 
         // Create and setup the grid overlay
         gridOverlayView = new GridOverlayView(context);
@@ -1092,10 +1097,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 ResolutionSelector previewResolutionSelector = buildPreviewResolutionSelector();
                 ResolutionSelector imageCaptureResolutionSelector = buildImageCaptureResolutionSelector();
 
-                int rotation =
-                    previewView != null && previewView.getDisplay() != null
-                        ? previewView.getDisplay().getRotation()
-                        : android.view.Surface.ROTATION_0;
+                int rotation = previewView != null && previewView.getDisplay() != null
+                    ? previewView.getDisplay().getRotation()
+                    : android.view.Surface.ROTATION_0;
 
                 Preview.Builder previewBuilder = new Preview.Builder()
                     .setResolutionSelector(previewResolutionSelector)
@@ -1308,12 +1312,13 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 previewView.setScaleType("cover".equals(aspectMode) ? PreviewView.ScaleType.FILL_CENTER : PreviewView.ScaleType.FIT_CENTER);
 
                 // Set initial zoom if specified, prioritizing targetZoom over default zoomFactor
-                float initialZoom =
-                    !bindingPlan.usesPhysicalSelection && bindingPlan.fallbackZoom != 1.0f && sessionConfig.getTargetZoom() == 1.0f
-                        ? bindingPlan.fallbackZoom
-                        : sessionConfig.getTargetZoom() != 1.0f
-                          ? sessionConfig.getTargetZoom()
-                          : sessionConfig.getZoomFactor();
+                float initialZoom = !bindingPlan.usesPhysicalSelection &&
+                    bindingPlan.fallbackZoom != 1.0f &&
+                    sessionConfig.getTargetZoom() == 1.0f
+                    ? bindingPlan.fallbackZoom
+                    : sessionConfig.getTargetZoom() != 1.0f
+                        ? sessionConfig.getTargetZoom()
+                        : sessionConfig.getZoomFactor();
                 if (initialZoom != 1.0f) {
                     Log.d(TAG, "Applying initial zoom of " + initialZoom);
 
@@ -1351,20 +1356,28 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                         if (streamState == PreviewView.StreamState.STREAMING) {
                             notifyCameraStartedIfNeeded("already-streaming");
                         } else if (previewContainer != null) {
-                            previewContainer.postDelayed(() -> {
-                                PreviewView.StreamState latestState =
-                                    previewView != null ? previewView.getPreviewStreamState().getValue() : null;
-                                if (latestState == PreviewView.StreamState.STREAMING) {
-                                    notifyCameraStartedIfNeeded("watchdog-streaming");
-                                }
-                            }, 300);
-                            previewContainer.postDelayed(() -> {
-                                PreviewView.StreamState latestState =
-                                    previewView != null ? previewView.getPreviewStreamState().getValue() : null;
-                                if (!cameraStartedCallbackSent && latestState == PreviewView.StreamState.STREAMING) {
-                                    notifyCameraStartedIfNeeded("fallback-streaming");
-                                }
-                            }, 1500);
+                            previewContainer.postDelayed(
+                                () -> {
+                                    PreviewView.StreamState latestState = previewView != null
+                                        ? previewView.getPreviewStreamState().getValue()
+                                        : null;
+                                    if (latestState == PreviewView.StreamState.STREAMING) {
+                                        notifyCameraStartedIfNeeded("watchdog-streaming");
+                                    }
+                                },
+                                300
+                            );
+                            previewContainer.postDelayed(
+                                () -> {
+                                    PreviewView.StreamState latestState = previewView != null
+                                        ? previewView.getPreviewStreamState().getValue()
+                                        : null;
+                                    if (!cameraStartedCallbackSent && latestState == PreviewView.StreamState.STREAMING) {
+                                        notifyCameraStartedIfNeeded("fallback-streaming");
+                                    }
+                                },
+                                1500
+                            );
                         }
                     } else {
                         notifyCameraStartedIfNeeded("bound");
@@ -1830,10 +1843,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
-        int rotation =
-            previewView != null && previewView.getDisplay() != null
-                ? previewView.getDisplay().getRotation()
-                : android.view.Surface.ROTATION_0;
+        int rotation = previewView != null && previewView.getDisplay() != null
+            ? previewView.getDisplay().getRotation()
+            : android.view.Surface.ROTATION_0;
         ViewPort viewPort = buildViewPort(rotation);
 
         if (viewPort != null) {
@@ -2379,7 +2391,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 isViewportCropCurrent() &&
                                 quality == 95 &&
                                 exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED) ==
-                                    ExifInterface.ORIENTATION_NORMAL
+                                ExifInterface.ORIENTATION_NORMAL
                             ) {
                                 Log.d(TAG, "capturePhoto: Using ViewPort fast path without software decode/crop/re-encode");
                             } else if (width != null || height != null) {
@@ -2794,8 +2806,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 );
             org.apache.commons.imaging.formats.tiff.TiffImageMetadata exif = jpegMetadata != null ? jpegMetadata.getExif() : null;
 
-            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet =
-                exif != null ? exif.getOutputSet() : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet = exif != null
+                ? exif.getOutputSet()
+                : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
 
             // Update orientation if requested (normalize to 1)
             org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory rootDir = outputSet.getOrCreateRootDirectory();
@@ -2830,8 +2843,9 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 (org.apache.commons.imaging.formats.jpeg.JpegImageMetadata) org.apache.commons.imaging.Imaging.getMetadata(jpeg);
             org.apache.commons.imaging.formats.tiff.TiffImageMetadata exif = jpegMetadata != null ? jpegMetadata.getExif() : null;
 
-            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet =
-                exif != null ? exif.getOutputSet() : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
+            org.apache.commons.imaging.formats.tiff.write.TiffOutputSet outputSet = exif != null
+                ? exif.getOutputSet()
+                : new org.apache.commons.imaging.formats.tiff.write.TiffOutputSet();
 
             org.apache.commons.imaging.formats.tiff.write.TiffOutputDirectory gpsDir = outputSet.getOrCreateGpsDirectory();
 
@@ -3543,29 +3557,32 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
             final ListenableFuture<FocusMeteringResult> capturedFuture = future;
             final long tokenForListener = indicatorToken;
-            future.addListener(() -> {
-                try {
-                    FocusMeteringResult result = capturedFuture.get();
-                } catch (Exception e) {
-                    // Handle cancellation gracefully - this is expected when rapid taps occur
-                    if (
-                        e.getMessage() != null &&
-                        (e.getMessage().contains("Cancelled by another startFocusAndMetering") ||
-                            e.getMessage().contains("OperationCanceledException") ||
-                            e.getClass().getSimpleName().contains("OperationCanceledException"))
-                    ) {
-                        Log.d(TAG, "Focus operation was cancelled by a newer focus request");
-                    } else {
-                        Log.e(TAG, "Error during focus: " + e.getMessage());
+            future.addListener(
+                () -> {
+                    try {
+                        FocusMeteringResult result = capturedFuture.get();
+                    } catch (Exception e) {
+                        // Handle cancellation gracefully - this is expected when rapid taps occur
+                        if (
+                            e.getMessage() != null &&
+                            (e.getMessage().contains("Cancelled by another startFocusAndMetering") ||
+                                e.getMessage().contains("OperationCanceledException") ||
+                                e.getClass().getSimpleName().contains("OperationCanceledException"))
+                        ) {
+                            Log.d(TAG, "Focus operation was cancelled by a newer focus request");
+                        } else {
+                            Log.e(TAG, "Error during focus: " + e.getMessage());
+                        }
+                    } finally {
+                        if (currentFocusFuture == capturedFuture && currentFocusFuture.isDone()) {
+                            currentFocusFuture = null;
+                        }
+                        hideFocusIndicator(tokenForListener);
+                        endOperation("setFocus");
                     }
-                } finally {
-                    if (currentFocusFuture == capturedFuture && currentFocusFuture.isDone()) {
-                        currentFocusFuture = null;
-                    }
-                    hideFocusIndicator(tokenForListener);
-                    endOperation("setFocus");
-                }
-            }, ContextCompat.getMainExecutor(context));
+                },
+                ContextCompat.getMainExecutor(context)
+            );
         } catch (Exception e) {
             currentFocusFuture = null;
             Log.e(TAG, "Failed to set focus: " + e.getMessage());
@@ -4189,8 +4206,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     if (parent != null) {
                         parent.removeView(focusIndicatorView);
                     }
-                } catch (Exception ignore) {
-                } finally {
+                } catch (Exception ignore) {} finally {
                     focusIndicatorView = null;
                 }
             });

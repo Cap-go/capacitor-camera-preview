@@ -490,21 +490,23 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (fusedLocationClient == null) {
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(getContext());
         }
-        fusedLocationClient.getLastLocation().addOnCompleteListener((task) -> {
-            if (task.isCanceled()) {
-                Logger.warn("Location lookup cancelled. Capturing photo without location data.");
+        fusedLocationClient
+            .getLastLocation()
+            .addOnCompleteListener((task) -> {
+                if (task.isCanceled()) {
+                    Logger.warn("Location lookup cancelled. Capturing photo without location data.");
+                    proceedWithCapture(call, null);
+                    return;
+                }
+                if (task.isSuccessful()) {
+                    lastLocation = task.getResult();
+                    proceedWithCapture(call, lastLocation);
+                    return;
+                }
+                Exception error = task.getException();
+                Logger.error("Failed to get location: " + (error != null ? error.getMessage() : "unknown error"));
                 proceedWithCapture(call, null);
-                return;
-            }
-            if (task.isSuccessful()) {
-                lastLocation = task.getResult();
-                proceedWithCapture(call, lastLocation);
-                return;
-            }
-            Exception error = task.getException();
-            Logger.error("Failed to get location: " + (error != null ? error.getMessage() : "unknown error"));
-            proceedWithCapture(call, null);
-        });
+            });
     }
 
     private void captureWithoutLocation(PluginCall call) {
@@ -807,37 +809,39 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     public void stop(final PluginCall call) {
         boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
 
-        bridge.getActivity().runOnUiThread(() -> {
-            getBridge().getActivity().setRequestedOrientation(previousOrientationRequest);
+        bridge
+            .getActivity()
+            .runOnUiThread(() -> {
+                getBridge().getActivity().setRequestedOrientation(previousOrientationRequest);
 
-            // Disable and clear orientation listener
-            if (orientationListener != null) {
-                orientationListener.disable();
-                orientationListener = null;
-                lastOrientation = Configuration.ORIENTATION_UNDEFINED;
-            }
-
-            // Remove any rotation overlay if present
-            if (rotationOverlay != null && rotationOverlay.getParent() != null) {
-                ((ViewGroup) rotationOverlay.getParent()).removeView(rotationOverlay);
-                rotationOverlay = null;
-            }
-
-            if (cameraXView != null) {
-                cameraXView.stopSession();
-                // If force is true, always drop the reference
-                // Otherwise only drop the reference if no deferred stop is pending
-                if (force || !cameraXView.isStopDeferred()) {
-                    cameraXView = null;
+                // Disable and clear orientation listener
+                if (orientationListener != null) {
+                    orientationListener.disable();
+                    orientationListener = null;
+                    lastOrientation = Configuration.ORIENTATION_UNDEFINED;
                 }
-            }
-            // Manual stops should not trigger automatic resume with stale config
-            lastSessionConfig = null;
-            clearActiveBarcodeScanner();
-            toBackVisualStateActive = false;
-            restoreWebViewVisualState();
-            call.resolve();
-        });
+
+                // Remove any rotation overlay if present
+                if (rotationOverlay != null && rotationOverlay.getParent() != null) {
+                    ((ViewGroup) rotationOverlay.getParent()).removeView(rotationOverlay);
+                    rotationOverlay = null;
+                }
+
+                if (cameraXView != null) {
+                    cameraXView.stopSession();
+                    // If force is true, always drop the reference
+                    // Otherwise only drop the reference if no deferred stop is pending
+                    if (force || !cameraXView.isStopDeferred()) {
+                        cameraXView = null;
+                    }
+                }
+                // Manual stops should not trigger automatic resume with stale config
+                lastSessionConfig = null;
+                clearActiveBarcodeScanner();
+                toBackVisualStateActive = false;
+                restoreWebViewVisualState();
+                call.resolve();
+            });
     }
 
     @PluginMethod
@@ -1225,8 +1229,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             result.put("microphone", mapPermissionState(audioState));
         }
 
-        boolean showSettingsAlert =
-            call.getBoolean("showSettingsAlert") != null ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert")) : false;
+        boolean showSettingsAlert = call.getBoolean("showSettingsAlert") != null
+            ? Boolean.TRUE.equals(call.getBoolean("showSettingsAlert"))
+            : false;
 
         String cameraStateString = result.getString("camera");
         boolean cameraNeedsSettings = "denied".equals(cameraStateString) || "prompt-with-rationale".equals(cameraStateString);
@@ -1274,10 +1279,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String originalDeviceId = call.getString("deviceId");
         String deviceId = originalDeviceId; // Use a mutable variable
 
-        final String position =
-            positionParam == null || positionParam.isEmpty() || "rear".equals(positionParam) || "back".equals(positionParam)
-                ? "back"
-                : "front";
+        final String position = positionParam == null ||
+            positionParam.isEmpty() ||
+            "rear".equals(positionParam) ||
+            "back".equals(positionParam)
+            ? "back"
+            : "front";
         // Use -1 as default to indicate centering is needed when x/y not provided
         final Integer xParam = call.getInt("x");
         final Integer yParam = call.getInt("y");
@@ -1821,21 +1828,24 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     if (rotationOverlay != null && rotationOverlay.getParent() != null) {
                         // Shorter delay for faster transition
                         int delay = "4:3".equals(ar) ? 200 : 150;
-                        rotationOverlay.postDelayed(() -> {
-                            if (rotationOverlay != null && rotationOverlay.getParent() != null) {
-                                rotationOverlay
-                                    .animate()
-                                    .alpha(0f)
-                                    .setDuration(100) // Faster fade out
-                                    .withEndAction(() -> {
-                                        if (rotationOverlay != null && rotationOverlay.getParent() != null) {
-                                            ((ViewGroup) rotationOverlay.getParent()).removeView(rotationOverlay);
-                                            rotationOverlay = null;
-                                        }
-                                    })
-                                    .start();
-                            }
-                        }, delay);
+                        rotationOverlay.postDelayed(
+                            () -> {
+                                if (rotationOverlay != null && rotationOverlay.getParent() != null) {
+                                    rotationOverlay
+                                        .animate()
+                                        .alpha(0f)
+                                        .setDuration(100) // Faster fade out
+                                        .withEndAction(() -> {
+                                            if (rotationOverlay != null && rotationOverlay.getParent() != null) {
+                                                ((ViewGroup) rotationOverlay.getParent()).removeView(rotationOverlay);
+                                                rotationOverlay = null;
+                                            }
+                                        })
+                                        .start();
+                                }
+                            },
+                            delay
+                        );
                     }
 
                     Log.d(TAG, "================================================================================");
@@ -2587,10 +2597,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
     @PluginMethod
     public void getSupportedVideoQualities(PluginCall call) {
-        List<String> qualities =
-            cameraXView != null
-                ? cameraXView.getSupportedVideoQualities()
-                : Arrays.asList("low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3");
+        List<String> qualities = cameraXView != null
+            ? cameraXView.getSupportedVideoQualities()
+            : Arrays.asList("low", "medium", "high", "2160p", "1080p", "720p", "480p", "4:3");
         JSONArray arr = new JSONArray();
         for (String quality : qualities) {
             arr.put(quality);
@@ -2708,8 +2717,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
 
-        boolean disableAudio =
-            call.getBoolean("disableAudio") != null ? Boolean.TRUE.equals(call.getBoolean("disableAudio")) : this.lastDisableAudio;
+        boolean disableAudio = call.getBoolean("disableAudio") != null
+            ? Boolean.TRUE.equals(call.getBoolean("disableAudio"))
+            : this.lastDisableAudio;
         this.lastDisableAudio = disableAudio;
         String permissionAlias = disableAudio ? CAMERA_ONLY_PERMISSION_ALIAS : CAMERA_WITH_AUDIO_PERMISSION_ALIAS;
 
