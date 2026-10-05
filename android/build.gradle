@@ -68,7 +68,7 @@ dependencies {
     implementation "androidx.camera:camera-lifecycle:${camerax_version}"
     implementation "androidx.camera:camera-view:${camerax_version}"
     implementation "androidx.camera:camera-extensions:${camerax_version}"
-    implementation 'com.google.guava:guava:33.6.0-android'
+    implementation 'com.google.guava:guava:33.7.2-android'
     implementation 'com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1'
 
     testImplementation "junit:junit:$junitVersion"
