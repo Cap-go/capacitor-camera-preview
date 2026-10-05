@@ -1,0 +1,25 @@
+{
+  "pull_request": 418,
+  "replies": [
+    {
+      "thread_id": "PRRT_kwDOIjIFSc6pKaMx",
+      "resolve": false,
+      "body": "Fixed on `2470e51`. `videoCapture` is now added to the `UseCaseGroup` with preview and `imageCapture` when video mode is enabled, so recorded video shares the same ViewPort FOV. If that group bind fails on a device, we still `unbindAll()` and fall back to legacy binding without ViewPort (preview, imageCapture, and video together)."
+    },
+    {
+      "thread_id": "PRRT_kwDOIjIFSc6pKaM6",
+      "resolve": false,
+      "body": "Fixed on `2470e51`. `buildImageCaptureResolutionSelector()` now applies a `ResolutionFilter` that drops candidates above the 1920px long-edge cap before the lower-first `ResolutionStrategy` runs. If no candidate is at or below the cap, we keep only the smallest supported size so fallback cannot jump to a very large capture."
+    },
+    {
+      "thread_id": "PRRT_kwDOIjIFSc6pKaNE",
+      "resolve": false,
+      "body": "Keeping `quality == 95` on purpose. An earlier CodeRabbit review on this PR required the ViewPort JPEG fast path only when quality equals 95, not `>= 95`, so requests at 96 through 100 still go through the transform path and honor the requested JPEG quality."
+    },
+    {
+      "thread_id": "PRRT_kwDOIjIFSc6pKaNN",
+      "resolve": false,
+      "body": "Org policy: latest major tags, not SHA pins."
+    }
+  ]
+}
