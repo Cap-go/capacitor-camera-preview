@@ -1692,7 +1692,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             Math.min(DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth(), DEFAULT_MAX_CAPTURE_RESOLUTION.getHeight())
         );
         ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder().setResolutionStrategy(
-            new ResolutionStrategy(targetResolution, ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER)
+            new ResolutionStrategy(targetResolution, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
         );
         applySessionAspectRatioStrategy(resolutionSelectorBuilder);
         return resolutionSelectorBuilder.build();
@@ -2352,7 +2352,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             if (
                                 !requiresSoftwareTransform &&
                                 isViewportCropCurrent() &&
-                                quality >= 95 &&
+                                quality == 95 &&
                                 exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED) ==
                                 ExifInterface.ORIENTATION_NORMAL
                             ) {
