@@ -628,6 +628,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private void performImmediateStop() {
         isRunning = false;
+        rejectPendingFrameRateBindOnStop();
         viewportCropEnabled = false;
         pendingViewportRebind = false;
         viewportBoundSize = null;
@@ -3884,6 +3885,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 onError.accept(e.getMessage());
             }
         });
+    }
+
+    private void rejectPendingFrameRateBindOnStop() {
+        completePendingFrameRateBindError("Camera session stopped before camera rebind completed");
     }
 
     private void completePendingFrameRateBindSuccess() {
