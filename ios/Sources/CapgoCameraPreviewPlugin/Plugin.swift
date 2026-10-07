@@ -134,36 +134,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var originalWebViewBackgroundColor: UIColor?
     private var originalWebViewSubviewColors: [UIView: UIColor] = [:]
 
-    // MARK: - Helper Methods for Aspect Ratio
-
-    /// Parses aspect ratio string and returns the appropriate ratio for the current orientation
-    private func parseAspectRatio(_ ratio: String, isPortrait: Bool) -> CGFloat {
-        let parts = ratio.split(separator: ":").compactMap { Double($0) }
-        guard parts.count == 2 else { return 1.0 }
-
-        // For camera (portrait), we want portrait orientation: 4:3 becomes 3:4, 16:9 becomes 9:16
-        return isPortrait ?
-            CGFloat(parts[1] / parts[0]) :
-            CGFloat(parts[0] / parts[1])
-    }
-
-    /// Calculates dimensions based on aspect ratio and available space
-    private func calculateDimensionsForAspectRatio(_ aspectRatio: String, availableWidth: CGFloat, availableHeight: CGFloat, isPortrait: Bool) -> (width: CGFloat, height: CGFloat) {
-        let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
-
-        // Calculate maximum size that fits the aspect ratio in available space
-        let maxWidthByHeight = availableHeight * ratio
-        let maxHeightByWidth = availableWidth / ratio
-
-        if maxWidthByHeight <= availableWidth {
-            // Height is the limiting factor
-            return (width: maxWidthByHeight, height: availableHeight)
-        } else {
-            // Width is the limiting factor
-            return (width: availableWidth, height: maxHeightByWidth)
-        }
-    }
-
     // MARK: - Transparency Methods
 
     private func makeWebViewTransparent() {
@@ -501,7 +471,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Parse aspect ratio - convert to portrait orientation for camera use
         // Use the centralized calculation method
         if let aspectRatio = self.aspectRatio {
-            let dimensions = calculateDimensionsForAspectRatio(aspectRatio, availableWidth: availableWidth, availableHeight: availableHeight, isPortrait: isPortrait)
+            let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                aspectRatio,
+                availableWidth: availableWidth,
+                availableHeight: availableHeight,
+                isPortrait: isPortrait
+            )
             self.width = dimensions.width
             self.height = dimensions.height
         }
@@ -2209,13 +2184,23 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 print("[CameraPreview] width: \(UIScreen.main.bounds.size.width) height: \(UIScreen.main.bounds.size.height)")
 
                 // Calculate dimensions using centralized method
-                let dimensions = calculateDimensionsForAspectRatio(ratio, availableWidth: finalWidth, availableHeight: webViewHeight - paddingBottom, isPortrait: isPortrait)
+                let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                    ratio,
+                    availableWidth: finalWidth,
+                    availableHeight: webViewHeight - paddingBottom,
+                    isPortrait: isPortrait
+                )
                 if isPortrait {
                     finalHeight = dimensions.height
                     finalWidth = dimensions.width
                 } else {
                     // In landscape, recalculate based on available space
-                    let landscapeDimensions = calculateDimensionsForAspectRatio(ratio, availableWidth: webViewWidth, availableHeight: webViewHeight - paddingBottom, isPortrait: isPortrait)
+                    let landscapeDimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                        ratio,
+                        availableWidth: webViewWidth,
+                        availableHeight: webViewHeight - paddingBottom,
+                        isPortrait: isPortrait
+                    )
                     finalWidth = landscapeDimensions.width
                     finalHeight = landscapeDimensions.height
                 }
@@ -2276,9 +2261,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         var frame = calculateCameraFrame()
 
         // Apply aspect ratio adjustments only if not auto-centering
-        if posX != -1 && posY != -1, let aspectRatio = self.aspectRatio {
-            let isPortrait = self.isPortrait()
-            let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
+        if posX != -1 && posY != -1,
+           let aspectRatio = self.aspectRatio,
+           !AspectRatioLayout.isFillMode(aspectRatio),
+           let ratio = AspectRatioLayout.parseViewportAspectRatio(aspectRatio, isPortrait: self.isPortrait()) {
             let currentRatio = frame.width / frame.height
 
             if currentRatio > ratio {

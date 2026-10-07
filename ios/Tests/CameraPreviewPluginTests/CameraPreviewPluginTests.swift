@@ -1,15 +1,45 @@
 import XCTest
-@testable import CameraViewPlugin
+@testable import CapgoCameraPreview
 
-class CameraViewTests: XCTestCase {
-    func testEcho() {
-        // This is an example of a functional test case for a plugin.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+final class AspectRatioLayoutTests: XCTestCase {
+    func testFillModeIsRecognizedCaseInsensitively() {
+        XCTAssertTrue(AspectRatioLayout.isFillMode("fill"))
+        XCTAssertTrue(AspectRatioLayout.isFillMode("FILL"))
+        XCTAssertFalse(AspectRatioLayout.isFillMode("4:3"))
+    }
 
-        let implementation = CameraView()
-        let value = "Hello, World!"
-        let result = implementation.echo(value)
+    func testFillDoesNotParseAsNumericRatio() {
+        XCTAssertNil(AspectRatioLayout.parseViewportAspectRatio("fill", isPortrait: true))
+        XCTAssertNil(AspectRatioLayout.parseViewportAspectRatio("fill", isPortrait: false))
+    }
 
-        XCTAssertEqual(value, result)
+    func testFillUsesFullAvailableSpace() {
+        let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+            "fill",
+            availableWidth: 428,
+            availableHeight: 926,
+            isPortrait: true
+        )
+
+        XCTAssertEqual(dimensions.width, 428)
+        XCTAssertEqual(dimensions.height, 926)
+    }
+
+    func testFourThreePortraitParsesAsThreeFour() {
+        let ratio = AspectRatioLayout.parseViewportAspectRatio("4:3", isPortrait: true)
+        XCTAssertEqual(ratio ?? 0, 0.75, accuracy: 0.0001)
+    }
+
+    func testFourThreePortraitLetterboxesInTallViewport() {
+        let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+            "4:3",
+            availableWidth: 428,
+            availableHeight: 926,
+            isPortrait: true
+        )
+
+        XCTAssertEqual(dimensions.width, 428, accuracy: 0.5)
+        XCTAssertLessThan(dimensions.height, 926)
+        XCTAssertGreaterThan(dimensions.height, 500)
     }
 }
