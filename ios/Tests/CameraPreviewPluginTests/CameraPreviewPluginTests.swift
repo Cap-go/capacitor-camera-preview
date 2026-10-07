@@ -42,4 +42,18 @@ final class AspectRatioLayoutTests: XCTestCase {
         XCTAssertLessThan(dimensions.height, 926)
         XCTAssertGreaterThan(dimensions.height, 500)
     }
+
+    func testMalformedRatioFallsBackToFullViewport() {
+        XCTAssertNil(AspectRatioLayout.parseViewportAspectRatio("4:bad:3", isPortrait: true))
+
+        let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+            "4:bad:3",
+            availableWidth: 428,
+            availableHeight: 926,
+            isPortrait: true
+        )
+
+        XCTAssertEqual(dimensions.width, 428)
+        XCTAssertEqual(dimensions.height, 926)
+    }
 }

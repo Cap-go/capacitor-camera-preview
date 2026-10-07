@@ -14,14 +14,17 @@ enum AspectRatioLayout {
             return nil
         }
 
-        let parts = ratio.split(separator: ":").compactMap { Double($0) }
-        guard parts.count == 2, parts[0] > 0, parts[1] > 0 else {
+        let parts = ratio.split(separator: ":")
+        guard parts.count == 2,
+              let width = Double(parts[0]), let height = Double(parts[1]),
+              width.isFinite, height.isFinite,
+              width > 0, height > 0 else {
             return nil
         }
 
         return isPortrait ?
-            CGFloat(parts[1] / parts[0]) :
-            CGFloat(parts[0] / parts[1])
+            CGFloat(height / width) :
+            CGFloat(width / height)
     }
 
     static func dimensionsForAspectRatio(
