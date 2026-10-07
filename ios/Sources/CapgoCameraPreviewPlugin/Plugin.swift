@@ -136,10 +136,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     // MARK: - Helper Methods for Aspect Ratio
 
-    /// Parses aspect ratio string and returns the appropriate ratio for the current orientation
-    private func parseAspectRatio(_ ratio: String, isPortrait: Bool) -> CGFloat {
+    /// Parses a `width:height` string and returns the ratio for the current orientation.
+    /// Returns nil for any other string (including `fill`) or a zero part, so callers leave the full frame.
+    /// Android only applies ratio layout when `split(":")` has two numeric parts; this matches that.
+    private func parseAspectRatio(_ ratio: String, isPortrait: Bool) -> CGFloat? {
         let parts = ratio.split(separator: ":").compactMap { Double($0) }
-        guard parts.count == 2 else { return 1.0 }
+        guard parts.count == 2, parts[0] != 0, parts[1] != 0 else { return nil }
 
         // For camera (portrait), we want portrait orientation: 4:3 becomes 3:4, 16:9 becomes 9:16
         return isPortrait ?
@@ -147,9 +149,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             CGFloat(parts[0] / parts[1])
     }
 
-    /// Calculates dimensions based on aspect ratio and available space
+    /// Calculates dimensions based on aspect ratio and available space.
+    /// Non-ratio strings keep the available frame (full screen when that is what was passed in).
     private func calculateDimensionsForAspectRatio(_ aspectRatio: String, availableWidth: CGFloat, availableHeight: CGFloat, isPortrait: Bool) -> (width: CGFloat, height: CGFloat) {
-        let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
+        guard let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait) else {
+            return (width: availableWidth, height: availableHeight)
+        }
 
         // Calculate maximum size that fits the aspect ratio in available space
         let maxWidthByHeight = availableHeight * ratio
@@ -2275,20 +2280,22 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Calculate the base frame using the factorized method
         var frame = calculateCameraFrame()
 
-        // Apply aspect ratio adjustments only if not auto-centering
+        // Apply aspect ratio adjustments only if not auto-centering and the value is width:height.
+        // Non-ratio strings such as "fill" leave the frame unchanged, matching Android.
         if posX != -1 && posY != -1, let aspectRatio = self.aspectRatio {
             let isPortrait = self.isPortrait()
-            let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
-            let currentRatio = frame.width / frame.height
+            if let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait) {
+                let currentRatio = frame.width / frame.height
 
-            if currentRatio > ratio {
-                let newWidth = frame.height * ratio
-                frame.origin.x += (frame.width - newWidth) / 2
-                frame.size.width = newWidth
-            } else {
-                let newHeight = frame.width / ratio
-                frame.origin.y += (frame.height - newHeight) / 2
-                frame.size.height = newHeight
+                if currentRatio > ratio {
+                    let newWidth = frame.height * ratio
+                    frame.origin.x += (frame.width - newWidth) / 2
+                    frame.size.width = newWidth
+                } else {
+                    let newHeight = frame.width / ratio
+                    frame.origin.y += (frame.height - newHeight) / 2
+                    frame.size.height = newHeight
+                }
             }
         }
 
