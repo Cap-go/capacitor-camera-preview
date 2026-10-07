@@ -56,4 +56,18 @@ final class AspectRatioLayoutTests: XCTestCase {
         XCTAssertEqual(dimensions.width, 428)
         XCTAssertEqual(dimensions.height, 926)
     }
+
+    func testExtremeRatioQuotientFallsBackToFullViewport() {
+        XCTAssertNil(AspectRatioLayout.parseViewportAspectRatio("1e-300:1e300", isPortrait: true))
+
+        let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+            "1e-300:1e300",
+            availableWidth: 428,
+            availableHeight: 926,
+            isPortrait: true
+        )
+
+        XCTAssertEqual(dimensions.width, 428)
+        XCTAssertEqual(dimensions.height, 926)
+    }
 }

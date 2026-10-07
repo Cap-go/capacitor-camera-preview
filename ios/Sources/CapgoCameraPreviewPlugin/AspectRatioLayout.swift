@@ -22,9 +22,12 @@ enum AspectRatioLayout {
             return nil
         }
 
-        return isPortrait ?
-            CGFloat(height / width) :
-            CGFloat(width / height)
+        let viewportRatio = CGFloat(isPortrait ? height / width : width / height)
+        guard viewportRatio.isFinite, viewportRatio > 0 else {
+            return nil
+        }
+
+        return viewportRatio
     }
 
     static func dimensionsForAspectRatio(
