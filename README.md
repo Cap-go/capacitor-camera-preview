@@ -1,12 +1,28 @@
 # Capacitor Camera Preview Plugin
 
-<a href="https://capgo.app/"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-camera-preview" alt="Capgo - Instant updates for Capacitor" /></a>
+Show a live camera preview inside your Capacitor app, behind or around your own UI, and capture photos, frames and video. Build custom camera screens, scanners and AR-style overlays.
+
+<a href="https://capgo.app/?ref=plugin_camera_preview"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-camera-preview" alt="Capgo - Instant updates for Capacitor" /></a>
 
 <div align="center">
-  <h2><a href="https://capgo.app/?ref=plugin_camera_preview"> ➡️ Get Instant updates for your App with Capgo</a></h2>
-  <h2><a href="https://capgo.app/consulting/?ref=plugin_camera_preview"> Missing a feature? We’ll build the plugin for you 💪</a></h2>
+  <p><b>Capgo</b>: push fixes to your Capacitor users in minutes, build signed iOS and Android apps without a Mac, and roll back in one click.</p>
+  <h2><a href="https://capgo.app/register/?ref=plugin_camera_preview">➡️ Get started for free</a></h2>
+  <p>14-day unlimited free trial. No credit card required</p>
+  <p><a href="https://capgo.app/consulting/?ref=plugin_camera_preview">Missing a feature? We'll build the plugin for you 💪</a></p>
 </div>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Cap-go/capacitor-camera-preview/main/assets/github-social-preview.png" alt="@capgo/camera-preview for Capacitor apps" width="300" />
+</p>
+
+## Key features
+
+- **Live preview**: `start()` and `stop()` with position, size, opacity and aspect ratio control.
+- **Capture**: `capture()` for full photos and `captureSample()` for quick frames from the stream.
+- **Video**: `startRecordVideo()` and `stopRecordVideo()` with quality, codec, frame rate and stabilization settings.
+- **Camera controls**: flash, zoom, focus, exposure, white balance, `flip()` and `setDeviceId()` to pick a lens.
+- **Barcode scanning**: `startBarcodeScanner()` with `barcodeScanned` events while the preview keeps running.
+- **Platforms**: iOS, Android and Web. iOS uses AVFoundation, Android uses CameraX. Web supports a subset (preview, capture and basic controls).
 
 ![NPM Version](https://img.shields.io/npm/v/%40capgo%2Fcamera-preview)
 ![NPM Downloads](https://img.shields.io/npm/dy/%40capgo%2Fcamera-preview)
@@ -103,7 +119,7 @@ use https://capacitorjs.com/docs/apis/filesystem#deletefile for that
 
 - Native tap‑to‑focus and pinch‑to‑zoom gesture handling are intentionally disabled on both Android and iOS.
 - Handle all user interactions in your HTML/JS layer, then call the plugin methods:
-  - Focus: `await CameraPreview.setFocus({ x, y })` with normalized coordinates (0–1) relative to the preview bounds.
+  - Focus: `await CameraPreview.setFocus({ x, y })` with normalized coordinates (0 to 1) relative to the preview bounds.
   - Zoom: `await CameraPreview.setZoom({ level })` using your own gesture/UI logic.
 - Rationale: native gesture recognizers can conflict with your HTML touch handlers and block UI interactions. Keeping gestures in JS guarantees your UI receives touches as intended.
 - The `enableZoom` start option is removed. Use JS gestures + `setZoom(...)`.
