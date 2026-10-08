@@ -1344,6 +1344,9 @@ extension CameraController {
             self.lastCaptureOrientation = captureOrientation
             self.setVideoOrientation(captureOrientation, on: connection)
         }
+        // For fill + cover the preview shows a centered crop of the frame. Snapshot its
+        // shape now so the photo can be cropped to the same visible area.
+        let visibleFillRatio = self.visibleFillCaptureAspectRatio()
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
         // Only use high res if explicitly requesting large dimensions
@@ -1415,7 +1418,7 @@ extension CameraController {
                 // When max dimensions are specified, we used high-res capture
                 // First crop to aspect ratio if needed, then resize to max dimensions
                 if let aspectRatio = self.requestedAspectRatio {
-                    finalImage = self.cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+                    finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
                     print("[CameraPreview] Cropped high-res image to aspect ratio \(aspectRatio)")
                 }
                 // Then resize to fit within maximum dimensions while maintaining aspect ratio
@@ -1424,7 +1427,7 @@ extension CameraController {
             } else if let aspectRatio = self.requestedAspectRatio {
                 // No max dimensions specified, but aspect ratio is specified
                 // Always apply aspect ratio cropping to ensure correct orientation
-                finalImage = self.cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+                finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
                 print("[CameraPreview] Applied aspect ratio cropping for \(aspectRatio): \(finalImage.size.width)x\(finalImage.size.height)")
             }
 
@@ -1739,6 +1742,55 @@ extension CameraController {
         }
 
         return resizeImage(image: image, to: targetSize)
+    }
+
+    /// Ratio of the visible preview area for `fill` + `cover`, in capture orientation.
+    /// Returns `nil` for numeric ratios and for `contain`, where the full frame is visible.
+    func visibleFillCaptureAspectRatio() -> CGFloat? {
+        guard let aspectRatio = self.requestedAspectRatio,
+              AspectRatioLayout.isFillMode(aspectRatio),
+              self.requestedAspectMode == "cover",
+              let previewLayer = self.previewLayer else {
+            return nil
+        }
+
+        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
+        let captureIsPortrait = orientation == .portrait || orientation == .portraitUpsideDown
+        let screenBounds = UIScreen.main.bounds
+        return AspectRatioLayout.visibleFillCaptureAspectRatio(
+            previewSize: previewLayer.bounds.size,
+            interfaceIsPortrait: screenBounds.height >= screenBounds.width,
+            captureIsPortrait: captureIsPortrait
+        )
+    }
+
+    /// Crops a captured photo so it matches what the preview shows.
+    func cropCapturedImage(_ image: UIImage, aspectRatio: String, visibleFillRatio: CGFloat?) -> UIImage {
+        if AspectRatioLayout.isFillMode(aspectRatio) {
+            guard let ratio = visibleFillRatio else {
+                // fill + contain shows the whole frame, so keep the full photo.
+                return image
+            }
+            return cropImage(image, toAspectRatio: ratio) ?? image
+        }
+        return cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+    }
+
+    /// Center-crops `image` (after normalizing its orientation) to a width / height ratio.
+    func cropImage(_ image: UIImage, toAspectRatio targetAspectRatio: CGFloat) -> UIImage? {
+        let normalizedImage = image.imageOrientation == .up ? image : (image.fixedOrientation() ?? image)
+        guard let cgImage = normalizedImage.cgImage else {
+            return nil
+        }
+
+        let pixelSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let cropRect = AspectRatioLayout.centerCropRect(imageSize: pixelSize, targetAspectRatio: targetAspectRatio)
+        guard let croppedCGImage = cgImage.cropping(to: cropRect) else {
+            return nil
+        }
+
+        print("[CameraPreview] cropImage - Cropped \(pixelSize.width)x\(pixelSize.height) to visible fill area \(cropRect)")
+        return UIImage(cgImage: croppedCGImage, scale: normalizedImage.scale, orientation: .up)
     }
 
     func cropImageToAspectRatio(image: UIImage, aspectRatio: String) -> UIImage? {

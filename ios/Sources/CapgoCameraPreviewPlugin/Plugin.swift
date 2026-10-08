@@ -2171,6 +2171,22 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         var finalWidth = currentWidth
         var finalHeight = adjustedHeight
 
+        // A fill preview with explicit x and y but no width or height still holds the
+        // screen-sized defaults from start(). Size it from the web view instead.
+        let usesDefaultSize = currentWidth == UIScreen.main.bounds.size.width &&
+            currentHeight == UIScreen.main.bounds.size.height
+        if currentX != -1 && currentY != -1 && usesDefaultSize,
+           let ratio = currentAspectRatio, AspectRatioLayout.isFillMode(ratio) {
+            let size = AspectRatioLayout.positionedFillSize(
+                x: currentX,
+                y: currentY,
+                viewportWidth: webViewWidth,
+                viewportHeight: webViewHeight - paddingBottom
+            )
+            finalWidth = size.width
+            finalHeight = size.height
+        }
+
         // Handle auto-centering when position is -1
         if currentX == -1 || currentY == -1 {
             // Only override dimensions if aspect ratio is provided and no explicit dimensions given

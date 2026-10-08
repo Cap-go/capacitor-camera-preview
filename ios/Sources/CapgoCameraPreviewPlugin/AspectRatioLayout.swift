@@ -49,4 +49,53 @@ enum AspectRatioLayout {
 
         return (width: availableWidth, height: maxHeightByWidth)
     }
+
+    /// Size of an explicitly positioned `fill` preview that has no width or height:
+    /// the web-view space remaining to the right of `x` and below `y`.
+    static func positionedFillSize(
+        x: CGFloat,
+        y: CGFloat,
+        viewportWidth: CGFloat,
+        viewportHeight: CGFloat
+    ) -> (width: CGFloat, height: CGFloat) {
+        (width: max(0, viewportWidth - x), height: max(0, viewportHeight - y))
+    }
+
+    /// Width-to-height ratio of the area visible in a `fill` preview using `cover`
+    /// (`resizeAspectFill`), expressed in the orientation of the captured photo.
+    /// Returns `nil` when the preview size is unusable.
+    static func visibleFillCaptureAspectRatio(
+        previewSize: CGSize,
+        interfaceIsPortrait: Bool,
+        captureIsPortrait: Bool
+    ) -> CGFloat? {
+        guard previewSize.width.isFinite, previewSize.height.isFinite,
+              previewSize.width > 0, previewSize.height > 0 else {
+            return nil
+        }
+
+        let ratio = previewSize.width / previewSize.height
+        return interfaceIsPortrait == captureIsPortrait ? ratio : 1 / ratio
+    }
+
+    /// Centered crop rect with `targetAspectRatio` (width / height) inside `imageSize`,
+    /// matching how `resizeAspectFill` centers the visible area.
+    static func centerCropRect(imageSize: CGSize, targetAspectRatio: CGFloat) -> CGRect {
+        let bounds = CGRect(origin: .zero, size: imageSize)
+        guard targetAspectRatio.isFinite, targetAspectRatio > 0,
+              imageSize.width > 0, imageSize.height > 0 else {
+            return bounds
+        }
+
+        let imageAspectRatio = imageSize.width / imageSize.height
+        let rect: CGRect
+        if imageAspectRatio > targetAspectRatio {
+            let width = imageSize.height * targetAspectRatio
+            rect = CGRect(x: (imageSize.width - width) / 2, y: 0, width: width, height: imageSize.height)
+        } else {
+            let height = imageSize.width / targetAspectRatio
+            rect = CGRect(x: 0, y: (imageSize.height - height) / 2, width: imageSize.width, height: height)
+        }
+        return rect.intersection(bounds).integral.intersection(bounds)
+    }
 }
