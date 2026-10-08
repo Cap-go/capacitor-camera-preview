@@ -96,13 +96,13 @@ public class GridOverlayView extends View {
 
         // Draw vertical lines
         for (int i = 1; i < divisions; i++) {
-            float x = left + (i * stepX);
+            float x = left + i * stepX;
             canvas.drawLine(x, top, x, top + height, gridPaint);
         }
 
         // Draw horizontal lines
         for (int i = 1; i < divisions; i++) {
-            float y = top + (i * stepY);
+            float y = top + i * stepY;
             canvas.drawLine(left, y, left + width, y, gridPaint);
         }
     }

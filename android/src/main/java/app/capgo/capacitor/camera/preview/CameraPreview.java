@@ -1279,10 +1279,10 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String originalDeviceId = call.getString("deviceId");
         String deviceId = originalDeviceId; // Use a mutable variable
 
-        final String position = (positionParam == null ||
-                positionParam.isEmpty() ||
-                "rear".equals(positionParam) ||
-                "back".equals(positionParam))
+        final String position = positionParam == null ||
+            positionParam.isEmpty() ||
+            "rear".equals(positionParam) ||
+            "back".equals(positionParam)
             ? "back"
             : "front";
         // Use -1 as default to indicate centering is needed when x/y not provided
@@ -1611,7 +1611,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 Log.d("CameraPreview", "========================");
 
                 // Pass along whether we're centering so CameraXView knows not to add insets
-                boolean isCentered = (x == -1 || y == -1);
+                boolean isCentered = x == -1 || y == -1;
 
                 CameraSessionConfiguration config = new CameraSessionConfiguration(
                     finalDeviceId,
@@ -2141,7 +2141,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d("CameraPreview", "9. WEBVIEW INSET - " + webViewTopInset);
             Log.d(
                 "CameraPreview",
-                "9b. SAFE AREA - " + (lastIncludeSafeAreaInsets ? ("ENABLED (inset=" + safeAreaTopInsetPx + ")") : "DISABLED")
+                "9b. SAFE AREA - " + (lastIncludeSafeAreaInsets ? "ENABLED (inset=" + safeAreaTopInsetPx + ")" : "DISABLED")
             );
             Log.d(
                 "CameraPreview",
@@ -2150,13 +2150,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             Log.d(
                 "CameraPreview",
                 "11. RETURNED (logical) - x=" +
-                    (x / pixelRatio) +
+                    x / pixelRatio +
                     ", y=" +
-                    (relativeY / pixelRatio) +
+                    relativeY / pixelRatio +
                     ", width=" +
-                    (width / pixelRatio) +
+                    width / pixelRatio +
                     ", height=" +
-                    (height / pixelRatio)
+                    height / pixelRatio
             );
             Log.d("CameraPreview", "12. PIXEL RATIO - " + pixelRatio);
             Log.d("CameraPreview", "========================");
@@ -2515,8 +2515,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final int safeAreaTopInsetPx = lastIncludeSafeAreaInsets ? getSafeAreaTopInsetPx() : 0;
         final float pixelRatioFinal = pixelRatio;
 
-        int x = (xParam != null && xParam > 0) ? (int) (xParam * pixelRatio) : 0;
-        int y = (yParam != null && yParam > 0) ? (int) (yParam * pixelRatio) : 0;
+        int x = xParam != null && xParam > 0 ? (int) (xParam * pixelRatio) : 0;
+        int y = yParam != null && yParam > 0 ? (int) (yParam * pixelRatio) : 0;
 
         // Add inset to Y for coordinate conversion if needed.
         // - If the WebView is already offset from the screen top, use that.
@@ -2526,8 +2526,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         } else if (!isWebViewOffset && lastIncludeSafeAreaInsets && safeAreaTopInsetPx > 0 && y > 0) {
             y += safeAreaTopInsetPx;
         }
-        int width = (widthParam != null && widthParam > 0) ? (int) (widthParam * pixelRatio) : 0;
-        int height = (heightParam != null && heightParam > 0) ? (int) (heightParam * pixelRatio) : 0;
+        int width = widthParam != null && widthParam > 0 ? (int) (widthParam * pixelRatio) : 0;
+        int height = heightParam != null && heightParam > 0 ? (int) (heightParam * pixelRatio) : 0;
 
         cameraXView.setPreviewSize(x, y, width, height, () -> {
             // Return the actual preview bounds after layout operations are complete
