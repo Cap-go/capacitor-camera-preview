@@ -487,13 +487,10 @@ class CameraController: NSObject, CXCallObserverDelegate {
     // older systems or if the property is unavailable.
     func getDisplayZoomMultiplier() -> Float {
         var multiplier: Float = 1.0
-        // Use KVC to avoid compile-time dependency on the iOS 18 SDK symbol
         let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera
         if #available(iOS 18.0, *), let device = device {
-            if let value = device.value(forKey: "displayVideoZoomFactorMultiplier") as? NSNumber {
-                let multiplierValue = value.floatValue
-                if multiplierValue > 0 { multiplier = multiplierValue }
-            }
+            let multiplierValue = device.displayVideoZoomFactorMultiplier
+            if multiplierValue > 0 { multiplier = multiplierValue }
         }
         return multiplier
     }
