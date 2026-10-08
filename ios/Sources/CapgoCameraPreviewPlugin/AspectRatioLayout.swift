@@ -50,7 +50,13 @@ enum AspectRatioLayout {
         return (width: availableWidth, height: maxHeightByWidth)
     }
 
-    /// Size of an explicitly positioned `fill` preview that has no width or height:
+    /// Length left in `available` after an explicit `origin`, clamped at zero.
+    /// Used to size an explicitly positioned `fill` axis from the web view.
+    static func remainingLength(from origin: CGFloat, in available: CGFloat) -> CGFloat {
+        max(0, available - origin)
+    }
+
+    /// Size of a `fill` preview with explicit `x` and `y` and no width or height:
     /// the web-view space remaining to the right of `x` and below `y`.
     static func positionedFillSize(
         x: CGFloat,
@@ -58,7 +64,7 @@ enum AspectRatioLayout {
         viewportWidth: CGFloat,
         viewportHeight: CGFloat
     ) -> (width: CGFloat, height: CGFloat) {
-        (width: max(0, viewportWidth - x), height: max(0, viewportHeight - y))
+        (width: remainingLength(from: x, in: viewportWidth), height: remainingLength(from: y, in: viewportHeight))
     }
 
     /// Width-to-height ratio of the area visible in a `fill` preview using `cover`

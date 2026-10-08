@@ -85,6 +85,12 @@ final class AspectRatioLayoutTests: XCTestCase {
         XCTAssertEqual(size.height, 0)
     }
 
+    func testRemainingLengthIsComputedPerAxis() {
+        XCTAssertEqual(AspectRatioLayout.remainingLength(from: 40, in: 390), 350)
+        XCTAssertEqual(AspectRatioLayout.remainingLength(from: 0, in: 800), 800)
+        XCTAssertEqual(AspectRatioLayout.remainingLength(from: 900, in: 800), 0)
+    }
+
     func testVisibleFillRatioMatchesPreviewWhenOrientationsAgree() {
         let ratio = AspectRatioLayout.visibleFillCaptureAspectRatio(
             previewSize: CGSize(width: 390, height: 844),

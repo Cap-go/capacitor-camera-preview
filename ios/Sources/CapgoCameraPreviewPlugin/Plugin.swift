@@ -111,6 +111,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     var posY: CGFloat?
     var width: CGFloat?
     var height: CGFloat?
+    /// Whether `width` / `height` came from the caller rather than from defaults or aspect ratio sizing.
+    var widthIsExplicit = false
+    var heightIsExplicit = false
     var paddingBottom: CGFloat?
     var rotateWhenOrientationChanged: Bool?
     var toBack: Bool?
@@ -479,6 +482,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             )
             self.width = dimensions.width
             self.height = dimensions.height
+            self.widthIsExplicit = false
+            self.heightIsExplicit = false
         }
 
         self.updateCameraFrame()
@@ -715,15 +720,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Set width - use screen width if not provided or if 0
         if let width = call.getInt("width"), width > 0 {
             self.width = CGFloat(width)
+            self.widthIsExplicit = true
         } else {
             self.width = UIScreen.main.bounds.size.width
+            self.widthIsExplicit = false
         }
 
         // Set height - use screen height if not provided or if 0
         if let height = call.getInt("height"), height > 0 {
             self.height = CGFloat(height)
+            self.heightIsExplicit = true
         } else {
             self.height = UIScreen.main.bounds.size.height
+            self.heightIsExplicit = false
         }
 
         // Set x position - use exact CSS pixel value from web view, or mark for centering
@@ -2171,22 +2180,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         var finalWidth = currentWidth
         var finalHeight = adjustedHeight
 
-        // A fill preview with explicit x and y but no width or height still holds the
-        // screen-sized defaults from start(). Size it from the web view instead.
-        let usesDefaultSize = currentWidth == UIScreen.main.bounds.size.width &&
-            currentHeight == UIScreen.main.bounds.size.height
-        if currentX != -1 && currentY != -1 && usesDefaultSize,
-           let ratio = currentAspectRatio, AspectRatioLayout.isFillMode(ratio) {
-            let size = AspectRatioLayout.positionedFillSize(
-                x: currentX,
-                y: currentY,
-                viewportWidth: webViewWidth,
-                viewportHeight: webViewHeight - paddingBottom
-            )
-            finalWidth = size.width
-            finalHeight = size.height
-        }
-
         // Handle auto-centering when position is -1
         if currentX == -1 || currentY == -1 {
             // Only override dimensions if aspect ratio is provided and no explicit dimensions given
@@ -2254,6 +2247,17 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             } else {
                 finalY = currentY
+            }
+        }
+
+        // A fill preview sizes each explicitly positioned axis from the web-view space
+        // remaining after that coordinate, unless the caller supplied that dimension.
+        if let ratio = currentAspectRatio, AspectRatioLayout.isFillMode(ratio) {
+            if currentX != -1 && width == nil && !self.widthIsExplicit {
+                finalWidth = AspectRatioLayout.remainingLength(from: currentX, in: webViewWidth)
+            }
+            if currentY != -1 && height == nil && !self.heightIsExplicit {
+                finalHeight = AspectRatioLayout.remainingLength(from: currentY, in: webViewHeight - paddingBottom)
             }
         }
 
@@ -2354,8 +2358,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.posY = -1 // Auto-center if Y not provided
         }
 
-        if let width = call.getInt("width") { self.width = CGFloat(width) }
-        if let height = call.getInt("height") { self.height = CGFloat(height) }
+        if let width = call.getInt("width") {
+            self.width = CGFloat(width)
+            self.widthIsExplicit = true
+        }
+        if let height = call.getInt("height") {
+            self.height = CGFloat(height)
+            self.heightIsExplicit = true
+        }
 
         DispatchQueue.main.async {
             // Direct update without animation for better performance
