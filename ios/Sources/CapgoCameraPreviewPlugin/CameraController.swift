@@ -490,7 +490,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
         let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera
         if #available(iOS 18.0, *), let device = device {
             let multiplierValue = device.displayVideoZoomFactorMultiplier
-            if multiplierValue > 0 { multiplier = multiplierValue }
+            if multiplierValue > 0 { multiplier = Float(multiplierValue) }
         }
         return multiplier
     }
