@@ -4,8 +4,24 @@ import UIKit
 import CoreLocation
 import UniformTypeIdentifiers
 import CoreMotion
+import CallKit
 
-class CameraController: NSObject {
+class CameraController: NSObject, CXCallObserverDelegate {
+    override init() {
+        super.init()
+        self.callObserver.setDelegate(self, queue: nil)
+    }
+
+    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        guard call.hasEnded,
+              callObserver.calls.allSatisfy({ $0.hasEnded }),
+              let session = self.captureSession else { return }
+        self.sessionRecoveryQueue.async { [weak self] in
+            guard let self = self, self.captureSession === session else { return }
+            self.restoreAudioInputIfNeeded(for: session)
+        }
+    }
+
     private func getVideoOrientation() -> AVCaptureVideoOrientation {
         var orientation: AVCaptureVideoOrientation = .portrait
         if Thread.isMainThread {
@@ -150,6 +166,16 @@ class CameraController: NSObject {
     // Add callback for detecting when first frame is ready
     var firstFrameReadyCallback: (() -> Void)?
     var hasReceivedFirstFrame = false
+
+    var onCameraInterrupted: ((String, Bool) -> Void)?
+    var onCameraInterruptionEnded: (() -> Void)?
+    var onStartFailure: ((Error) -> Void)?
+
+    private let callObserver = CXCallObserver()
+    private weak var observedCaptureSession: AVCaptureSession?
+    private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
+    private var activePrepareToken: UInt = 0
+    private var audioInputEnabledByUser = false
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -658,14 +684,28 @@ extension CameraController {
         self.outputsPrepared = true
     }
 
-    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", completionHandler: @escaping (Error?) -> Void) {
+    func invalidateActivePrepare() {
+        self.activePrepareToken = 0
+    }
+
+    private func isPrepareTokenValid(_ token: UInt) -> Bool {
+        return token != 0 && token == self.activePrepareToken
+    }
+
+    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
+
+        self.activePrepareToken = startToken
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else {
                 DispatchQueue.main.async {
                     completionHandler(CameraControllerError.unknown)
                 }
+                return
+            }
+
+            guard self.isPrepareTokenValid(startToken) else {
                 return
             }
 
@@ -758,12 +798,19 @@ extension CameraController {
                 NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
                 NotificationCenter.default.addObserver(self, selector: #selector(self.subjectAreaDidChange), name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
 
+                self.registerCaptureSessionObservers(for: captureSession)
+
+                guard self.isPrepareTokenValid(startToken) else {
+                    return
+                }
+
                 // Start the session - all outputs are already configured
                 captureSession.startRunning()
 
                 // Bring to full opacity after a tiny moment to smooth any visual artifacts
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                    if let layer = self?.previewLayer {
+                    guard let self = self, self.isPrepareTokenValid(startToken) else { return }
+                    if let layer = self.previewLayer {
                         CATransaction.begin()
                         CATransaction.setAnimationDuration(0.1)
                         layer.opacity = 1.0
@@ -773,6 +820,7 @@ extension CameraController {
 
                 // Success callback
                 DispatchQueue.main.async {
+                    guard self.isPrepareTokenValid(startToken) else { return }
                     completionHandler(nil)
                 }
             } catch {
@@ -780,6 +828,7 @@ extension CameraController {
                     self.motionManager.stopAccelerometerUpdates()
                 }
                 DispatchQueue.main.async {
+                    guard self.isPrepareTokenValid(startToken) else { return }
                     completionHandler(error)
                 }
             }
@@ -951,6 +1000,8 @@ extension CameraController {
     private func configureDeviceInputs(cameraPosition: String, deviceId: String?, disableAudio: Bool) throws {
         guard let captureSession = self.captureSession else { throw CameraControllerError.captureSessionIsMissing }
 
+        self.audioInputEnabledByUser = !disableAudio
+
         // Ensure cameras are discovered before configuring inputs
         ensureCamerasDiscovered()
 
@@ -991,8 +1042,8 @@ extension CameraController {
             throw CameraControllerError.inputsAreInvalid
         }
 
-        // Add audio input if needed
-        if !disableAudio {
+        // Add audio input if needed (skip while a phone call owns the audio session)
+        if self.shouldAttachAudioInput(disableAudio: disableAudio) {
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
@@ -1344,6 +1395,9 @@ extension CameraController {
             self.lastCaptureOrientation = captureOrientation
             self.setVideoOrientation(captureOrientation, on: connection)
         }
+        // For fill + cover the preview shows a centered crop of the frame. Snapshot its
+        // shape now so the photo can be cropped to the same visible area.
+        let visibleFillRatio = self.visibleFillCaptureAspectRatio()
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
         // Only use high res if explicitly requesting large dimensions
@@ -1415,7 +1469,7 @@ extension CameraController {
                 // When max dimensions are specified, we used high-res capture
                 // First crop to aspect ratio if needed, then resize to max dimensions
                 if let aspectRatio = self.requestedAspectRatio {
-                    finalImage = self.cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+                    finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
                     print("[CameraPreview] Cropped high-res image to aspect ratio \(aspectRatio)")
                 }
                 // Then resize to fit within maximum dimensions while maintaining aspect ratio
@@ -1424,7 +1478,7 @@ extension CameraController {
             } else if let aspectRatio = self.requestedAspectRatio {
                 // No max dimensions specified, but aspect ratio is specified
                 // Always apply aspect ratio cropping to ensure correct orientation
-                finalImage = self.cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+                finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
                 print("[CameraPreview] Applied aspect ratio cropping for \(aspectRatio): \(finalImage.size.width)x\(finalImage.size.height)")
             }
 
@@ -1739,6 +1793,55 @@ extension CameraController {
         }
 
         return resizeImage(image: image, to: targetSize)
+    }
+
+    /// Ratio of the visible preview area for `fill` + `cover`, in capture orientation.
+    /// Returns `nil` for numeric ratios and for `contain`, where the full frame is visible.
+    func visibleFillCaptureAspectRatio() -> CGFloat? {
+        guard let aspectRatio = self.requestedAspectRatio,
+              AspectRatioLayout.isFillMode(aspectRatio),
+              self.requestedAspectMode == "cover",
+              let previewLayer = self.previewLayer else {
+            return nil
+        }
+
+        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
+        let captureIsPortrait = orientation == .portrait || orientation == .portraitUpsideDown
+        let screenBounds = UIScreen.main.bounds
+        return AspectRatioLayout.visibleFillCaptureAspectRatio(
+            previewSize: previewLayer.bounds.size,
+            interfaceIsPortrait: screenBounds.height >= screenBounds.width,
+            captureIsPortrait: captureIsPortrait
+        )
+    }
+
+    /// Crops a captured photo so it matches what the preview shows.
+    func cropCapturedImage(_ image: UIImage, aspectRatio: String, visibleFillRatio: CGFloat?) -> UIImage {
+        if AspectRatioLayout.isFillMode(aspectRatio) {
+            guard let ratio = visibleFillRatio else {
+                // fill + contain shows the whole frame, so keep the full photo.
+                return image
+            }
+            return cropImage(image, toAspectRatio: ratio) ?? image
+        }
+        return cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+    }
+
+    /// Center-crops `image` (after normalizing its orientation) to a width / height ratio.
+    func cropImage(_ image: UIImage, toAspectRatio targetAspectRatio: CGFloat) -> UIImage? {
+        let normalizedImage = image.imageOrientation == .up ? image : (image.fixedOrientation() ?? image)
+        guard let cgImage = normalizedImage.cgImage else {
+            return nil
+        }
+
+        let pixelSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let cropRect = AspectRatioLayout.centerCropRect(imageSize: pixelSize, targetAspectRatio: targetAspectRatio)
+        guard let croppedCGImage = cgImage.cropping(to: cropRect) else {
+            return nil
+        }
+
+        print("[CameraPreview] cropImage - Cropped \(pixelSize.width)x\(pixelSize.height) to visible fill area \(cropRect)")
+        return UIImage(cgImage: croppedCGImage, scale: normalizedImage.scale, orientation: .up)
     }
 
     func cropImageToAspectRatio(image: UIImage, aspectRatio: String) -> UIImage? {
@@ -2536,10 +2639,168 @@ extension CameraController {
         self.updateVideoOrientation()
     }
 
+    private func isPhoneCallActive() -> Bool {
+        self.callObserver.calls.contains { !$0.hasEnded }
+    }
+
+    private func shouldAttachAudioInput(disableAudio: Bool) -> Bool {
+        return !disableAudio && !self.isPhoneCallActive()
+    }
+
+    private static let insufficientAudioPriorityOSStatus = 561017449
+
+    private func isAudioPriorityError(_ error: NSError) -> Bool {
+        var current: NSError? = error
+        while let err = current {
+            if err.domain == NSOSStatusErrorDomain && err.code == CameraController.insufficientAudioPriorityOSStatus {
+                return true
+            }
+            current = err.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
+    }
+
+    private func registerCaptureSessionObservers(for session: AVCaptureSession) {
+        self.unregisterCaptureSessionObservers()
+        self.observedCaptureSession = session
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.handleCaptureSessionRuntimeError(_:)),
+            name: .AVCaptureSessionRuntimeError,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.handleCaptureSessionWasInterrupted(_:)),
+            name: .AVCaptureSessionWasInterrupted,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.handleCaptureSessionInterruptionEnded(_:)),
+            name: .AVCaptureSessionInterruptionEnded,
+            object: session
+        )
+    }
+
+    private func unregisterCaptureSessionObservers() {
+        guard let session = self.observedCaptureSession else { return }
+        NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionRuntimeError, object: session)
+        NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionWasInterrupted, object: session)
+        NotificationCenter.default.removeObserver(self, name: .AVCaptureSessionInterruptionEnded, object: session)
+        self.observedCaptureSession = nil
+    }
+
+    private func restoreAudioInputIfNeeded(for session: AVCaptureSession) {
+        guard self.audioInputEnabledByUser, self.audioInput == nil, !self.isPhoneCallActive() else { return }
+        guard self.captureSession === session else { return }
+
+        do {
+            session.beginConfiguration()
+            defer { session.commitConfiguration() }
+            if self.audioDevice == nil {
+                self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
+            }
+            guard let audioDevice = self.audioDevice else {
+                return
+            }
+            let input = try AVCaptureDeviceInput(device: audioDevice)
+            if session.canAddInput(input) {
+                session.addInput(input)
+                self.audioInput = input
+            }
+        } catch {
+            print("[CameraPreview] Failed to restore audio input after interruption: \(error)")
+        }
+    }
+
+    private func dropAudioInputAndRestartSession(for session: AVCaptureSession) {
+        guard self.captureSession === session else { return }
+
+        session.beginConfiguration()
+        for input in session.inputs {
+            guard let deviceInput = input as? AVCaptureDeviceInput else { continue }
+            if deviceInput.device.hasMediaType(.audio) {
+                session.removeInput(deviceInput)
+            }
+        }
+        self.audioInput = nil
+        session.commitConfiguration()
+
+        if session.isRunning {
+            session.stopRunning()
+        }
+        session.startRunning()
+    }
+
+    @objc private func handleCaptureSessionRuntimeError(_ notification: Notification) {
+        guard let error = notification.userInfo?[AVCaptureSessionErrorKey] as? NSError else { return }
+        print("[CameraPreview] AVCaptureSession runtime error: \(error)")
+
+        let audioConflict = self.isAudioPriorityError(error)
+        guard let session = notification.object as? AVCaptureSession else { return }
+        if audioConflict {
+            self.sessionRecoveryQueue.async { [weak self] in
+                self?.dropAudioInputAndRestartSession(for: session)
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.onCameraInterrupted?("runtimeError", audioConflict)
+            if !audioConflict && !self.hasReceivedFirstFrame {
+                self.sessionRecoveryQueue.async { [weak self] in
+                    guard let self = self, self.captureSession === session else { return }
+                    session.stopRunning()
+                    DispatchQueue.main.async {
+                        self.onStartFailure?(error)
+                    }
+                }
+            }
+        }
+    }
+
+    @objc private func handleCaptureSessionWasInterrupted(_ notification: Notification) {
+        guard let session = notification.object as? AVCaptureSession else { return }
+        var audioRelated = false
+        if let reasonValue = notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int,
+           let reason = AVCaptureSession.InterruptionReason(rawValue: reasonValue),
+           reason == .audioDeviceInUseByAnotherClient {
+            audioRelated = true
+            self.sessionRecoveryQueue.async { [weak self] in
+                self?.dropAudioInputAndRestartSession(for: session)
+            }
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            self?.onCameraInterrupted?("interrupted", audioRelated)
+        }
+    }
+
+    @objc private func handleCaptureSessionInterruptionEnded(_ notification: Notification) {
+        guard let session = notification.object as? AVCaptureSession else { return }
+        self.sessionRecoveryQueue.async { [weak self] in
+            guard let self = self, self.captureSession === session else { return }
+            self.restoreAudioInputIfNeeded(for: session)
+            if !session.isRunning {
+                session.startRunning()
+            }
+            DispatchQueue.main.async {
+                guard self.captureSession === session else { return }
+                self.onCameraInterruptionEnded?()
+            }
+        }
+    }
+
     func cleanup() {
+        self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         stopBarcodeScanner()
+        self.unregisterCaptureSessionObservers()
+        self.onCameraInterrupted = nil
+        self.onCameraInterruptionEnded = nil
+        self.onStartFailure = nil
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
@@ -2572,6 +2833,7 @@ extension CameraController {
         self.captureSession = nil
         self.currentCameraPosition = nil
         self.preferredExposureMode = "CONTINUOUS"
+        self.audioInputEnabledByUser = false
 
         // Reset output preparation status
         self.outputsPrepared = false

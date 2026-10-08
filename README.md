@@ -434,6 +434,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`addListener('barcodeScanned', ...)`](#addlistenerbarcodescanned-)
 * [`addListener('barcodeScanError', ...)`](#addlistenerbarcodescanerror-)
 * [`addListener('recordingFinished', ...)`](#addlistenerrecordingfinished-)
+* [`addListener('cameraInterrupted', ...)`](#addlistenercamerainterrupted-)
+* [`addListener('cameraInterruptionEnded', ...)`](#addlistenercamerainterruptionended-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -1259,6 +1261,47 @@ Adds a listener fired when a video recording finishes natively, including automa
 --------------------
 
 
+### addListener('cameraInterrupted', ...)
+
+```typescript
+addListener(eventName: 'cameraInterrupted', listenerFunc: (data: CameraInterruptedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for capture session interruptions (for example an active phone call).
+
+| Param              | Type                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'cameraInterrupted'</code>                                                             |
+| **`listenerFunc`** | <code>(data: <a href="#camerainterruptedevent">CameraInterruptedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.11.7
+
+--------------------
+
+
+### addListener('cameraInterruptionEnded', ...)
+
+```typescript
+addListener(eventName: 'cameraInterruptionEnded', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener fired when a capture session interruption ends.
+Native recovery may still be restarting the session; wait for preview frames before assuming the stream is live.
+
+| Param              | Type                                   |
+| ------------------ | -------------------------------------- |
+| **`eventName`**    | <code>'cameraInterruptionEnded'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>             |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.11.7
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -1722,6 +1765,16 @@ Represents the detailed information of the currently active lens.
 | Prop          | Type                | Description                   |
 | ------------- | ------------------- | ----------------------------- |
 | **`message`** | <code>string</code> | Native scanner error message. |
+
+
+#### CameraInterruptedEvent
+
+Emitted when the native capture session is interrupted (for example during a phone call).
+
+| Prop               | Type                                         | Description                                                                       |
+| ------------------ | -------------------------------------------- | --------------------------------------------------------------------------------- |
+| **`reason`**       | <code>'runtimeError' \| 'interrupted'</code> | Why the session was interrupted.                                                  |
+| **`audioDropped`** | <code>boolean</code>                         | When true, the plugin removed the microphone input and continued with video only. |
 
 
 #### SafeAreaInsets

@@ -111,6 +111,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     var posY: CGFloat?
     var width: CGFloat?
     var height: CGFloat?
+    /// Whether `width` / `height` came from the caller rather than from defaults or aspect ratio sizing.
+    var widthIsExplicit = false
+    var heightIsExplicit = false
     var paddingBottom: CGFloat?
     var rotateWhenOrientationChanged: Bool?
     var toBack: Bool?
@@ -129,40 +132,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var isPresentingPermissionAlert: Bool = false
     private var pendingStartBarcodeScannerOptions: (formats: [String], detectionInterval: Int)?
     private var hasResolvedStartCall: Bool = false
+    private var startGeneration: UInt = 0
+    private var firstFrameTimeoutWorkItem: DispatchWorkItem?
+    private var pendingStartCall: CAPPluginCall?
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
     private var originalWebViewSubviewColors: [UIView: UIColor] = [:]
-
-    // MARK: - Helper Methods for Aspect Ratio
-
-    /// Parses aspect ratio string and returns the appropriate ratio for the current orientation
-    private func parseAspectRatio(_ ratio: String, isPortrait: Bool) -> CGFloat {
-        let parts = ratio.split(separator: ":").compactMap { Double($0) }
-        guard parts.count == 2 else { return 1.0 }
-
-        // For camera (portrait), we want portrait orientation: 4:3 becomes 3:4, 16:9 becomes 9:16
-        return isPortrait ?
-            CGFloat(parts[1] / parts[0]) :
-            CGFloat(parts[0] / parts[1])
-    }
-
-    /// Calculates dimensions based on aspect ratio and available space
-    private func calculateDimensionsForAspectRatio(_ aspectRatio: String, availableWidth: CGFloat, availableHeight: CGFloat, isPortrait: Bool) -> (width: CGFloat, height: CGFloat) {
-        let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
-
-        // Calculate maximum size that fits the aspect ratio in available space
-        let maxWidthByHeight = availableHeight * ratio
-        let maxHeightByWidth = availableWidth / ratio
-
-        if maxWidthByHeight <= availableWidth {
-            // Height is the limiting factor
-            return (width: maxWidthByHeight, height: availableHeight)
-        } else {
-            // Width is the limiting factor
-            return (width: availableWidth, height: maxHeightByWidth)
-        }
-    }
 
     // MARK: - Transparency Methods
 
@@ -501,9 +477,16 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Parse aspect ratio - convert to portrait orientation for camera use
         // Use the centralized calculation method
         if let aspectRatio = self.aspectRatio {
-            let dimensions = calculateDimensionsForAspectRatio(aspectRatio, availableWidth: availableWidth, availableHeight: availableHeight, isPortrait: isPortrait)
+            let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                aspectRatio,
+                availableWidth: availableWidth,
+                availableHeight: availableHeight,
+                isPortrait: isPortrait
+            )
             self.width = dimensions.width
             self.height = dimensions.height
+            self.widthIsExplicit = false
+            self.heightIsExplicit = false
         }
 
         self.updateCameraFrame()
@@ -685,7 +668,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // If force is true, kill everything and restart no matter what
         if force {
+            if let pendingStartCall = self.pendingStartCall, !self.hasResolvedStartCall {
+                self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
+            }
             if self.isInitializing || self.isInitialized || self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+                self.startGeneration += 1
+                self.cancelFirstFrameTimeout()
                 // Force stop everything synchronously
                 DispatchQueue.main.sync {
                     self.cameraController.removeGridOverlay()
@@ -732,6 +720,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.isInitializing = true
         self.hasResolvedStartCall = false
+        self.pendingStartCall = call
+        self.startGeneration += 1
+        let startToken = self.startGeneration
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -740,15 +731,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Set width - use screen width if not provided or if 0
         if let width = call.getInt("width"), width > 0 {
             self.width = CGFloat(width)
+            self.widthIsExplicit = true
         } else {
             self.width = UIScreen.main.bounds.size.width
+            self.widthIsExplicit = false
         }
 
         // Set height - use screen height if not provided or if 0
         if let height = call.getInt("height"), height > 0 {
             self.height = CGFloat(height)
+            self.heightIsExplicit = true
         } else {
             self.height = UIScreen.main.bounds.size.height
+            self.heightIsExplicit = false
         }
 
         // Set x position - use exact CSS pixel value from web view, or mark for centering
@@ -819,18 +814,36 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             }
 
-            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality) { error in
+            self.cameraController.onCameraInterrupted = { [weak self] reason, audioDropped in
+                self?.notifyListeners("cameraInterrupted", data: [
+                    "reason": reason,
+                    "audioDropped": audioDropped
+                ])
+            }
+            self.cameraController.onCameraInterruptionEnded = { [weak self] in
+                self?.notifyListeners("cameraInterruptionEnded", data: [:])
+            }
+            self.cameraController.onStartFailure = { [weak self] error in
+                guard let self = self, startToken == self.startGeneration, !self.hasResolvedStartCall else { return }
+                DispatchQueue.main.async {
+                    self.failPendingStart(call, message: error.localizedDescription)
+                }
+            }
+
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality, startToken: startToken) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
-                        self.isInitializing = false
-                        self.pendingStartBarcodeScannerOptions = nil
-                        call.reject(error.localizedDescription)
+                        guard startToken == self.startGeneration else { return }
+                        self.failPendingStart(call, message: error.localizedDescription)
                     }
                     return
                 }
 
                 DispatchQueue.main.async {
+                    guard startToken == self.startGeneration, !self.hasResolvedStartCall else {
+                        return
+                    }
                     if self.rotateWhenOrientationChanged == true {
                         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                         self.isGeneratingDeviceOrientationNotifications = true
@@ -839,16 +852,15 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                                                                name: UIDevice.orientationDidChangeNotification,
                                                                object: nil)
                     }
-                    self.completeStartCamera(call: call)
+                    self.completeStartCamera(call: call, startToken: startToken)
                 }
             }
         }
 
         let handleDenied: (AVAuthorizationStatus) -> Void = { _ in
             DispatchQueue.main.async {
-                self.isInitializing = false
-                self.pendingStartBarcodeScannerOptions = nil
-                call.reject("camera permission denied. enable camera access in Settings.", "cameraPermissionDenied")
+                guard startToken == self.startGeneration else { return }
+                self.failPendingStart(call, message: "camera permission denied. enable camera access in Settings.", errorCode: "cameraPermissionDenied")
             }
         }
 
@@ -859,6 +871,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             beginStart()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { granted in
+                guard startToken == self.startGeneration else { return }
                 if granted {
                     beginStart()
                 } else {
@@ -873,7 +886,71 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
-    private func completeStartCamera(call: CAPPluginCall) {
+    private func cancelFirstFrameTimeout() {
+        self.firstFrameTimeoutWorkItem?.cancel()
+        self.firstFrameTimeoutWorkItem = nil
+    }
+
+    private func teardownAfterFailedStart() {
+        self.cameraController.removeGridOverlay()
+        if let previewView = self.previewView {
+            previewView.removeFromSuperview()
+            self.previewView = nil
+        }
+        if let webView = self.webView {
+            webView.isOpaque = true
+            self.restoreWebViewBackground(webView)
+        }
+        NotificationCenter.default.removeObserver(self, name: UIDevice.orientationDidChangeNotification, object: nil)
+        if self.isGeneratingDeviceOrientationNotifications {
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            self.isGeneratingDeviceOrientationNotifications = false
+        }
+        self.cameraController.invalidateActivePrepare()
+        self.cameraController.cleanup()
+    }
+
+    private func failPendingStart(_ call: CAPPluginCall, message: String, errorCode: String? = nil) {
+        let applyFailure = { [weak self] in
+            guard let self = self else { return }
+            guard !self.hasResolvedStartCall else { return }
+            self.hasResolvedStartCall = true
+            self.pendingStartCall = nil
+            self.cancelFirstFrameTimeout()
+            self.cameraController.firstFrameReadyCallback = nil
+            self.cameraController.onStartFailure = nil
+            self.teardownAfterFailedStart()
+            self.isInitializing = false
+            self.isInitialized = false
+            self.pendingStartBarcodeScannerOptions = nil
+            if let errorCode = errorCode {
+                call.reject(message, errorCode)
+            } else {
+                call.reject(message)
+            }
+        }
+
+        if Thread.isMainThread {
+            applyFailure()
+        } else {
+            DispatchQueue.main.sync {
+                applyFailure()
+            }
+        }
+    }
+
+    private func scheduleFirstFrameTimeout(for call: CAPPluginCall, startToken: UInt) {
+        self.cancelFirstFrameTimeout()
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self, startToken == self.startGeneration, !self.hasResolvedStartCall else { return }
+            self.failPendingStart(call, message: "Camera preview failed to start: timed out waiting for the first frame")
+        }
+        self.firstFrameTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30, execute: workItem)
+    }
+
+    private func completeStartCamera(call: CAPPluginCall, startToken: UInt) {
+        guard startToken == self.startGeneration else { return }
         // Create and configure the preview view first
         self.updateCameraFrame()
 
@@ -913,9 +990,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Set up callback to wait for first frame before resolving
         self.cameraController.firstFrameReadyCallback = { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, startToken == self.startGeneration else { return }
 
             DispatchQueue.main.async {
+                guard startToken == self.startGeneration else { return }
                 var returnedObject = JSObject()
                 returnedObject["width"] = self.previewView.frame.width as any JSValue
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
@@ -925,9 +1003,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        self.scheduleFirstFrameTimeout(for: call, startToken: startToken)
+
         // If already received first frame (unlikely but possible), resolve immediately on main thread
         if self.cameraController.hasReceivedFirstFrame {
             DispatchQueue.main.async {
+                guard startToken == self.startGeneration else { return }
                 var returnedObject = JSObject()
                 returnedObject["width"] = self.previewView.frame.width as any JSValue
                 returnedObject["height"] = self.previewView.frame.height as any JSValue
@@ -955,7 +1036,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
         guard !hasResolvedStartCall else { return }
         hasResolvedStartCall = true
+        pendingStartCall = nil
+        cancelFirstFrameTimeout()
         cameraController.firstFrameReadyCallback = nil
+        cameraController.onStartFailure = nil
 
         if let options = pendingStartBarcodeScannerOptions {
             do {
@@ -1044,6 +1128,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // UI operations must be on main thread
         DispatchQueue.main.async {
+            if !self.hasResolvedStartCall, let pendingStartCall = self.pendingStartCall {
+                self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
+            }
+
             // If a photo capture is in-flight, defer cleanup until it finishes,
             // but hide the preview immediately so UI can close.
             self.cameraController.removeGridOverlay()
@@ -1059,6 +1147,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.restoreWebViewBackground(webView)
             }
 
+            self.startGeneration += 1
+            self.cancelFirstFrameTimeout()
             self.isInitialized = false
             self.isInitializing = false
 
@@ -2211,13 +2301,23 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 print("[CameraPreview] width: \(UIScreen.main.bounds.size.width) height: \(UIScreen.main.bounds.size.height)")
 
                 // Calculate dimensions using centralized method
-                let dimensions = calculateDimensionsForAspectRatio(ratio, availableWidth: finalWidth, availableHeight: webViewHeight - paddingBottom, isPortrait: isPortrait)
+                let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                    ratio,
+                    availableWidth: finalWidth,
+                    availableHeight: webViewHeight - paddingBottom,
+                    isPortrait: isPortrait
+                )
                 if isPortrait {
                     finalHeight = dimensions.height
                     finalWidth = dimensions.width
                 } else {
                     // In landscape, recalculate based on available space
-                    let landscapeDimensions = calculateDimensionsForAspectRatio(ratio, availableWidth: webViewWidth, availableHeight: webViewHeight - paddingBottom, isPortrait: isPortrait)
+                    let landscapeDimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                        ratio,
+                        availableWidth: webViewWidth,
+                        availableHeight: webViewHeight - paddingBottom,
+                        isPortrait: isPortrait
+                    )
                     finalWidth = landscapeDimensions.width
                     finalHeight = landscapeDimensions.height
                 }
@@ -2258,6 +2358,17 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        // A fill preview sizes each explicitly positioned axis from the web-view space
+        // remaining after that coordinate, unless the caller supplied that dimension.
+        if let ratio = currentAspectRatio, AspectRatioLayout.isFillMode(ratio) {
+            if currentX != -1 && width == nil && !self.widthIsExplicit {
+                finalWidth = AspectRatioLayout.remainingLength(from: currentX, in: webViewWidth)
+            }
+            if currentY != -1 && height == nil && !self.heightIsExplicit {
+                finalHeight = AspectRatioLayout.remainingLength(from: currentY, in: webViewHeight - paddingBottom)
+            }
+        }
+
         return CGRect(x: finalX, y: finalY, width: finalWidth, height: finalHeight)
     }
 
@@ -2278,9 +2389,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         var frame = calculateCameraFrame()
 
         // Apply aspect ratio adjustments only if not auto-centering
-        if posX != -1 && posY != -1, let aspectRatio = self.aspectRatio {
-            let isPortrait = self.isPortrait()
-            let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
+        if posX != -1 && posY != -1,
+           let aspectRatio = self.aspectRatio,
+           !AspectRatioLayout.isFillMode(aspectRatio),
+           let ratio = AspectRatioLayout.parseViewportAspectRatio(aspectRatio, isPortrait: self.isPortrait()) {
             let currentRatio = frame.width / frame.height
 
             if currentRatio > ratio {
@@ -2354,8 +2466,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.posY = -1 // Auto-center if Y not provided
         }
 
-        if let width = call.getInt("width") { self.width = CGFloat(width) }
-        if let height = call.getInt("height") { self.height = CGFloat(height) }
+        if let width = call.getInt("width") {
+            self.width = CGFloat(width)
+            self.widthIsExplicit = true
+        }
+        if let height = call.getInt("height") {
+            self.height = CGFloat(height)
+            self.heightIsExplicit = true
+        }
 
         DispatchQueue.main.async {
             // Direct update without animation for better performance
