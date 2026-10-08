@@ -1286,6 +1286,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }()
         print("[CameraPreview] Preview dimensions: \(previewWidth)x\(previewHeight)")
 
+        let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front
         let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
         self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
@@ -1311,7 +1312,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
 
                 let imageToEncode: UIImage
-                if mirrorFrontCamera, self.cameraPosition == "front" {
+                if mirrorFrontCamera, capturedFromFrontCamera {
                     imageToEncode = self.cameraController.mirrorImageHorizontally(capturedImage)
                 } else {
                     imageToEncode = capturedImage
@@ -1534,6 +1535,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     @objc func captureSample(_ call: CAPPluginCall) {
         let quality: Int = call.getInt("quality") ?? 85
         let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
+        let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front
 
         self.cameraController.captureSample { image, error in
             guard let image = image else {
@@ -1543,7 +1545,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
 
             var outputImage = image
-            if mirrorFrontCamera, self.cameraPosition == "front" {
+            if mirrorFrontCamera, capturedFromFrontCamera {
                 outputImage = self.cameraController.mirrorImageHorizontally(image)
             }
             let imageData = outputImage.jpegData(compressionQuality: CGFloat(quality)/100)
