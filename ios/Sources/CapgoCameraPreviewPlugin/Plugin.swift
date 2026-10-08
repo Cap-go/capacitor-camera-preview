@@ -111,6 +111,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     var posY: CGFloat?
     var width: CGFloat?
     var height: CGFloat?
+    /// Whether `width` / `height` came from the caller rather than from defaults or aspect ratio sizing.
+    var widthIsExplicit = false
+    var heightIsExplicit = false
     var paddingBottom: CGFloat?
     var rotateWhenOrientationChanged: Bool?
     var toBack: Bool?
@@ -136,36 +139,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
     private var originalWebViewSubviewColors: [UIView: UIColor] = [:]
-
-    // MARK: - Helper Methods for Aspect Ratio
-
-    /// Parses aspect ratio string and returns the appropriate ratio for the current orientation
-    private func parseAspectRatio(_ ratio: String, isPortrait: Bool) -> CGFloat {
-        let parts = ratio.split(separator: ":").compactMap { Double($0) }
-        guard parts.count == 2 else { return 1.0 }
-
-        // For camera (portrait), we want portrait orientation: 4:3 becomes 3:4, 16:9 becomes 9:16
-        return isPortrait ?
-            CGFloat(parts[1] / parts[0]) :
-            CGFloat(parts[0] / parts[1])
-    }
-
-    /// Calculates dimensions based on aspect ratio and available space
-    private func calculateDimensionsForAspectRatio(_ aspectRatio: String, availableWidth: CGFloat, availableHeight: CGFloat, isPortrait: Bool) -> (width: CGFloat, height: CGFloat) {
-        let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
-
-        // Calculate maximum size that fits the aspect ratio in available space
-        let maxWidthByHeight = availableHeight * ratio
-        let maxHeightByWidth = availableWidth / ratio
-
-        if maxWidthByHeight <= availableWidth {
-            // Height is the limiting factor
-            return (width: maxWidthByHeight, height: availableHeight)
-        } else {
-            // Width is the limiting factor
-            return (width: availableWidth, height: maxHeightByWidth)
-        }
-    }
 
     // MARK: - Transparency Methods
 
@@ -504,9 +477,16 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Parse aspect ratio - convert to portrait orientation for camera use
         // Use the centralized calculation method
         if let aspectRatio = self.aspectRatio {
-            let dimensions = calculateDimensionsForAspectRatio(aspectRatio, availableWidth: availableWidth, availableHeight: availableHeight, isPortrait: isPortrait)
+            let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                aspectRatio,
+                availableWidth: availableWidth,
+                availableHeight: availableHeight,
+                isPortrait: isPortrait
+            )
             self.width = dimensions.width
             self.height = dimensions.height
+            self.widthIsExplicit = false
+            self.heightIsExplicit = false
         }
 
         self.updateCameraFrame()
@@ -751,15 +731,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Set width - use screen width if not provided or if 0
         if let width = call.getInt("width"), width > 0 {
             self.width = CGFloat(width)
+            self.widthIsExplicit = true
         } else {
             self.width = UIScreen.main.bounds.size.width
+            self.widthIsExplicit = false
         }
 
         // Set height - use screen height if not provided or if 0
         if let height = call.getInt("height"), height > 0 {
             self.height = CGFloat(height)
+            self.heightIsExplicit = true
         } else {
             self.height = UIScreen.main.bounds.size.height
+            self.heightIsExplicit = false
         }
 
         // Set x position - use exact CSS pixel value from web view, or mark for centering
@@ -2317,13 +2301,23 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 print("[CameraPreview] width: \(UIScreen.main.bounds.size.width) height: \(UIScreen.main.bounds.size.height)")
 
                 // Calculate dimensions using centralized method
-                let dimensions = calculateDimensionsForAspectRatio(ratio, availableWidth: finalWidth, availableHeight: webViewHeight - paddingBottom, isPortrait: isPortrait)
+                let dimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                    ratio,
+                    availableWidth: finalWidth,
+                    availableHeight: webViewHeight - paddingBottom,
+                    isPortrait: isPortrait
+                )
                 if isPortrait {
                     finalHeight = dimensions.height
                     finalWidth = dimensions.width
                 } else {
                     // In landscape, recalculate based on available space
-                    let landscapeDimensions = calculateDimensionsForAspectRatio(ratio, availableWidth: webViewWidth, availableHeight: webViewHeight - paddingBottom, isPortrait: isPortrait)
+                    let landscapeDimensions = AspectRatioLayout.dimensionsForAspectRatio(
+                        ratio,
+                        availableWidth: webViewWidth,
+                        availableHeight: webViewHeight - paddingBottom,
+                        isPortrait: isPortrait
+                    )
                     finalWidth = landscapeDimensions.width
                     finalHeight = landscapeDimensions.height
                 }
@@ -2364,6 +2358,17 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        // A fill preview sizes each explicitly positioned axis from the web-view space
+        // remaining after that coordinate, unless the caller supplied that dimension.
+        if let ratio = currentAspectRatio, AspectRatioLayout.isFillMode(ratio) {
+            if currentX != -1 && width == nil && !self.widthIsExplicit {
+                finalWidth = AspectRatioLayout.remainingLength(from: currentX, in: webViewWidth)
+            }
+            if currentY != -1 && height == nil && !self.heightIsExplicit {
+                finalHeight = AspectRatioLayout.remainingLength(from: currentY, in: webViewHeight - paddingBottom)
+            }
+        }
+
         return CGRect(x: finalX, y: finalY, width: finalWidth, height: finalHeight)
     }
 
@@ -2384,9 +2389,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         var frame = calculateCameraFrame()
 
         // Apply aspect ratio adjustments only if not auto-centering
-        if posX != -1 && posY != -1, let aspectRatio = self.aspectRatio {
-            let isPortrait = self.isPortrait()
-            let ratio = parseAspectRatio(aspectRatio, isPortrait: isPortrait)
+        if posX != -1 && posY != -1,
+           let aspectRatio = self.aspectRatio,
+           !AspectRatioLayout.isFillMode(aspectRatio),
+           let ratio = AspectRatioLayout.parseViewportAspectRatio(aspectRatio, isPortrait: self.isPortrait()) {
             let currentRatio = frame.width / frame.height
 
             if currentRatio > ratio {
@@ -2460,8 +2466,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.posY = -1 // Auto-center if Y not provided
         }
 
-        if let width = call.getInt("width") { self.width = CGFloat(width) }
-        if let height = call.getInt("height") { self.height = CGFloat(height) }
+        if let width = call.getInt("width") {
+            self.width = CGFloat(width)
+            self.widthIsExplicit = true
+        }
+        if let height = call.getInt("height") {
+            self.height = CGFloat(height)
+            self.heightIsExplicit = true
+        }
 
         DispatchQueue.main.async {
             // Direct update without animation for better performance
