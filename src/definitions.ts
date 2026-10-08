@@ -177,6 +177,23 @@ export interface RecordingFinishedEvent {
 }
 
 /**
+ * Emitted when the native capture session is interrupted (for example during a phone call).
+ *
+ * @since 8.11.7
+ * @platform ios
+ */
+export interface CameraInterruptedEvent {
+  /**
+   * Why the session was interrupted.
+   */
+  reason: 'runtimeError' | 'interrupted';
+  /**
+   * When true, the plugin removed the microphone input and continued with video only.
+   */
+  audioDropped: boolean;
+}
+
+/**
  * Defines the configuration options for starting the camera preview.
  */
 export interface CameraPreviewOptions {
@@ -1066,6 +1083,27 @@ export interface CameraPreviewPlugin {
     eventName: 'recordingFinished',
     listenerFunc: (data: RecordingFinishedEvent) => void,
   ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for capture session interruptions (for example an active phone call).
+   *
+   * @since 8.11.7
+   * @platform ios
+   */
+  addListener(
+    eventName: 'cameraInterrupted',
+    listenerFunc: (data: CameraInterruptedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener fired when a capture session interruption ends.
+   * Native recovery may still be restarting the session; wait for preview frames before assuming the stream is live.
+   *
+   * @since 8.11.7
+   * @platform ios
+   */
+  addListener(eventName: 'cameraInterruptionEnded', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
   /**
    * Deletes a file at the given absolute path on the device.
    * Use this to quickly clean up temporary images created with `storeToFile`.
