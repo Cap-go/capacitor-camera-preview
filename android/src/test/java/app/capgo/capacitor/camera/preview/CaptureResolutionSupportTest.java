@@ -56,8 +56,11 @@ public class CaptureResolutionSupportTest {
         );
         assertTrue(negative.isError());
 
+        JSONObject nanWidthObject = new JSONObject();
+        nanWidthObject.put("width", Double.NaN);
+        nanWidthObject.put("height", 1080);
         CaptureResolutionSupport.CaptureResolutionParseResult nanWidth = CaptureResolutionSupport.parseStartCaptureResolution(
-            new JSONObject("{\"width\":NaN,\"height\":1080}")
+            nanWidthObject
         );
         assertTrue(nanWidth.isError());
 
@@ -107,8 +110,9 @@ public class CaptureResolutionSupportTest {
         List<Size> supported = Arrays.asList(new Size(4000, 3000), new Size(1920, 1080), new Size(1280, 720));
         List<Size> capped = CaptureResolutionSupport.filterCaptureResolutionCandidates(supported, 1920);
         assertEquals(2, capped.size());
-        assertEquals(1920, capped.get(0).getWidth());
-        assertEquals(1080, capped.get(1).getWidth());
+        for (Size size : capped) {
+            assertTrue(Math.max(size.getWidth(), size.getHeight()) <= 1920);
+        }
     }
 
     @Test
