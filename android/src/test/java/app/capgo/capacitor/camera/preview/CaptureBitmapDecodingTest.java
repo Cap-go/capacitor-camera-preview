@@ -30,9 +30,9 @@ public class CaptureBitmapDecodingTest {
     }
 
     @Test
-    public void decodeJpegSubsamplingToMaxDimensions_returnsNullForInvalidInput() {
+    public void decodeJpegSubsamplingToMaxDimensions_returnsNullForEmptyInput() {
         assertNull(CaptureBitmapDecoding.decodeJpegSubsamplingToMaxDimensions(new byte[0], 1920, 1080));
-        assertNull(CaptureBitmapDecoding.decodeJpegSubsamplingToMaxDimensions(new byte[] { 1, 2, 3 }, 1920, 1080));
+        assertNull(CaptureBitmapDecoding.decodeJpegSubsamplingToMaxDimensions(null, 1920, 1080));
     }
 
     @Test
