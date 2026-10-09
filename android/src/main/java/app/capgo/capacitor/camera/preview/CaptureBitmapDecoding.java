@@ -29,8 +29,18 @@ final class CaptureBitmapDecoding {
             return 1;
         }
 
-        int reqWidth = maxWidth != null ? maxWidth : sourceWidth;
-        int reqHeight = maxHeight != null ? maxHeight : sourceHeight;
+        int reqWidth;
+        int reqHeight;
+        if (maxWidth != null && maxHeight != null) {
+            reqWidth = maxWidth;
+            reqHeight = maxHeight;
+        } else if (maxWidth != null) {
+            reqWidth = maxWidth;
+            reqHeight = Math.max(1, (int) ((long) sourceHeight * maxWidth / sourceWidth));
+        } else {
+            reqHeight = maxHeight;
+            reqWidth = Math.max(1, (int) ((long) sourceWidth * maxHeight / sourceHeight));
+        }
         if (reqWidth <= 0 || reqHeight <= 0) {
             return 1;
         }
