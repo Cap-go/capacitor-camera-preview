@@ -78,6 +78,15 @@ public class CaptureResolutionSupportTest {
     }
 
     @Test
+    public void parseCaptureResolution_rejectsFractionalDimensions() throws Exception {
+        JSONObject fractional = new JSONObject();
+        fractional.put("width", 1920.7);
+        fractional.put("height", 1080);
+        CaptureResolutionSupport.CaptureResolutionParseResult result = CaptureResolutionSupport.parseStartCaptureResolution(fractional);
+        assertTrue(result.isError());
+    }
+
+    @Test
     public void parseCaptureResolution_validNumbers() throws Exception {
         CaptureResolutionSupport.CaptureResolutionParseResult result = CaptureResolutionSupport.parseStartCaptureResolution(
             new JSONObject("{\"width\":1600,\"height\":1200}")

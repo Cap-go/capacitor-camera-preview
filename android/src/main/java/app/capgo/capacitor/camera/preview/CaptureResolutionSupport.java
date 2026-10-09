@@ -48,7 +48,6 @@ final class CaptureResolutionSupport {
         }
     }
 
-    @Nullable
     static CaptureResolutionParseResult parseStartCaptureResolution(@Nullable Object captureResolutionObject) {
         if (captureResolutionObject == null) {
             return CaptureResolutionParseResult.success(null, null);
@@ -74,18 +73,7 @@ final class CaptureResolutionSupport {
             return null;
         }
         if (value instanceof Number) {
-            double numeric = ((Number) value).doubleValue();
-            if (Double.isNaN(numeric) || Double.isInfinite(numeric) || numeric <= 0) {
-                return null;
-            }
-            long rounded = (long) numeric;
-            if (rounded != (long) numeric) {
-                return null;
-            }
-            if (rounded > Integer.MAX_VALUE) {
-                return null;
-            }
-            return (int) rounded;
+            return parsePositivePixelDimensionFromDouble(((Number) value).doubleValue());
         }
         if (value instanceof String) {
             String trimmed = ((String) value).trim();
@@ -93,23 +81,23 @@ final class CaptureResolutionSupport {
                 return null;
             }
             try {
-                double numeric = Double.parseDouble(trimmed);
-                if (Double.isNaN(numeric) || Double.isInfinite(numeric) || numeric <= 0) {
-                    return null;
-                }
-                long rounded = (long) numeric;
-                if (rounded != (long) numeric) {
-                    return null;
-                }
-                if (rounded > Integer.MAX_VALUE) {
-                    return null;
-                }
-                return (int) rounded;
+                return parsePositivePixelDimensionFromDouble(Double.parseDouble(trimmed));
             } catch (NumberFormatException ignored) {
                 return null;
             }
         }
         return null;
+    }
+
+    @Nullable
+    private static Integer parsePositivePixelDimensionFromDouble(double numeric) {
+        if (Double.isNaN(numeric) || Double.isInfinite(numeric) || numeric <= 0) {
+            return null;
+        }
+        if (numeric != Math.floor(numeric) || numeric > Integer.MAX_VALUE) {
+            return null;
+        }
+        return (int) numeric;
     }
 
     static Size normalizedCaptureTargetResolution(int configuredWidth, int configuredHeight) {

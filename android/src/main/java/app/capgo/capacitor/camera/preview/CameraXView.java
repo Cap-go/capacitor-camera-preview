@@ -2378,6 +2378,20 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                     width,
                                     height
                                 );
+                                if (bitmap == null) {
+                                    if (listener != null) {
+                                        listener.onPictureTakenError("Failed to decode captured image");
+                                    }
+                                    synchronized (captureLock) {
+                                        isCapturingPhoto = false;
+                                        if (stopRequested) {
+                                            performImmediateStop();
+                                        }
+                                    }
+                                    maybePerformPendingViewportRebind();
+                                    endOperation("capturePhoto");
+                                    return;
+                                }
                                 bitmap = applyExifOrientation(bitmap, exifInterface);
                                 bitmap = maybeMirrorFrontCameraBitmap(bitmap, mirrorFrontCamera);
                                 Bitmap resizedBitmap = resizeBitmapToMaxDimensions(bitmap, width, height);

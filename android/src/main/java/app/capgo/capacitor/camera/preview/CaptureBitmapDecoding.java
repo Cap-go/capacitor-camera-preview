@@ -9,7 +9,11 @@ final class CaptureBitmapDecoding {
 
     private CaptureBitmapDecoding() {}
 
+    @Nullable
     static Bitmap decodeJpegSubsamplingToMaxDimensions(byte[] jpegBytes, @Nullable Integer maxWidth, @Nullable Integer maxHeight) {
+        if (jpegBytes == null || jpegBytes.length == 0) {
+            return null;
+        }
         BitmapFactory.Options boundsOptions = new BitmapFactory.Options();
         boundsOptions.inJustDecodeBounds = true;
         BitmapFactory.decodeByteArray(jpegBytes, 0, jpegBytes.length, boundsOptions);
