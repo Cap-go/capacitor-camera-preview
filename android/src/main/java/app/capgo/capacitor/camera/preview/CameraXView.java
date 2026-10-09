@@ -2382,7 +2382,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                             if (
                                 !requiresSoftwareTransform &&
                                 isViewportCropCurrent() &&
-                                quality == 95 &&
                                 exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED) ==
                                     ExifInterface.ORIENTATION_NORMAL
                             ) {
