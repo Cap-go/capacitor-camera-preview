@@ -1106,6 +1106,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     .setResolutionSelector(imageCaptureResolutionSelector)
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .setFlashMode(currentFlashMode)
+                    .setJpegQuality(CaptureResolutionSupport.DEFAULT_IMAGE_CAPTURE_JPEG_QUALITY)
                     .setTargetRotation(rotation)
                     .build();
                 sampleImageCapture = imageCapture;
@@ -1685,45 +1686,16 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         int configuredWidth = sessionConfig.getCaptureResolutionWidth();
         int configuredHeight = sessionConfig.getCaptureResolutionHeight();
-        Size targetResolution = new Size(Math.max(configuredWidth, configuredHeight), Math.min(configuredWidth, configuredHeight));
+        Size targetResolution = CaptureResolutionSupport.normalizedCaptureTargetResolution(configuredWidth, configuredHeight);
         int maxCaptureLongEdge = Math.max(configuredWidth, configuredHeight);
         resolutionSelectorBuilder.setResolutionFilter((supportedSizes, rotationDegrees) ->
-            filterCaptureResolutionCandidates(supportedSizes, maxCaptureLongEdge)
+            CaptureResolutionSupport.filterCaptureResolutionCandidates(supportedSizes, maxCaptureLongEdge)
         );
         resolutionSelectorBuilder.setResolutionStrategy(
             new ResolutionStrategy(targetResolution, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
         );
         applySessionAspectRatioStrategy(resolutionSelectorBuilder);
         return resolutionSelectorBuilder.build();
-    }
-
-    private List<Size> filterCaptureResolutionCandidates(List<Size> supportedSizes, int maxCaptureLongEdge) {
-        if (supportedSizes == null || supportedSizes.isEmpty()) {
-            return supportedSizes;
-        }
-
-        List<Size> cappedSizes = new ArrayList<>();
-        for (Size size : supportedSizes) {
-            int longEdge = Math.max(size.getWidth(), size.getHeight());
-            if (longEdge <= maxCaptureLongEdge) {
-                cappedSizes.add(size);
-            }
-        }
-
-        if (!cappedSizes.isEmpty()) {
-            return cappedSizes;
-        }
-
-        Size smallest = supportedSizes.get(0);
-        int smallestLongEdge = Math.max(smallest.getWidth(), smallest.getHeight());
-        for (Size size : supportedSizes) {
-            int longEdge = Math.max(size.getWidth(), size.getHeight());
-            if (longEdge < smallestLongEdge) {
-                smallest = size;
-                smallestLongEdge = longEdge;
-            }
-        }
-        return Collections.singletonList(smallest);
     }
 
     private void applySessionAspectRatioStrategy(ResolutionSelector.Builder resolutionSelectorBuilder) {
@@ -1830,7 +1802,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         boolean embedLocation,
         boolean mirrorFrontCamera
     ) {
-        return width != null || height != null || embedTimestamp || embedLocation || shouldMirrorFrontCamera(mirrorFrontCamera);
+        return CaptureResolutionSupport.captureRequiresSoftwareTransform(
+            width,
+            height,
+            embedTimestamp,
+            embedLocation,
+            mirrorFrontCamera,
+            shouldMirrorFrontCamera(mirrorFrontCamera)
+        );
     }
 
     private void bindConfiguredUseCases(CameraBindingPlan bindingPlan, Preview preview) {
@@ -2379,15 +2358,26 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                                 mirrorFrontCamera
                             );
 
+                            int exifOrientation = exifInterface.getAttributeInt(
+                                ExifInterface.TAG_ORIENTATION,
+                                ExifInterface.ORIENTATION_UNDEFINED
+                            );
                             if (
-                                !requiresSoftwareTransform &&
-                                isViewportCropCurrent() &&
-                                exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED) ==
-                                    ExifInterface.ORIENTATION_NORMAL
+                                CaptureResolutionSupport.canUseViewportCaptureFastPath(
+                                    quality,
+                                    CaptureResolutionSupport.DEFAULT_IMAGE_CAPTURE_JPEG_QUALITY,
+                                    requiresSoftwareTransform,
+                                    isViewportCropCurrent(),
+                                    exifOrientation
+                                )
                             ) {
                                 Log.d(TAG, "capturePhoto: Using ViewPort fast path without software decode/crop/re-encode");
                             } else if (width != null || height != null) {
-                                Bitmap bitmap = BitmapFactory.decodeByteArray(originalCaptureBytes, 0, originalCaptureBytes.length);
+                                Bitmap bitmap = CaptureBitmapDecoding.decodeJpegSubsamplingToMaxDimensions(
+                                    originalCaptureBytes,
+                                    width,
+                                    height
+                                );
                                 bitmap = applyExifOrientation(bitmap, exifInterface);
                                 bitmap = maybeMirrorFrontCameraBitmap(bitmap, mirrorFrontCamera);
                                 Bitmap resizedBitmap = resizeBitmapToMaxDimensions(bitmap, width, height);

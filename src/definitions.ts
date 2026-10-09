@@ -369,6 +369,7 @@ export interface CameraPreviewOptions {
    * sensors, for example `{ width: 1920, height: 1080 }` or `{ width: 1600, height: 1200 }`.
    *
    * @platform android
+   * @since 8.12.0
    */
   captureResolution?: CameraCaptureResolution;
   /**
