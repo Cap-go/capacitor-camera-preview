@@ -56,11 +56,8 @@ public class CaptureResolutionSupportTest {
         );
         assertTrue(negative.isError());
 
-        JSONObject nanWidthObject = new JSONObject();
-        nanWidthObject.put("width", Double.NaN);
-        nanWidthObject.put("height", 1080);
         CaptureResolutionSupport.CaptureResolutionParseResult nanWidth = CaptureResolutionSupport.parseStartCaptureResolution(
-            nanWidthObject
+            new JSONObject("{\"width\":\"NaN\",\"height\":1080}")
         );
         assertTrue(nanWidth.isError());
 
