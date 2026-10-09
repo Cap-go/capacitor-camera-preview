@@ -31,6 +31,8 @@ public class CameraSessionConfiguration {
     private boolean enablePhysicalDeviceSelection = false;
     private boolean barcodeScannerEnabled = false;
     private boolean mirrorFrontCamera = false;
+    private Integer captureResolutionWidth;
+    private Integer captureResolutionHeight;
 
     public CameraSessionConfiguration(
         String deviceId,
@@ -196,6 +198,35 @@ public class CameraSessionConfiguration {
 
     public void setBarcodeScannerEnabled(boolean barcodeScannerEnabled) {
         this.barcodeScannerEnabled = barcodeScannerEnabled;
+    }
+
+    public boolean hasCaptureResolution() {
+        return (
+            captureResolutionWidth != null && captureResolutionHeight != null && captureResolutionWidth > 0 && captureResolutionHeight > 0
+        );
+    }
+
+    public Integer getCaptureResolutionWidth() {
+        return captureResolutionWidth;
+    }
+
+    public Integer getCaptureResolutionHeight() {
+        return captureResolutionHeight;
+    }
+
+    public void setCaptureResolution(Integer width, Integer height) {
+        this.captureResolutionWidth = width;
+        this.captureResolutionHeight = height;
+    }
+
+    public void copyCaptureResolutionFrom(CameraSessionConfiguration source) {
+        if (source == null) {
+            this.captureResolutionWidth = null;
+            this.captureResolutionHeight = null;
+            return;
+        }
+        this.captureResolutionWidth = source.captureResolutionWidth;
+        this.captureResolutionHeight = source.captureResolutionHeight;
     }
 
     // Additional getters with "get" prefix for compatibility

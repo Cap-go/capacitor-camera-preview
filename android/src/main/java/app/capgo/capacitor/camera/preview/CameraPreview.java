@@ -1315,6 +1315,18 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final String videoQuality = call.getString("videoQuality", "high");
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
 
+        final Integer captureResolutionWidth;
+        final Integer captureResolutionHeight;
+        Object captureResolutionObject = call.getData().opt("captureResolution");
+        CaptureResolutionSupport.CaptureResolutionParseResult captureResolutionParseResult =
+            CaptureResolutionSupport.parseStartCaptureResolution(captureResolutionObject);
+        if (captureResolutionParseResult.isError()) {
+            call.reject(captureResolutionParseResult.errorMessage);
+            return;
+        }
+        captureResolutionWidth = captureResolutionParseResult.width;
+        captureResolutionHeight = captureResolutionParseResult.height;
+
         // Check for conflict between aspectRatio and size
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.");
@@ -1629,6 +1641,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
+                config.setCaptureResolution(captureResolutionWidth, captureResolutionHeight);
                 config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
                 if (barcodeScannerOptions == null) {
