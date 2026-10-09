@@ -68,8 +68,8 @@ public class CaptureResolutionSupportTest {
             new JSONObject("{\"width\":\"1920\",\"height\":\"1080\"}")
         );
         assertFalse(result.isError());
-        assertEquals(1920, result.width);
-        assertEquals(1080, result.height);
+        assertEquals(Integer.valueOf(1920), result.width);
+        assertEquals(Integer.valueOf(1080), result.height);
     }
 
     @Test
@@ -78,8 +78,8 @@ public class CaptureResolutionSupportTest {
             new JSONObject("{\"width\":1600,\"height\":1200}")
         );
         assertFalse(result.isError());
-        assertEquals(1600, result.width);
-        assertEquals(1200, result.height);
+        assertEquals(Integer.valueOf(1600), result.width);
+        assertEquals(Integer.valueOf(1200), result.height);
     }
 
     @Test
@@ -87,7 +87,7 @@ public class CaptureResolutionSupportTest {
         assertNull(CaptureResolutionSupport.parsePositivePixelDimension(null));
         assertNull(CaptureResolutionSupport.parsePositivePixelDimension(Double.NaN));
         assertNull(CaptureResolutionSupport.parsePositivePixelDimension("not-a-number"));
-        assertEquals(42, CaptureResolutionSupport.parsePositivePixelDimension("42"));
+        assertEquals(Integer.valueOf(42), CaptureResolutionSupport.parsePositivePixelDimension("42"));
     }
 
     @Test
