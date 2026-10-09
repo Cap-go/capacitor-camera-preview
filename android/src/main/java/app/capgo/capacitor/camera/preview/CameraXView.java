@@ -127,7 +127,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
     private static final String TAG = "CameraPreview CameraXView";
     private static final String FOCUS_INDICATOR_TAG = "cpcp_focus_indicator";
-    private static final Size DEFAULT_MAX_CAPTURE_RESOLUTION = new Size(1920, 1080);
 
     public interface CameraXViewListener {
         void onPictureTaken(String base64, JSONObject exif);
@@ -1677,12 +1676,17 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     private ResolutionSelector buildImageCaptureResolutionSelector() {
-        Size targetResolution = new Size(
-            Math.max(DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth(), DEFAULT_MAX_CAPTURE_RESOLUTION.getHeight()),
-            Math.min(DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth(), DEFAULT_MAX_CAPTURE_RESOLUTION.getHeight())
-        );
-        int maxCaptureLongEdge = Math.max(DEFAULT_MAX_CAPTURE_RESOLUTION.getWidth(), DEFAULT_MAX_CAPTURE_RESOLUTION.getHeight());
         ResolutionSelector.Builder resolutionSelectorBuilder = new ResolutionSelector.Builder();
+        if (sessionConfig == null || !sessionConfig.hasCaptureResolution()) {
+            resolutionSelectorBuilder.setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY);
+            applySessionAspectRatioStrategy(resolutionSelectorBuilder);
+            return resolutionSelectorBuilder.build();
+        }
+
+        int configuredWidth = sessionConfig.getCaptureResolutionWidth();
+        int configuredHeight = sessionConfig.getCaptureResolutionHeight();
+        Size targetResolution = new Size(Math.max(configuredWidth, configuredHeight), Math.min(configuredWidth, configuredHeight));
+        int maxCaptureLongEdge = Math.max(configuredWidth, configuredHeight);
         resolutionSelectorBuilder.setResolutionFilter((supportedSizes, rotationDegrees) ->
             filterCaptureResolutionCandidates(supportedSizes, maxCaptureLongEdge)
         );
@@ -2163,6 +2167,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         target.setTargetZoom(source.getTargetZoom());
         target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
         target.setBarcodeScannerEnabled(source.isBarcodeScannerEnabled());
+        target.copyCaptureResolutionFrom(source);
     }
 
     private void requestEnumeratedDeviceCacheRefresh() {

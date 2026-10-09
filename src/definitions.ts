@@ -10,6 +10,19 @@ export type CameraPositioning = 'center' | 'top' | 'bottom';
 
 export type CameraPreviewAspectRatio = '4:3' | '16:9' | 'fill';
 
+/**
+ * Target still-capture resolution for the Android `ImageCapture` use case.
+ *
+ * Width and height define the resolution strategy target. The plugin also filters out
+ * supported capture sizes whose long edge exceeds `max(width, height)`.
+ */
+export interface CameraCaptureResolution {
+  /** Target width in pixels. */
+  width: number;
+  /** Target height in pixels. */
+  height: number;
+}
+
 export type BarcodeScannerFormat =
   | 'aztec'
   | 'codabar'
@@ -347,6 +360,17 @@ export interface CameraPreviewOptions {
    * @since 7.11.0
    */
   enableVideoMode?: boolean;
+  /**
+   * Sets the Android still-capture resolution for the `ImageCapture` use case at session bind time.
+   * Preview resolution is unchanged. The shared ViewPort crop from the preview still applies to captures.
+   *
+   * When omitted, `ImageCapture` uses the highest resolution supported by the active camera
+   * (same as versions before 8.11.10). Set this to cap capture size for faster shots on high-megapixel
+   * sensors, for example `{ width: 1920, height: 1080 }` or `{ width: 1600, height: 1200 }`.
+   *
+   * @platform android
+   */
+  captureResolution?: CameraCaptureResolution;
   /**
    * If true, forces the camera to start/restart even if it's already running or busy.
    * This will kill the current camera session and start a new one, ignoring all state checks.

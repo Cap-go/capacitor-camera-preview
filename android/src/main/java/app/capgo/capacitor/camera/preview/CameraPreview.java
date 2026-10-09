@@ -1315,6 +1315,31 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final String videoQuality = call.getString("videoQuality", "high");
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
 
+        final Integer captureResolutionWidth;
+        final Integer captureResolutionHeight;
+        Object captureResolutionObject = call.getData().opt("captureResolution");
+        if (captureResolutionObject == null) {
+            captureResolutionWidth = null;
+            captureResolutionHeight = null;
+        } else if (captureResolutionObject instanceof JSONObject) {
+            JSONObject captureResolution = (JSONObject) captureResolutionObject;
+            if (!captureResolution.has("width") || !captureResolution.has("height")) {
+                call.reject("captureResolution requires both width and height");
+                return;
+            }
+            int captureWidth = captureResolution.optInt("width", 0);
+            int captureHeight = captureResolution.optInt("height", 0);
+            if (captureWidth <= 0 || captureHeight <= 0) {
+                call.reject("captureResolution width and height must be positive");
+                return;
+            }
+            captureResolutionWidth = captureWidth;
+            captureResolutionHeight = captureHeight;
+        } else {
+            call.reject("captureResolution must be an object with width and height");
+            return;
+        }
+
         // Check for conflict between aspectRatio and size
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.");
@@ -1629,6 +1654,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setTargetZoom(finalTargetZoom);
                 config.setCentered(isCentered);
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
+                config.setCaptureResolution(captureResolutionWidth, captureResolutionHeight);
                 config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
                 if (barcodeScannerOptions == null) {
