@@ -71,7 +71,7 @@ dependencies {
     implementation 'com.google.android.gms:play-services-mlkit-barcode-scanning:18.3.1'
 
     testImplementation "junit:junit:$junitVersion"
-    testImplementation 'org.robolectric:robolectric:4.14.1'
+    testImplementation 'org.robolectric:robolectric:4.17'
     testImplementation 'androidx.test:core:1.7.0'
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
