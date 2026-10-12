@@ -2,7 +2,7 @@
 
 Show a live camera preview inside your Capacitor app, behind or around your own UI, and capture photos, frames and video. Build custom camera screens, scanners and AR-style overlays.
 
-<a href="https://capgo.app/?ref=plugin_camera_preview"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-camera-preview" alt="Capgo - Instant updates for Capacitor" /></a>
+<a href="https://capgo.app/?ref=plugin_camera_preview"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-camera-preview" alt="Capgo - Build Capacitor apps with AI, ship updates instantly" /></a>
 
 <div align="center">
   <p><b>Capgo</b>: push fixes to your Capacitor users in minutes, build signed iOS and Android apps without a Mac, and roll back in one click.</p>
@@ -10,6 +10,8 @@ Show a live camera preview inside your Capacitor app, behind or around your own 
   <p>14-day unlimited free trial. No credit card required</p>
   <p><a href="https://capgo.app/consulting/?ref=plugin_camera_preview">Missing a feature? We'll build the plugin for you 💪</a></p>
 </div>
+
+> 🤖 **Building with an AI coding agent?** Install [Capgo skills](https://capgo.app/skills/?ref=plugin_camera_preview) so Claude Code, Codex, Cursor, Copilot, or Gemini CLI know how to install and use `@capgo/camera-preview` in your Capacitor app: `npx skills add Cap-go/capgo-skills`. Then ask your agent: *"Add @capgo/camera-preview to my Capacitor app and wire it up."* [Agent setup guides](https://capgo.app/agents/?ref=plugin_camera_preview) · [Hosted MCP](https://capgo.app/docs/ai/mcp/?ref=plugin_camera_preview)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Cap-go/capacitor-camera-preview/main/assets/github-social-preview.png" alt="@capgo/camera-preview for Capacitor apps" width="300" />
