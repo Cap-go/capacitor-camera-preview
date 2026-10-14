@@ -8,6 +8,7 @@ final class ApplicationAudioSessionSnapshotTests: XCTestCase {
         let priorCategory = session.category
         let priorMode = session.mode
         let priorOptions = session.categoryOptions
+        defer { try? session.setCategory(priorCategory, mode: priorMode, options: priorOptions) }
 
         try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         let snapshot = ApplicationAudioSessionSnapshot.capture(from: session)
@@ -20,7 +21,5 @@ final class ApplicationAudioSessionSnapshotTests: XCTestCase {
         XCTAssertEqual(session.category, .playback)
         XCTAssertEqual(session.mode, .default)
         XCTAssertEqual(session.categoryOptions, [.mixWithOthers])
-
-        try session.setCategory(priorCategory, mode: priorMode, options: priorOptions)
     }
 }

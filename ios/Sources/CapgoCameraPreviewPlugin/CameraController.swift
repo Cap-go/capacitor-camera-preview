@@ -2653,10 +2653,9 @@ extension CameraController {
     }
 
     private func restoreApplicationAudioSessionIfNeeded() {
-        guard self.applicationAudioSessionSnapshot != nil else { return }
-        let snapshot = self.applicationAudioSessionSnapshot
+        guard let snapshot = self.applicationAudioSessionSnapshot else { return }
         self.applicationAudioSessionSnapshot = nil
-        snapshot?.apply()
+        snapshot.apply()
     }
 
     private func completeDeferredApplicationAudioSessionRestoreIfNeeded() {
