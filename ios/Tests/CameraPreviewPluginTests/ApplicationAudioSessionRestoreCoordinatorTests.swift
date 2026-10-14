@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 @testable import CapgoCameraPreview
 
