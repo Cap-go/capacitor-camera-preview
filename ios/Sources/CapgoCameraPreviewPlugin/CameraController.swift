@@ -176,8 +176,8 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
-    private var applicationAudioSessionSnapshot: ApplicationAudioSessionSnapshot?
-    private var deferApplicationAudioSessionRestoreUntilRecordingEnds = false
+    private let applicationAudioSessionRestoreCoordinator = ApplicationAudioSessionRestoreCoordinator()
+    private var activeVideoRecordingSessionId: UInt64?
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -694,6 +694,7 @@ extension CameraController {
     func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
 
+        self.applicationAudioSessionRestoreCoordinator.beginPreviewSession()
         self.activePrepareToken = startToken
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -2648,20 +2649,7 @@ extension CameraController {
     }
 
     private func captureApplicationAudioSessionSnapshotIfNeeded() {
-        guard self.applicationAudioSessionSnapshot == nil else { return }
-        self.applicationAudioSessionSnapshot = ApplicationAudioSessionSnapshot.capture()
-    }
-
-    private func restoreApplicationAudioSessionIfNeeded() {
-        guard let snapshot = self.applicationAudioSessionSnapshot else { return }
-        self.applicationAudioSessionSnapshot = nil
-        snapshot.apply()
-    }
-
-    private func completeDeferredApplicationAudioSessionRestoreIfNeeded() {
-        guard self.deferApplicationAudioSessionRestoreUntilRecordingEnds else { return }
-        self.deferApplicationAudioSessionRestoreUntilRecordingEnds = false
-        self.restoreApplicationAudioSessionIfNeeded()
+        self.applicationAudioSessionRestoreCoordinator.captureSnapshotIfNeeded()
     }
 
     private static let insufficientAudioPriorityOSStatus = 561017449
@@ -2818,17 +2806,13 @@ extension CameraController {
         self.onCameraInterrupted = nil
         self.onCameraInterruptionEnded = nil
         self.onStartFailure = nil
-        let shouldDeferAudioSessionRestore = self.fileVideoOutput?.isRecording == true
+        let isRecording = self.fileVideoOutput?.isRecording == true
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
             captureSession.outputs.forEach { captureSession.removeOutput($0) }
         }
-        if shouldDeferAudioSessionRestore {
-            self.deferApplicationAudioSessionRestoreUntilRecordingEnds = true
-        } else {
-            self.restoreApplicationAudioSessionIfNeeded()
-        }
+        self.applicationAudioSessionRestoreCoordinator.handleCleanup(isRecording: isRecording)
         // Remove listener for subject area change
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
 
@@ -3360,6 +3344,8 @@ extension CameraController {
             self.applyVideoStabilizationMode()
         }
 
+        self.activeVideoRecordingSessionId = self.applicationAudioSessionRestoreCoordinator.beginRecording()
+
         // Start recording video
         fileVideoOutput.startRecording(to: fileUrl, recordingDelegate: self)
 
@@ -3762,6 +3748,10 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
         let reason = recordingFinishReason(from: error)
         let stopCompletion = self.stopRecordingCompletion
         self.stopRecordingCompletion = nil
+        let recordingSessionId = self.activeVideoRecordingSessionId ?? 0
+        self.activeVideoRecordingSessionId = nil
+
+        self.applicationAudioSessionRestoreCoordinator.finishRecordingAsync(recordingId: recordingSessionId)
 
         if let stopCompletion = stopCompletion {
             DispatchQueue.main.async {
@@ -3775,13 +3765,11 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
 
         if reason == "error" {
             print("Error recording movie: \(error?.localizedDescription ?? "unknown")")
-            self.completeDeferredApplicationAudioSessionRestoreIfNeeded()
             return
         }
 
         print("Movie recorded successfully: \(outputFileURL)")
         self.recordingFinishedCallback?(outputFileURL, reason)
-        self.completeDeferredApplicationAudioSessionRestoreIfNeeded()
     }
 
     private func recordingFinishReason(from error: Error?) -> String {
