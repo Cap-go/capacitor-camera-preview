@@ -176,6 +176,8 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
+    private var applicationAudioSessionSnapshot: ApplicationAudioSessionSnapshot?
+    private var deferApplicationAudioSessionRestoreUntilRecordingEnds = false
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -1041,6 +1043,7 @@ extension CameraController {
 
         // Add audio input if needed (skip while a phone call owns the audio session)
         if self.shouldAttachAudioInput(disableAudio: disableAudio) {
+            self.captureApplicationAudioSessionSnapshotIfNeeded()
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
@@ -2644,6 +2647,24 @@ extension CameraController {
         return !disableAudio && !self.isPhoneCallActive()
     }
 
+    private func captureApplicationAudioSessionSnapshotIfNeeded() {
+        guard self.applicationAudioSessionSnapshot == nil else { return }
+        self.applicationAudioSessionSnapshot = ApplicationAudioSessionSnapshot.capture()
+    }
+
+    private func restoreApplicationAudioSessionIfNeeded() {
+        guard self.applicationAudioSessionSnapshot != nil else { return }
+        let snapshot = self.applicationAudioSessionSnapshot
+        self.applicationAudioSessionSnapshot = nil
+        snapshot?.apply()
+    }
+
+    private func completeDeferredApplicationAudioSessionRestoreIfNeeded() {
+        guard self.deferApplicationAudioSessionRestoreUntilRecordingEnds else { return }
+        self.deferApplicationAudioSessionRestoreUntilRecordingEnds = false
+        self.restoreApplicationAudioSessionIfNeeded()
+    }
+
     private static let insufficientAudioPriorityOSStatus = 561017449
 
     private func isAudioPriorityError(_ error: NSError) -> Bool {
@@ -2798,10 +2819,16 @@ extension CameraController {
         self.onCameraInterrupted = nil
         self.onCameraInterruptionEnded = nil
         self.onStartFailure = nil
+        let shouldDeferAudioSessionRestore = self.fileVideoOutput?.isRecording == true
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
             captureSession.outputs.forEach { captureSession.removeOutput($0) }
+        }
+        if shouldDeferAudioSessionRestore {
+            self.deferApplicationAudioSessionRestoreUntilRecordingEnds = true
+        } else {
+            self.restoreApplicationAudioSessionIfNeeded()
         }
         // Remove listener for subject area change
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
@@ -3265,6 +3292,7 @@ extension CameraController {
         // This reclaims the microphone even if other parts of the app changed the
         // AVAudioSession category (e.g. for UI sound effects) between recordings.
         if self.audioInput != nil {
+            self.captureApplicationAudioSessionSnapshotIfNeeded()
             do {
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
@@ -3748,11 +3776,13 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
 
         if reason == "error" {
             print("Error recording movie: \(error?.localizedDescription ?? "unknown")")
+            self.completeDeferredApplicationAudioSessionRestoreIfNeeded()
             return
         }
 
         print("Movie recorded successfully: \(outputFileURL)")
         self.recordingFinishedCallback?(outputFileURL, reason)
+        self.completeDeferredApplicationAudioSessionRestoreIfNeeded()
     }
 
     private func recordingFinishReason(from error: Error?) -> String {
