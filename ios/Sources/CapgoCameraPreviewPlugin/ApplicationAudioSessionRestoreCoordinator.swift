@@ -10,17 +10,18 @@ final class ApplicationAudioSessionRestoreCoordinator {
     private var previewGeneration: UInt64 = 0
     private var activeRecordingId: UInt64?
     private var nextRecordingId: UInt64 = 1
-    private var deferredRecordingId: UInt64?
+    private var deferredRecordingIds: Set<UInt64> = []
     private var deferredPreviewGeneration: UInt64?
+    private var finishedBeforeDeferral: Set<UInt64> = []
 
     var isDeferredRestorePending: Bool {
-        self.queue.sync { self.deferredRecordingId != nil }
+        self.queue.sync { !self.deferredRecordingIds.isEmpty }
     }
 
     func beginPreviewSession() {
         self.queue.sync {
             self.previewGeneration += 1
-            if self.deferredRecordingId != nil {
+            if !self.deferredRecordingIds.isEmpty {
                 self.clearDeferredRestoreWithoutApplying()
             }
         }
@@ -28,26 +29,29 @@ final class ApplicationAudioSessionRestoreCoordinator {
 
     func captureSnapshotIfNeeded() {
         self.queue.sync {
-            guard self.snapshot == nil || self.snapshotPreviewGeneration != self.previewGeneration else { return }
+            guard self.snapshot == nil else { return }
             self.snapshot = ApplicationAudioSessionSnapshot.capture()
             self.snapshotPreviewGeneration = self.previewGeneration
         }
     }
 
-    func handleCleanup(isRecording: Bool, pendingRecordingId: UInt64? = nil) {
+    func handleCleanup(isRecording: Bool, pendingRecordingIds: Set<UInt64> = []) {
         self.queue.sync {
-            if self.deferredRecordingId != nil {
+            if !self.deferredRecordingIds.isEmpty {
                 return
             }
-            let shouldDeferRestore = isRecording || pendingRecordingId != nil
-            if shouldDeferRestore {
-                let recordingId = pendingRecordingId ?? self.activeRecordingId ?? 0
-                guard recordingId != 0 else { return }
-                self.deferredRecordingId = recordingId
-                self.deferredPreviewGeneration = self.previewGeneration
+            var ids = pendingRecordingIds
+            if isRecording, let active = self.activeRecordingId {
+                ids.insert(active)
+            }
+            ids.subtract(self.finishedBeforeDeferral)
+            self.finishedBeforeDeferral.removeAll()
+            guard !ids.isEmpty else {
+                self.restoreNow()
                 return
             }
-            self.restoreNow()
+            self.deferredRecordingIds = ids
+            self.deferredPreviewGeneration = self.previewGeneration
         }
     }
 
@@ -62,19 +66,13 @@ final class ApplicationAudioSessionRestoreCoordinator {
 
     func finishRecording(recordingId: UInt64) {
         self.queue.sync {
-            if self.activeRecordingId == recordingId {
-                self.activeRecordingId = nil
-            }
-            self.completeDeferredRestoreIfNeeded(forRecordingId: recordingId)
+            self.noteRecordingFinished(recordingId)
         }
     }
 
     func finishRecordingAsync(recordingId: UInt64) {
         self.queue.async {
-            if self.activeRecordingId == recordingId {
-                self.activeRecordingId = nil
-            }
-            self.completeDeferredRestoreIfNeeded(forRecordingId: recordingId)
+            self.noteRecordingFinished(recordingId)
         }
     }
 
@@ -82,21 +80,30 @@ final class ApplicationAudioSessionRestoreCoordinator {
         self.queue.sync {}
     }
 
-    private func completeDeferredRestoreIfNeeded(forRecordingId recordingId: UInt64) {
-        guard let deferredId = self.deferredRecordingId, deferredId == recordingId else {
+    private func noteRecordingFinished(_ recordingId: UInt64) {
+        if self.activeRecordingId == recordingId {
+            self.activeRecordingId = nil
+        }
+        if self.deferredRecordingIds.isEmpty {
+            self.finishedBeforeDeferral.insert(recordingId)
             return
         }
+        self.deferredRecordingIds.remove(recordingId)
+        self.tryCompleteDeferredRestore()
+    }
+
+    private func tryCompleteDeferredRestore() {
+        guard self.deferredRecordingIds.isEmpty else { return }
         if self.deferredPreviewGeneration != self.previewGeneration {
             self.clearDeferredRestoreWithoutApplying()
             return
         }
-        self.deferredRecordingId = nil
         self.deferredPreviewGeneration = nil
         self.restoreNow()
     }
 
     private func clearDeferredRestoreWithoutApplying() {
-        self.deferredRecordingId = nil
+        self.deferredRecordingIds.removeAll()
         self.deferredPreviewGeneration = nil
     }
 
