@@ -2703,6 +2703,7 @@ extension CameraController {
         do {
             session.beginConfiguration()
             defer { session.commitConfiguration() }
+            self.captureApplicationAudioSessionSnapshotIfNeeded()
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
