@@ -2,6 +2,18 @@ import AVFoundation
 import XCTest
 @testable import CapgoCameraPreview
 
+private extension ApplicationAudioSessionRestoreCoordinator {
+    func registerCleanup(isRecording: Bool, pendingRecordingIds: Set<UInt64> = []) {
+        _ = self.beginCaptureSessionTeardown(isRecording: isRecording, pendingRecordingIds: pendingRecordingIds)
+    }
+
+    func registerCleanupAndRestoreIfNeeded(isRecording: Bool, pendingRecordingIds: Set<UInt64> = []) {
+        if self.beginCaptureSessionTeardown(isRecording: isRecording, pendingRecordingIds: pendingRecordingIds) {
+            self.restoreAfterCaptureSessionTeardown()
+        }
+    }
+}
+
 final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
     func testDoubleCleanupWhileRecordingActiveDefersSingleRestoreUntilRecordingFinishes() throws {
         let session = AVAudioSession.sharedInstance()
@@ -19,10 +31,10 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         try session.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
         XCTAssertTrue(coordinator.isDeferredRestorePending)
 
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
         XCTAssertTrue(coordinator.isDeferredRestorePending)
         XCTAssertEqual(session.category, .playAndRecord)
 
@@ -38,10 +50,10 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         coordinator.captureSnapshotIfNeeded()
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
         XCTAssertTrue(coordinator.isDeferredRestorePending)
 
-        coordinator.handleCleanup(isRecording: false)
+        coordinator.registerCleanup(isRecording: false)
         XCTAssertTrue(coordinator.isDeferredRestorePending)
 
         coordinator.finishRecording(recordingId: recordingId)
@@ -64,7 +76,7 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         try session.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: false, pendingRecordingIds: [recordingId])
+        coordinator.registerCleanup(isRecording: false, pendingRecordingIds: [recordingId])
         XCTAssertTrue(coordinator.isDeferredRestorePending)
         XCTAssertEqual(session.category, .playAndRecord)
 
@@ -86,7 +98,7 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         coordinator.captureSnapshotIfNeeded()
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
 
         try session.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
         coordinator.beginPreviewSession()
@@ -110,7 +122,7 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         coordinator.captureSnapshotIfNeeded()
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
 
         try session.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
         coordinator.beginPreviewSession()
@@ -136,15 +148,17 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         coordinator.captureSnapshotIfNeeded()
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
 
         try session.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
         coordinator.beginPreviewSession()
         coordinator.captureSnapshotIfNeeded()
 
         coordinator.finishRecording(recordingId: recordingId)
-        coordinator.handleCleanup(isRecording: false)
+        coordinator.registerCleanupAndRestoreIfNeeded(isRecording: false)
         XCTAssertEqual(session.category, .playback)
+        XCTAssertEqual(session.mode, .default)
+        XCTAssertEqual(session.categoryOptions, [.mixWithOthers])
     }
 
     func testBeginPreviewDuringDeferredRestoreKeepsSnapshotForLaterCleanup() throws {
@@ -161,14 +175,14 @@ final class ApplicationAudioSessionRestoreCoordinatorTests: XCTestCase {
         coordinator.captureSnapshotIfNeeded()
 
         let recordingId = coordinator.beginRecording()
-        coordinator.handleCleanup(isRecording: true)
+        coordinator.registerCleanup(isRecording: true)
 
         try session.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
         coordinator.beginPreviewSession()
         coordinator.finishRecording(recordingId: recordingId)
         XCTAssertEqual(session.category, .playAndRecord)
 
-        coordinator.handleCleanup(isRecording: false)
+        coordinator.registerCleanupAndRestoreIfNeeded(isRecording: false)
         XCTAssertEqual(session.category, .playback)
         XCTAssertEqual(session.mode, .default)
     }

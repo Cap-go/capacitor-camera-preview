@@ -35,10 +35,11 @@ final class ApplicationAudioSessionRestoreCoordinator {
         }
     }
 
-    func handleCleanup(isRecording: Bool, pendingRecordingIds: Set<UInt64> = []) {
+    /// Registers deferred restore before capture session teardown. Returns `true` if the snapshot should be applied after teardown.
+    func beginCaptureSessionTeardown(isRecording: Bool, pendingRecordingIds: Set<UInt64> = []) -> Bool {
         self.queue.sync {
             if !self.deferredRecordingIds.isEmpty {
-                return
+                return false
             }
             var ids = pendingRecordingIds
             if isRecording, let active = self.activeRecordingId {
@@ -47,11 +48,17 @@ final class ApplicationAudioSessionRestoreCoordinator {
             ids.subtract(self.finishedBeforeDeferral)
             self.finishedBeforeDeferral.removeAll()
             guard !ids.isEmpty else {
-                self.restoreNow()
-                return
+                return true
             }
             self.deferredRecordingIds = ids
             self.deferredPreviewGeneration = self.previewGeneration
+            return false
+        }
+    }
+
+    func restoreAfterCaptureSessionTeardown() {
+        self.queue.sync {
+            self.restoreNow()
         }
     }
 

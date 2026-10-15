@@ -2812,7 +2812,7 @@ extension CameraController {
         let pendingRecordingIds = self.recordingIdQueue.sync {
             Set(self.recordingIdByOutputFileURL.values)
         }
-        self.applicationAudioSessionRestoreCoordinator.handleCleanup(
+        let shouldRestoreAfterTeardown = self.applicationAudioSessionRestoreCoordinator.beginCaptureSessionTeardown(
             isRecording: isFileOutputRecording,
             pendingRecordingIds: pendingRecordingIds
         )
@@ -2820,6 +2820,9 @@ extension CameraController {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
             captureSession.outputs.forEach { captureSession.removeOutput($0) }
+        }
+        if shouldRestoreAfterTeardown {
+            self.applicationAudioSessionRestoreCoordinator.restoreAfterCaptureSessionTeardown()
         }
         // Remove listener for subject area change
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
