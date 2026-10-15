@@ -177,7 +177,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
     private let applicationAudioSessionRestoreCoordinator = ApplicationAudioSessionRestoreCoordinator()
-    private var activeVideoRecordingSessionId: UInt64?
+    private var recordingIdByOutputFileURL: [URL: UInt64] = [:]
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -2806,13 +2806,17 @@ extension CameraController {
         self.onCameraInterrupted = nil
         self.onCameraInterruptionEnded = nil
         self.onStartFailure = nil
-        let isRecording = self.fileVideoOutput?.isRecording == true
+        let isFileOutputRecording = self.fileVideoOutput?.isRecording == true
+        let pendingRecordingId = self.recordingIdByOutputFileURL.values.first
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
             captureSession.outputs.forEach { captureSession.removeOutput($0) }
         }
-        self.applicationAudioSessionRestoreCoordinator.handleCleanup(isRecording: isRecording)
+        self.applicationAudioSessionRestoreCoordinator.handleCleanup(
+            isRecording: isFileOutputRecording,
+            pendingRecordingId: pendingRecordingId
+        )
         // Remove listener for subject area change
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
 
@@ -3344,7 +3348,8 @@ extension CameraController {
             self.applyVideoStabilizationMode()
         }
 
-        self.activeVideoRecordingSessionId = self.applicationAudioSessionRestoreCoordinator.beginRecording()
+        let recordingId = self.applicationAudioSessionRestoreCoordinator.beginRecording()
+        self.recordingIdByOutputFileURL[fileUrl] = recordingId
 
         // Start recording video
         fileVideoOutput.startRecording(to: fileUrl, recordingDelegate: self)
@@ -3748,8 +3753,7 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
         let reason = recordingFinishReason(from: error)
         let stopCompletion = self.stopRecordingCompletion
         self.stopRecordingCompletion = nil
-        let recordingSessionId = self.activeVideoRecordingSessionId ?? 0
-        self.activeVideoRecordingSessionId = nil
+        let recordingSessionId = self.recordingIdByOutputFileURL.removeValue(forKey: outputFileURL) ?? 0
 
         self.applicationAudioSessionRestoreCoordinator.finishRecordingAsync(recordingId: recordingSessionId)
 

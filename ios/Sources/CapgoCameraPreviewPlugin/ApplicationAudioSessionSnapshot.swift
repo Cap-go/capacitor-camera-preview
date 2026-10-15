@@ -18,7 +18,6 @@ struct ApplicationAudioSessionSnapshot {
     @discardableResult
     func apply(to session: AVAudioSession = .sharedInstance()) -> Bool {
         do {
-            try session.setActive(false, options: .notifyOthersOnDeactivation)
             try session.setCategory(category, mode: mode, options: categoryOptions)
             return true
         } catch {

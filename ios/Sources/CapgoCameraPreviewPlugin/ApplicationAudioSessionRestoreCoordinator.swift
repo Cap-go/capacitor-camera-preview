@@ -6,6 +6,7 @@ final class ApplicationAudioSessionRestoreCoordinator {
     private let queue = DispatchQueue(label: "com.capgo.camera.applicationAudioSessionRestore")
 
     private var snapshot: ApplicationAudioSessionSnapshot?
+    private var snapshotPreviewGeneration: UInt64?
     private var previewGeneration: UInt64 = 0
     private var activeRecordingId: UInt64?
     private var nextRecordingId: UInt64 = 1
@@ -20,25 +21,28 @@ final class ApplicationAudioSessionRestoreCoordinator {
         self.queue.sync {
             self.previewGeneration += 1
             if self.deferredRecordingId != nil {
-                self.discardPendingRestoreWithoutApplying()
+                self.clearDeferredRestoreWithoutApplying()
             }
         }
     }
 
     func captureSnapshotIfNeeded() {
         self.queue.sync {
-            guard self.snapshot == nil else { return }
+            guard self.snapshot == nil || self.snapshotPreviewGeneration != self.previewGeneration else { return }
             self.snapshot = ApplicationAudioSessionSnapshot.capture()
+            self.snapshotPreviewGeneration = self.previewGeneration
         }
     }
 
-    func handleCleanup(isRecording: Bool) {
+    func handleCleanup(isRecording: Bool, pendingRecordingId: UInt64? = nil) {
         self.queue.sync {
             if self.deferredRecordingId != nil {
                 return
             }
-            if isRecording {
-                let recordingId = self.activeRecordingId ?? 0
+            let shouldDeferRestore = isRecording || pendingRecordingId != nil
+            if shouldDeferRestore {
+                let recordingId = pendingRecordingId ?? self.activeRecordingId ?? 0
+                guard recordingId != 0 else { return }
                 self.deferredRecordingId = recordingId
                 self.deferredPreviewGeneration = self.previewGeneration
                 return
@@ -74,12 +78,16 @@ final class ApplicationAudioSessionRestoreCoordinator {
         }
     }
 
+    func syncWithQueueForTesting() {
+        self.queue.sync {}
+    }
+
     private func completeDeferredRestoreIfNeeded(forRecordingId recordingId: UInt64) {
         guard let deferredId = self.deferredRecordingId, deferredId == recordingId else {
             return
         }
         if self.deferredPreviewGeneration != self.previewGeneration {
-            self.discardPendingRestoreWithoutApplying()
+            self.clearDeferredRestoreWithoutApplying()
             return
         }
         self.deferredRecordingId = nil
@@ -87,15 +95,15 @@ final class ApplicationAudioSessionRestoreCoordinator {
         self.restoreNow()
     }
 
-    private func discardPendingRestoreWithoutApplying() {
+    private func clearDeferredRestoreWithoutApplying() {
         self.deferredRecordingId = nil
         self.deferredPreviewGeneration = nil
-        self.snapshot = nil
     }
 
     private func restoreNow() {
         guard let snap = self.snapshot else { return }
         self.snapshot = nil
+        self.snapshotPreviewGeneration = nil
         snap.apply()
     }
 }
