@@ -182,6 +182,9 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
+    private let applicationAudioSessionRestoreCoordinator = ApplicationAudioSessionRestoreCoordinator()
+    private var recordingIdByOutputFileURL: [URL: UInt64] = [:]
+    private let recordingIdQueue = DispatchQueue(label: "com.capgo.camera.recordingIds")
 
     var audioDevice: AVCaptureDevice?
     var audioInput: AVCaptureDeviceInput?
@@ -698,6 +701,7 @@ extension CameraController {
     func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
 
+        self.applicationAudioSessionRestoreCoordinator.beginPreviewSession()
         self.activePrepareToken = startToken
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -1047,6 +1051,7 @@ extension CameraController {
 
         // Add audio input if needed (skip while a phone call owns the audio session)
         if self.shouldAttachAudioInput(disableAudio: disableAudio) {
+            self.captureApplicationAudioSessionSnapshotIfNeeded()
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
@@ -2650,6 +2655,10 @@ extension CameraController {
         return !disableAudio && !self.isPhoneCallActive()
     }
 
+    private func captureApplicationAudioSessionSnapshotIfNeeded() {
+        self.applicationAudioSessionRestoreCoordinator.captureSnapshotIfNeeded()
+    }
+
     private static let insufficientAudioPriorityOSStatus = 561017449
 
     private func isAudioPriorityError(_ error: NSError) -> Bool {
@@ -2701,6 +2710,7 @@ extension CameraController {
         do {
             session.beginConfiguration()
             defer { session.commitConfiguration() }
+            self.captureApplicationAudioSessionSnapshotIfNeeded()
             if self.audioDevice == nil {
                 self.audioDevice = AVCaptureDevice.default(for: AVMediaType.audio)
             }
@@ -2804,10 +2814,23 @@ extension CameraController {
         self.onCameraInterrupted = nil
         self.onCameraInterruptionEnded = nil
         self.onStartFailure = nil
+        let isFileOutputRecording = self.fileVideoOutput?.isRecording == true
+        let pendingRecordingIds = self.recordingIdQueue.sync {
+            Set(self.recordingIdByOutputFileURL.values)
+        }
+        let shouldRestoreAfterTeardown = self.applicationAudioSessionRestoreCoordinator.beginCaptureSessionTeardown(
+            isRecording: isFileOutputRecording,
+            pendingRecordingIds: pendingRecordingIds
+        )
         if let captureSession = self.captureSession {
             captureSession.stopRunning()
             captureSession.inputs.forEach { captureSession.removeInput($0) }
             captureSession.outputs.forEach { captureSession.removeOutput($0) }
+        }
+        if shouldRestoreAfterTeardown {
+            self.applicationAudioSessionRestoreCoordinator.restoreAfterCaptureSessionTeardown()
+        } else {
+            self.applicationAudioSessionRestoreCoordinator.completeCaptureSessionTeardown()
         }
         // Remove listener for subject area change
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
@@ -3273,6 +3296,7 @@ extension CameraController {
         // This reclaims the microphone even if other parts of the app changed the
         // AVAudioSession category (e.g. for UI sound effects) between recordings.
         if self.audioInput != nil {
+            self.captureApplicationAudioSessionSnapshotIfNeeded()
             do {
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
@@ -3339,6 +3363,11 @@ extension CameraController {
 
         self.configureCaptureSession {
             self.applyVideoStabilizationMode()
+        }
+
+        let recordingId = self.applicationAudioSessionRestoreCoordinator.beginRecording()
+        self.recordingIdQueue.sync {
+            self.recordingIdByOutputFileURL[fileUrl] = recordingId
         }
 
         // Start recording video
@@ -3743,6 +3772,11 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
         let reason = recordingFinishReason(from: error)
         let stopCompletion = self.stopRecordingCompletion
         self.stopRecordingCompletion = nil
+        let recordingSessionId = self.recordingIdQueue.sync {
+            self.recordingIdByOutputFileURL.removeValue(forKey: outputFileURL) ?? 0
+        }
+
+        self.applicationAudioSessionRestoreCoordinator.finishRecordingAsync(recordingId: recordingSessionId)
 
         if let stopCompletion = stopCompletion {
             DispatchQueue.main.async {
