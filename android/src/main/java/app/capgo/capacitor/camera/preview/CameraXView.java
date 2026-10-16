@@ -223,6 +223,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private final float[] lastAccelerometerValues = new float[3]; // x,y, and z
     private final Object accelerometerLock = new Object();
     private volatile int lastCaptureRotation = -1; // -1 unknown
+    private volatile int lastReliableCaptureRotation = -1;
 
     // Compass heading (degrees, 0-360, true north); -1 means not yet available
     private Sensor rotationVectorSensor;
@@ -565,6 +566,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 lastAccelerometerValues[2] = 0f;
             }
             lastCaptureRotation = -1;
+            lastReliableCaptureRotation = -1;
 
             // Start accelerometer for orientation detection regardless of lock
             if (sensorManager == null) {
@@ -2207,43 +2209,37 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
      * This works even when portrait lock is enabled.
      * Falls back to display rotation if accelerometer data is not available.
      */
+    private int getDisplayRotationFallback() {
+        if (previewView != null && previewView.getDisplay() != null) {
+            return previewView.getDisplay().getRotation();
+        }
+        return android.view.Surface.ROTATION_0;
+    }
+
     private int getRotationFromAccelerometer() {
-        float x, y;
+        float x, y, z;
         synchronized (accelerometerLock) {
             x = lastAccelerometerValues[0];
             y = lastAccelerometerValues[1];
+            z = lastAccelerometerValues[2];
         }
 
-        // If no accelerometer data yet, fall back to display rotation
         final float epsilon = 1.0f;
-        if (Math.abs(x) < epsilon && Math.abs(y) < epsilon) {
-            if (previewView != null && previewView.getDisplay() != null) {
-                return previewView.getDisplay().getRotation();
-            }
-            return android.view.Surface.ROTATION_0;
+        if (Math.abs(x) < epsilon && Math.abs(y) < epsilon && Math.abs(z) < epsilon) {
+            return getDisplayRotationFallback();
         }
 
-        // Android accelerometer: +X is right, +Y is up, +Z is toward user
-        // Determine orientation based on which axis has the strongest gravity component
-        if (Math.abs(x) > Math.abs(y)) {
-            // Landscape orientation
-            if (x > 0) {
-                // Device tilted to the left (top of device points left)
-                return android.view.Surface.ROTATION_90;
-            } else {
-                // Device tilted to the right (top of device points right)
-                return android.view.Surface.ROTATION_270;
-            }
-        } else {
-            // Portrait orientation
-            if (y > 0) {
-                // Normal portrait (top of device points up)
-                return android.view.Surface.ROTATION_0;
-            } else {
-                // Upside down portrait
-                return android.view.Surface.ROTATION_180;
-            }
+        PhysicalOrientationResolver.Result result = PhysicalOrientationResolver.resolve(
+            x,
+            y,
+            z,
+            lastReliableCaptureRotation,
+            getDisplayRotationFallback()
+        );
+        if (result.reliable) {
+            lastReliableCaptureRotation = result.rotation;
         }
+        return result.rotation;
     }
 
     public void capturePhoto(
@@ -5410,6 +5406,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         // Update video capture rotation from accelerometer for device orientation
         int rotation = getRotationFromAccelerometer();
+        lastCaptureRotation = rotation;
         videoCapture.setTargetRotation(rotation);
         Log.d(TAG, "startRecordVideo: Using rotation " + rotation + " from accelerometer");
 
