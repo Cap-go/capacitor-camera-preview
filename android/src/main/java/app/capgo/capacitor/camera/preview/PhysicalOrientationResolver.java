@@ -30,9 +30,9 @@ final class PhysicalOrientationResolver {
     private PhysicalOrientationResolver() {}
 
     /**
-     * @param x accelerometer x (m/s^2 normalized to g in sensor values)
-     * @param y accelerometer y
-     * @param z accelerometer z
+     * @param x gravity component on x in g (divide raw m/s^2 by {@link android.hardware.SensorManager#GRAVITY_EARTH})
+     * @param y gravity component on y in g
+     * @param z gravity component on z in g
      * @param lastReliableRotation {@link Surface#ROTATION_0} etc., or -1 if unknown
      * @param fallbackRotation display rotation when gravity is ambiguous
      */

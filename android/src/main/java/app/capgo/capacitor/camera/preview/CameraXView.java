@@ -2224,15 +2224,16 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             z = lastAccelerometerValues[2];
         }
 
-        final float epsilon = 1.0f;
-        if (Math.abs(x) < epsilon && Math.abs(y) < epsilon && Math.abs(z) < epsilon) {
+        final float gravityEarth = SensorManager.GRAVITY_EARTH;
+        final float epsilonG = 0.1f;
+        if (Math.abs(x) < gravityEarth * epsilonG && Math.abs(y) < gravityEarth * epsilonG && Math.abs(z) < gravityEarth * epsilonG) {
             return getDisplayRotationFallback();
         }
 
         PhysicalOrientationResolver.Result result = PhysicalOrientationResolver.resolve(
-            x,
-            y,
-            z,
+            x / gravityEarth,
+            y / gravityEarth,
+            z / gravityEarth,
             lastReliableCaptureRotation,
             getDisplayRotationFallback()
         );
