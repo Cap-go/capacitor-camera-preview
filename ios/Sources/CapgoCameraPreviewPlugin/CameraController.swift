@@ -2823,6 +2823,8 @@ extension CameraController {
         }
         if shouldRestoreAfterTeardown {
             self.applicationAudioSessionRestoreCoordinator.restoreAfterCaptureSessionTeardown()
+        } else {
+            self.applicationAudioSessionRestoreCoordinator.completeCaptureSessionTeardown()
         }
         // Remove listener for subject area change
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)

@@ -12,6 +12,7 @@ final class ApplicationAudioSessionRestoreCoordinator {
     private var nextRecordingId: UInt64 = 1
     private var deferredRecordingIds: Set<UInt64> = []
     private var deferredPreviewGeneration: UInt64?
+    private var captureSessionTeardownComplete = false
     private var finishedBeforeDeferral: Set<UInt64> = []
 
     var isDeferredRestorePending: Bool {
@@ -52,7 +53,17 @@ final class ApplicationAudioSessionRestoreCoordinator {
             }
             self.deferredRecordingIds = ids
             self.deferredPreviewGeneration = self.previewGeneration
+            self.captureSessionTeardownComplete = false
             return false
+        }
+    }
+
+    /// Call after capture session `stopRunning()` and input/output removal when restore was deferred for active recordings.
+    func completeCaptureSessionTeardown() {
+        self.queue.sync {
+            guard self.deferredPreviewGeneration != nil else { return }
+            self.captureSessionTeardownComplete = true
+            self.tryCompleteDeferredRestore()
         }
     }
 
@@ -101,6 +112,7 @@ final class ApplicationAudioSessionRestoreCoordinator {
 
     private func tryCompleteDeferredRestore() {
         guard self.deferredRecordingIds.isEmpty else { return }
+        guard self.captureSessionTeardownComplete else { return }
         if self.deferredPreviewGeneration != self.previewGeneration {
             self.clearDeferredRestoreWithoutApplying()
             return
@@ -112,6 +124,7 @@ final class ApplicationAudioSessionRestoreCoordinator {
     private func clearDeferredRestoreWithoutApplying() {
         self.deferredRecordingIds.removeAll()
         self.deferredPreviewGeneration = nil
+        self.captureSessionTeardownComplete = false
     }
 
     private func restoreNow() {
