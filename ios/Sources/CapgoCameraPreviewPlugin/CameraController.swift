@@ -56,21 +56,27 @@ class CameraController: NSObject, CXCallObserverDelegate {
     }
 
     // For capture only - uses accelerometer to detect physical orientation to properly position videos/images
+    private var lastReliableCaptureOrientation: AVCaptureVideoOrientation?
+
     private func getPhysicalOrientation() -> AVCaptureVideoOrientation {
+        let fallback = getVideoOrientation()
         guard let accelerometerData = motionManager.accelerometerData else {
-            return lastCaptureOrientation ?? getVideoOrientation() // Fallback to interface in case of accelerometer fail
+            return lastReliableCaptureOrientation ?? lastCaptureOrientation ?? fallback
         }
 
-        let x = accelerometerData.acceleration.x
-        let y = accelerometerData.acceleration.y
-
-        if abs(x) > abs(y) {
-            // Landscape
-            return x > 0 ? .landscapeLeft : .landscapeRight
-        } else {
-            // Portrait
-            return y > 0 ? .portraitUpsideDown : .portrait
+        let result = PhysicalOrientationResolver.resolve(
+            acceleration: PhysicalOrientationResolver.Acceleration(
+                x: accelerometerData.acceleration.x,
+                y: accelerometerData.acceleration.y,
+                z: accelerometerData.acceleration.z
+            ),
+            lastReliableOrientation: lastReliableCaptureOrientation,
+            fallbackOrientation: fallback
+        )
+        if result.isReliable {
+            lastReliableCaptureOrientation = result.orientation
         }
+        return result.orientation
     }
 
     private func setVideoOrientation(_ orientation: AVCaptureVideoOrientation, on connection: AVCaptureConnection) {
@@ -2807,6 +2813,8 @@ extension CameraController {
         NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
 
         self.motionManager.stopAccelerometerUpdates()
+        self.lastCaptureOrientation = nil
+        self.lastReliableCaptureOrientation = nil
         self.previewLayer?.removeFromSuperlayer()
         self.previewLayer = nil
 
