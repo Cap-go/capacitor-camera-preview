@@ -1010,7 +1010,12 @@ export interface CameraPreviewPlugin {
   getDeviceId(): Promise<{ deviceId: string }>;
 
   /**
-   * Gets the current preview size and position.
+   * Gets the current visible camera preview bounds in web-view coordinates.
+   *
+   * With `aspectMode: 'contain'`, this is the letterboxed camera image rect inside the
+   * preview container (not the full container when bars are shown). With `aspectMode: 'cover'`,
+   * this matches the preview container bounds on both platforms.
+   *
    * @returns {Promise<{x: number, y: number, width: number, height: number}>}
    * @since 7.5.0
    * @platform android, ios
@@ -1024,7 +1029,7 @@ export interface CameraPreviewPlugin {
   /**
    * Sets the preview size and position.
    * @param options The new position and dimensions.
-   * @returns {Promise<{ width: number; height: number; x: number; y: number }>} A promise that resolves with the actual preview dimensions and position.
+   * @returns {Promise<{ width: number; height: number; x: number; y: number }>} A promise that resolves with the visible camera preview bounds (same contract as {@link CameraPreviewPlugin.getPreviewSize}).
    * @since 7.5.0
    * @platform android, ios
    */

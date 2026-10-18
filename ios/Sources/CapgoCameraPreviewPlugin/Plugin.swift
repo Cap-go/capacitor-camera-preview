@@ -491,12 +491,16 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.updateCameraFrame()
 
-        // Return the actual preview bounds
+        return self.visiblePreviewSizeJSObject()
+    }
+
+    private func visiblePreviewSizeJSObject() -> JSObject {
+        let rect = self.cameraController.visiblePreviewRect(in: self.previewView)
         var result = JSObject()
-        result["x"] = Double(self.previewView.frame.origin.x)
-        result["y"] = Double(self.previewView.frame.origin.y)
-        result["width"] = Double(self.previewView.frame.width)
-        result["height"] = Double(self.previewView.frame.height)
+        result["x"] = Double(rect.origin.x)
+        result["y"] = Double(rect.origin.y)
+        result["width"] = Double(rect.width)
+        result["height"] = Double(rect.height)
         return result
     }
 
@@ -994,12 +998,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             DispatchQueue.main.async {
                 guard startToken == self.startGeneration else { return }
-                var returnedObject = JSObject()
-                returnedObject["width"] = self.previewView.frame.width as any JSValue
-                returnedObject["height"] = self.previewView.frame.height as any JSValue
-                returnedObject["x"] = self.previewView.frame.origin.x as any JSValue
-                returnedObject["y"] = self.previewView.frame.origin.y as any JSValue
-                self.resolveStartCall(call, returnedObject: returnedObject)
+                self.resolveStartCall(call, returnedObject: self.visiblePreviewSizeJSObject())
             }
         }
 
@@ -1009,12 +1008,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if self.cameraController.hasReceivedFirstFrame {
             DispatchQueue.main.async {
                 guard startToken == self.startGeneration else { return }
-                var returnedObject = JSObject()
-                returnedObject["width"] = self.previewView.frame.width as any JSValue
-                returnedObject["height"] = self.previewView.frame.height as any JSValue
-                returnedObject["x"] = self.previewView.frame.origin.x as any JSValue
-                returnedObject["y"] = self.previewView.frame.origin.y as any JSValue
-                self.resolveStartCall(call, returnedObject: returnedObject)
+                self.resolveStartCall(call, returnedObject: self.visiblePreviewSizeJSObject())
             }
         }
     }
@@ -2438,12 +2432,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         DispatchQueue.main.async {
-            var result = JSObject()
-            result["x"] = Double(self.previewView.frame.origin.x)
-            result["y"] = Double(self.previewView.frame.origin.y)
-            result["width"] = Double(self.previewView.frame.width)
-            result["height"] = Double(self.previewView.frame.height)
-            call.resolve(result)
+            call.resolve(self.visiblePreviewSizeJSObject())
         }
     }
 
@@ -2480,13 +2469,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.updateCameraFrame()
             self.makeWebViewTransparent()
 
-            // Return the actual preview bounds
-            var result = JSObject()
-            result["x"] = Double(self.previewView.frame.origin.x)
-            result["y"] = Double(self.previewView.frame.origin.y)
-            result["width"] = Double(self.previewView.frame.width)
-            result["height"] = Double(self.previewView.frame.height)
-            call.resolve(result)
+            call.resolve(self.visiblePreviewSizeJSObject())
         }
     }
 

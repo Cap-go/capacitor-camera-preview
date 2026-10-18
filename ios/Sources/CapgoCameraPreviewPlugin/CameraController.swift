@@ -563,6 +563,56 @@ class CameraController: NSObject, CXCallObserverDelegate {
 
         return (width: finalWidth, height: finalHeight)
     }
+
+    /// Pixel dimensions of the active camera preview stream in the current interface orientation.
+    func capturePreviewContentSize() -> CGSize? {
+        let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera
+        guard let device = device else {
+            return nil
+        }
+
+        let dimensions = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        var width = CGFloat(dimensions.width)
+        var height = CGFloat(dimensions.height)
+        guard width > 0, height > 0 else {
+            return nil
+        }
+
+        let orientation = self.getVideoOrientation()
+        let isPortrait = orientation == .portrait || orientation == .portraitUpsideDown
+        if isPortrait {
+            swap(&width, &height)
+        }
+
+        return CGSize(width: width, height: height)
+    }
+
+    /// Web-view coordinates of the visible camera image (after letterboxing / pillarboxing).
+    func visiblePreviewRect(in previewView: UIView) -> CGRect {
+        let containerFrame = previewView.frame
+        guard let previewLayer = self.previewLayer else {
+            return containerFrame
+        }
+
+        let layerFrame = previewLayer.frame
+        let contentRectInPreviewView: CGRect
+
+        if self.requestedAspectMode == "cover" {
+            contentRectInPreviewView = layerFrame
+        } else if let contentSize = self.capturePreviewContentSize() {
+            contentRectInPreviewView = AspectRatioLayout.containContentRect(
+                contentSize: contentSize,
+                inside: layerFrame
+            )
+        } else {
+            contentRectInPreviewView = layerFrame
+        }
+
+        return AspectRatioLayout.previewContentRectInWebViewCoordinates(
+            contentRectInPreviewView: contentRectInPreviewView,
+            previewViewFrame: containerFrame
+        )
+    }
 }
 
 extension CameraController {
