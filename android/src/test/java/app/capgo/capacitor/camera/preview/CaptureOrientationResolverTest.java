@@ -15,16 +15,17 @@ import org.robolectric.annotation.Config;
 public class CaptureOrientationResolverTest {
 
     @Test
-    public void defaultsToPreviewRotation() {
-        assertEquals(Surface.ROTATION_0, CaptureOrientationResolver.resolveRotation(null, Surface.ROTATION_0, Surface.ROTATION_90));
-        assertEquals(Surface.ROTATION_270, CaptureOrientationResolver.resolveRotation("preview", Surface.ROTATION_270, Surface.ROTATION_0));
-        assertEquals(Surface.ROTATION_90, CaptureOrientationResolver.resolveRotation("", Surface.ROTATION_90, Surface.ROTATION_0));
+    public void defaultsToDeviceRotation() {
+        assertEquals(Surface.ROTATION_90, CaptureOrientationResolver.resolveRotation(null, Surface.ROTATION_0, Surface.ROTATION_90));
+        assertEquals(Surface.ROTATION_90, CaptureOrientationResolver.resolveRotation("", Surface.ROTATION_0, Surface.ROTATION_90));
+        assertEquals(Surface.ROTATION_90, CaptureOrientationResolver.resolveRotation("device", Surface.ROTATION_0, Surface.ROTATION_90));
+        assertTrue(CaptureOrientationResolver.usesDeviceOrientation(null));
+        assertTrue(CaptureOrientationResolver.usesDeviceOrientation("device"));
     }
 
     @Test
-    public void deviceModeUsesAccelerometerRotation() {
-        assertEquals(Surface.ROTATION_90, CaptureOrientationResolver.resolveRotation("device", Surface.ROTATION_0, Surface.ROTATION_90));
-        assertTrue(CaptureOrientationResolver.usesDeviceOrientation("device"));
+    public void previewModeUsesDisplayRotation() {
+        assertEquals(Surface.ROTATION_270, CaptureOrientationResolver.resolveRotation("preview", Surface.ROTATION_270, Surface.ROTATION_0));
         assertFalse(CaptureOrientationResolver.usesDeviceOrientation("preview"));
     }
 }

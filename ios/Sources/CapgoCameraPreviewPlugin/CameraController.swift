@@ -55,6 +55,25 @@ class CameraController: NSObject, CXCallObserverDelegate {
         return orientation
     }
 
+    private func getPreviewLayerVideoOrientation() -> AVCaptureVideoOrientation? {
+        var orientation: AVCaptureVideoOrientation?
+        if Thread.isMainThread {
+            if let connection = self.previewLayer?.connection, connection.isVideoOrientationSupported {
+                orientation = connection.videoOrientation
+            }
+        } else {
+            let semaphore = DispatchSemaphore(value: 0)
+            DispatchQueue.main.async {
+                if let connection = self.previewLayer?.connection, connection.isVideoOrientationSupported {
+                    orientation = connection.videoOrientation
+                }
+                semaphore.signal()
+            }
+            _ = semaphore.wait(timeout: .now() + 0.1)
+        }
+        return orientation
+    }
+
     // For capture only - uses accelerometer to detect physical orientation to properly position videos/images
     private var lastReliableCaptureOrientation: AVCaptureVideoOrientation?
 
@@ -1398,8 +1417,7 @@ extension CameraController {
         }
 
         if let connection = photoOutput.connection(with: .video) {
-            let previewOrientation =
-                self.previewLayer?.connection?.videoOrientation ?? self.getVideoOrientation()
+            let previewOrientation = self.getPreviewLayerVideoOrientation() ?? self.getVideoOrientation()
             let captureOrientation = CaptureOrientationResolver.resolveOrientation(
                 mode: captureOrientationMode,
                 previewOrientation: previewOrientation,

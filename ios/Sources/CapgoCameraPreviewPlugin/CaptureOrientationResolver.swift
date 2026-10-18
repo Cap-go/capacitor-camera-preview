@@ -7,7 +7,7 @@ enum CaptureOrientationResolver {
     static let orientationDevice = "device"
 
     static func usesDeviceOrientation(mode: String?) -> Bool {
-        mode == orientationDevice
+        mode != orientationPreview
     }
 
     static func resolveOrientation(
@@ -15,9 +15,9 @@ enum CaptureOrientationResolver {
         previewOrientation: AVCaptureVideoOrientation,
         deviceOrientation: AVCaptureVideoOrientation
     ) -> AVCaptureVideoOrientation {
-        if usesDeviceOrientation(mode: mode) {
-            return deviceOrientation
+        if mode == orientationPreview {
+            return previewOrientation
         }
-        return previewOrientation
+        return deviceOrientation
     }
 }

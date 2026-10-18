@@ -1356,11 +1356,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let height = call.getInt("height")
         let photoQualityPrioritization = call.getString("photoQualityPrioritization", "speed")
         let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
-        let captureOrientation = call.getString("orientation", CaptureOrientationResolver.orientationPreview)
+        let captureOrientation = call.getString("orientation", CaptureOrientationResolver.orientationDevice)
 
         print("[CameraPreview] Raw parameter values - width: \(String(describing: width)), height: \(String(describing: height))")
 
-        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera), orientation: \(captureOrientation ?? CaptureOrientationResolver.orientationPreview)")
+        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera), orientation: \(captureOrientation ?? CaptureOrientationResolver.orientationDevice)")
         print("[CameraPreview] Current location: \(self.currentLocation?.description ?? "nil")")
         // Safely read frame from main thread for logging
         let (previewWidth, previewHeight): (CGFloat, CGFloat) = {
