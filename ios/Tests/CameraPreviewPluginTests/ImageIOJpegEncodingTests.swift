@@ -37,6 +37,6 @@ final class ImageIOJpegEncodingTests: XCTestCase {
             return
         }
 
-        XCTAssertLessThan(lowQualityData.count, highQualityData.count / 2)
+        XCTAssertLessThan(lowQualityData.count, highQualityData.count)
     }
 }

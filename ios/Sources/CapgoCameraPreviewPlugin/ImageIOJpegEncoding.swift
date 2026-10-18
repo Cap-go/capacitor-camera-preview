@@ -1,7 +1,6 @@
 import Foundation
 import ImageIO
 import MobileCoreServices
-import UIKit
 
 enum ImageIOJpegEncoding {
     static func compressionQuality(forPercent qualityPercent: Int) -> CGFloat {
