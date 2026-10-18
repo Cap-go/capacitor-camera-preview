@@ -1398,9 +1398,11 @@ extension CameraController {
         }
 
         if let connection = photoOutput.connection(with: .video) {
+            let previewOrientation =
+                self.previewLayer?.connection?.videoOrientation ?? self.getVideoOrientation()
             let captureOrientation = CaptureOrientationResolver.resolveOrientation(
                 mode: captureOrientationMode,
-                previewOrientation: self.getVideoOrientation(),
+                previewOrientation: previewOrientation,
                 deviceOrientation: self.getPhysicalOrientation()
             )
             self.lastCaptureOrientation = captureOrientation
