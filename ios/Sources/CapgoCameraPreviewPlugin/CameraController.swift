@@ -518,6 +518,16 @@ class CameraController: NSObject, CXCallObserverDelegate {
     }
 
     private func activeCaptureDevice() -> AVCaptureDevice? {
+        if let captureSession = self.captureSession {
+            for input in captureSession.inputs {
+                guard let deviceInput = input as? AVCaptureDeviceInput,
+                      deviceInput.device.hasMediaType(.video) else {
+                    continue
+                }
+                return deviceInput.device
+            }
+        }
+
         switch currentCameraPosition {
         case .front:
             return self.frontCamera
@@ -1434,6 +1444,8 @@ extension CameraController {
                 try self.refreshVideoStabilizationAfterMovieOutputAttached()
             }
         }
+
+        self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
 
         // Keep orientation correct
         self.updateVideoOrientation()
@@ -2697,6 +2709,8 @@ extension CameraController {
                 try self.refreshVideoStabilizationAfterMovieOutputAttached()
             }
         }
+
+        self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
 
         // Update video orientation
         self.updateVideoOrientation()

@@ -62,7 +62,7 @@ final class CaptureResolutionSupportTests: XCTestCase {
         XCTAssertEqual(dimensions.height, 1080)
     }
 
-    func testPhotoMaxDimensionsFallsBackToSmallestSupportedWhenCapIsTooSmall() {
+    func testPhotoMaxDimensionsClampsToConfiguredCapWhenNoSupportedSizeFits() {
         let deviceMax = CMVideoDimensions(width: 4032, height: 3024)
         let supported = [
             CMVideoDimensions(width: 4032, height: 3024),
@@ -74,8 +74,8 @@ final class CaptureResolutionSupportTests: XCTestCase {
             supportedDimensions: supported,
             deviceMax: deviceMax
         )
-        XCTAssertEqual(dimensions.width, 1920)
-        XCTAssertEqual(dimensions.height, 1080)
+        XCTAssertEqual(dimensions.width, 640)
+        XCTAssertEqual(dimensions.height, 480)
     }
 
     func testParseCaptureResolutionRejectsInt32Overflow() {

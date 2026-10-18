@@ -97,10 +97,6 @@ enum CaptureResolutionSupport {
             return bestFit
         }
 
-        if let smallestSupported = supportedDimensions.min(by: { pixelArea($0) < pixelArea($1) }) {
-            return smallestSupported
-        }
-
         return clampPhotoDimensions(
             width: targetLong,
             height: targetShort,
