@@ -203,6 +203,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
     var videoQuality: String = "high"
     private var configuredVideoFrameRate: Int?
     var videoCodec: String = "avc1"
+    var videoBitrate: Int?
     var videoStabilizationMode: String = "off"
     private var cachedSupportedVideoStabilizationModes: [String] = []
     private var isSupportedVideoStabilizationModesCacheValid = false
@@ -262,6 +263,18 @@ class CameraController: NSObject, CXCallObserverDelegate {
 
     func getVideoCodec() -> String {
         return self.videoCodec
+    }
+
+    func setVideoBitrate(_ bitrate: Int?) {
+        if let bitrate = bitrate, bitrate > 0 {
+            self.videoBitrate = bitrate
+        } else {
+            self.videoBitrate = nil
+        }
+    }
+
+    func getVideoBitrate() -> Int? {
+        return self.videoBitrate
     }
 
     func isVideoStabilizationSupported() -> Bool {
@@ -3358,7 +3371,11 @@ extension CameraController {
         if let connection = fileVideoOutput.connection(with: .video),
            let codecType = avVideoCodecType(for: self.videoCodec),
            fileVideoOutput.availableVideoCodecTypes.contains(codecType) {
-            fileVideoOutput.setOutputSettings([AVVideoCodecKey: codecType], for: connection)
+            let outputSettings = VideoRecordingOptions.movieFileOutputSettings(
+                codecType: codecType,
+                videoBitrate: self.videoBitrate
+            )
+            fileVideoOutput.setOutputSettings(outputSettings, for: connection)
         }
 
         self.configureCaptureSession {

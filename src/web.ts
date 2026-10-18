@@ -906,7 +906,6 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   }
 
   async startRecordVideo(options: CameraPreviewOptions): Promise<any> {
-    void options;
     const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
     if (!video?.srcObject) {
       throw new Error('camera is not running');
@@ -930,7 +929,11 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         : 'video/webm';
 
     this.recordedChunks = [];
-    this.mediaRecorder = new MediaRecorder(stream, { mimeType });
+    const recorderOptions: MediaRecorderOptions = { mimeType };
+    if (options?.videoBitrate != null && options.videoBitrate > 0) {
+      recorderOptions.videoBitsPerSecond = options.videoBitrate;
+    }
+    this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
     this.mediaRecorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
         this.recordedChunks.push(event.data);

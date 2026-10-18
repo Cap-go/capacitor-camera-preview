@@ -1643,6 +1643,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
                 config.setCaptureResolution(captureResolutionWidth, captureResolutionHeight);
                 config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
+                String startVideoCodec = call.getString("videoCodec");
+                if (startVideoCodec != null) {
+                    config.setVideoCodec(startVideoCodec);
+                }
+                config.setVideoBitrate(VideoRecordingOptions.parseVideoBitrate(call.getData()));
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
                 if (barcodeScannerOptions == null) {
                     clearActiveBarcodeScanner();
@@ -2776,6 +2781,20 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    private void applyVideoBitrateFromCall(PluginCall call) {
+        if (cameraXView == null) {
+            return;
+        }
+        if (!call.getData().has("videoBitrate") || call.getData().isNull("videoBitrate")) {
+            return;
+        }
+        Integer parsed = VideoRecordingOptions.parseVideoBitrate(call.getData());
+        if (parsed == null) {
+            return;
+        }
+        cameraXView.setVideoBitrateSetting(parsed);
+    }
+
     private void applyVideoStabilizationFromCall(PluginCall call) {
         String mode = call.getString("videoStabilizationMode");
         if (mode != null && cameraXView != null) {
@@ -2809,6 +2828,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         try {
             applyVideoCodecFromCall(call);
+            applyVideoBitrateFromCall(call);
             applyVideoStabilizationFromCall(call);
             Integer frameRate = call.getInt("frameRate");
             boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera", false));
