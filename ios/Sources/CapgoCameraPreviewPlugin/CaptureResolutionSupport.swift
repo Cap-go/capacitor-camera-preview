@@ -57,6 +57,7 @@ enum CaptureResolutionSupport {
     private static func parsePositivePixelDimensionFromDouble(_ numeric: Double) -> Int? {
         guard !numeric.isNaN, !numeric.isInfinite, numeric > 0 else { return nil }
         guard numeric == floor(numeric), numeric <= Double(Int.max) else { return nil }
+        guard numeric <= Double(Int32.max) else { return nil }
         return Int(numeric)
     }
 
@@ -65,25 +66,59 @@ enum CaptureResolutionSupport {
         (max(configuredWidth, configuredHeight), min(configuredWidth, configuredHeight))
     }
 
-    /// Picks `maxPhotoDimensions` for AVCapturePhotoSettings, clamped to the output maximum.
+    static func longEdge(_ dimensions: CMVideoDimensions) -> Int32 {
+        max(dimensions.width, dimensions.height)
+    }
+
+    static func shortEdge(_ dimensions: CMVideoDimensions) -> Int32 {
+        min(dimensions.width, dimensions.height)
+    }
+
+    static func pixelArea(_ dimensions: CMVideoDimensions) -> Int64 {
+        Int64(dimensions.width) * Int64(dimensions.height)
+    }
+
+    /// Picks a supported `maxPhotoDimensions` value at or below the configured cap.
     static func photoMaxDimensions(
         configuredWidth: Int,
         configuredHeight: Int,
+        supportedDimensions: [CMVideoDimensions],
         deviceMax: CMVideoDimensions
     ) -> CMVideoDimensions {
         let normalized = normalizedCaptureTargetResolution(configuredWidth: configuredWidth, configuredHeight: configuredHeight)
-        var width = Int32(normalized.width)
-        var height = Int32(normalized.height)
+        let targetLong = Int32(normalized.width)
+        let targetShort = Int32(normalized.height)
 
-        let deviceWidth = deviceMax.width
-        let deviceHeight = deviceMax.height
-        if width > deviceWidth || height > deviceHeight {
-            let scale = min(Double(deviceWidth) / Double(width), Double(deviceHeight) / Double(height))
-            width = max(1, Int32((Double(width) * scale).rounded(.down)))
-            height = max(1, Int32((Double(height) * scale).rounded(.down)))
+        let fittingSupported = supportedDimensions.filter { dimension in
+            longEdge(dimension) <= targetLong && shortEdge(dimension) <= targetShort
         }
 
-        return CMVideoDimensions(width: width, height: height)
+        if let bestFit = fittingSupported.max(by: { pixelArea($0) < pixelArea($1) }) {
+            return bestFit
+        }
+
+        if let smallestSupported = supportedDimensions.min(by: { pixelArea($0) < pixelArea($1) }) {
+            return smallestSupported
+        }
+
+        return clampPhotoDimensions(
+            width: targetLong,
+            height: targetShort,
+            deviceMax: deviceMax
+        )
+    }
+
+    static func clampPhotoDimensions(width: Int32, height: Int32, deviceMax: CMVideoDimensions) -> CMVideoDimensions {
+        var clampedWidth = width
+        var clampedHeight = height
+        let deviceWidth = deviceMax.width
+        let deviceHeight = deviceMax.height
+        if clampedWidth > deviceWidth || clampedHeight > deviceHeight {
+            let scale = min(Double(deviceWidth) / Double(clampedWidth), Double(deviceHeight) / Double(clampedHeight))
+            clampedWidth = max(1, Int32((Double(clampedWidth) * scale).rounded(.down)))
+            clampedHeight = max(1, Int32((Double(clampedHeight) * scale).rounded(.down)))
+        }
+        return CMVideoDimensions(width: clampedWidth, height: clampedHeight)
     }
 
     static func shouldEnableHighResolutionPhoto(

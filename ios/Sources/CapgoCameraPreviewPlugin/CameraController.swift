@@ -517,19 +517,41 @@ class CameraController: NSObject, CXCallObserverDelegate {
         self.configuredCaptureResolutionHeight = height
     }
 
-    private func applyConfiguredCaptureResolutionToPhotoOutputIfNeeded() {
+    private func activeCaptureDevice() -> AVCaptureDevice? {
+        switch currentCameraPosition {
+        case .front:
+            return self.frontCamera
+        case .rear:
+            return self.rearCamera
+        default:
+            return nil
+        }
+    }
+
+    private func configuredPhotoMaxDimensions() -> CMVideoDimensions? {
         guard #available(iOS 16.0, *),
               let photoOutput = self.photoOutput,
               let width = self.configuredCaptureResolutionWidth,
-              let height = self.configuredCaptureResolutionHeight else {
+              let height = self.configuredCaptureResolutionHeight,
+              let device = self.activeCaptureDevice() else {
+            return nil
+        }
+
+        return CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: width,
+            configuredHeight: height,
+            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions,
+            deviceMax: photoOutput.maxPhotoDimensions
+        )
+    }
+
+    private func applyConfiguredCaptureResolutionToPhotoOutputIfNeeded() {
+        guard #available(iOS 16.0, *),
+              let photoOutput = self.photoOutput,
+              let dimensions = self.configuredPhotoMaxDimensions() else {
             return
         }
 
-        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
-            configuredWidth: width,
-            configuredHeight: height,
-            deviceMax: photoOutput.maxPhotoDimensions
-        )
         photoOutput.maxPhotoDimensions = dimensions
     }
 
@@ -1441,16 +1463,8 @@ extension CameraController {
             captureMaxHeight: height
         )
         settings.isHighResolutionPhotoEnabled = shouldUseHighRes
-        if #available(iOS 16.0, *) {
-            if let configuredWidth = self.configuredCaptureResolutionWidth,
-               let configuredHeight = self.configuredCaptureResolutionHeight {
-                let dimensions = CaptureResolutionSupport.photoMaxDimensions(
-                    configuredWidth: configuredWidth,
-                    configuredHeight: configuredHeight,
-                    deviceMax: photoOutput.maxPhotoDimensions
-                )
-                settings.maxPhotoDimensions = dimensions
-            }
+        if #available(iOS 16.0, *), let dimensions = self.configuredPhotoMaxDimensions() {
+            settings.maxPhotoDimensions = dimensions
         }
         if #available(iOS 15.0, *) {
             if photoQualityPrioritization == "quality" {
@@ -2849,6 +2863,8 @@ extension CameraController {
     func cleanup() {
         self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
+        self.configuredCaptureResolutionWidth = nil
+        self.configuredCaptureResolutionHeight = nil
         configuredVideoFrameRate = nil
         stopBarcodeScanner()
         self.unregisterCaptureSessionObservers()

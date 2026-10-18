@@ -364,9 +364,10 @@ export interface CameraPreviewOptions {
    * Sets the still-capture sensor resolution cap at session start. Preview resolution is unchanged.
    * The shared ViewPort crop from the preview still applies to captures.
    *
-   * On Android this binds the `ImageCapture` use case to the requested size. On iOS this sets
+   * On Android this binds the `ImageCapture` use case to the requested size. On iOS 16+ this sets
    * `AVCapturePhotoSettings.maxPhotoDimensions` (and disables high-resolution photo capture when capped)
    * so the sensor delivers fewer pixels instead of downscaling a full-sensor frame in software.
+   * On iOS 15, `start()` rejects this option.
    *
    * When omitted, capture uses the highest resolution supported by the active camera
    * (same as versions before 8.11.10 on Android, and the format default on iOS). Set this to cap

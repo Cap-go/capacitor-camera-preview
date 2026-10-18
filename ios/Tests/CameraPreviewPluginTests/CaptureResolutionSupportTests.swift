@@ -45,23 +45,45 @@ final class CaptureResolutionSupportTests: XCTestCase {
         XCTAssertEqual(normalized.height, 1080)
     }
 
-    func testPhotoMaxDimensionsClampsToDeviceMax() {
+    func testPhotoMaxDimensionsSelectsSupportedValueWithinCap() {
         let deviceMax = CMVideoDimensions(width: 4032, height: 3024)
+        let supported = [
+            CMVideoDimensions(width: 4032, height: 3024),
+            CMVideoDimensions(width: 1920, height: 1080),
+            CMVideoDimensions(width: 1280, height: 720)
+        ]
         let dimensions = CaptureResolutionSupport.photoMaxDimensions(
             configuredWidth: 1080,
             configuredHeight: 1920,
+            supportedDimensions: supported,
             deviceMax: deviceMax
         )
         XCTAssertEqual(dimensions.width, 1920)
         XCTAssertEqual(dimensions.height, 1080)
+    }
 
-        let clamped = CaptureResolutionSupport.photoMaxDimensions(
-            configuredWidth: 8000,
-            configuredHeight: 6000,
+    func testPhotoMaxDimensionsFallsBackToSmallestSupportedWhenCapIsTooSmall() {
+        let deviceMax = CMVideoDimensions(width: 4032, height: 3024)
+        let supported = [
+            CMVideoDimensions(width: 4032, height: 3024),
+            CMVideoDimensions(width: 1920, height: 1080)
+        ]
+        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: 640,
+            configuredHeight: 480,
+            supportedDimensions: supported,
             deviceMax: deviceMax
         )
-        XCTAssertLessThanOrEqual(clamped.width, deviceMax.width)
-        XCTAssertLessThanOrEqual(clamped.height, deviceMax.height)
+        XCTAssertEqual(dimensions.width, 1920)
+        XCTAssertEqual(dimensions.height, 1080)
+    }
+
+    func testParseCaptureResolutionRejectsInt32Overflow() {
+        let overflow = CaptureResolutionSupport.parseStartCaptureResolution([
+            "width": Int64(Int32.max) + 1,
+            "height": 1080
+        ])
+        XCTAssertTrue(overflow.isError)
     }
 
     func testShouldEnableHighResolutionPhotoWhenCaptureResolutionSet() {

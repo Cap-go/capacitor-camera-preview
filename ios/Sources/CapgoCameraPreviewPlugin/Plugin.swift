@@ -718,11 +718,36 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        let hasAspectRatio = call.getString("aspectRatio") != nil
+        let hasWidth = call.getInt("width") != nil
+        let hasHeight = call.getInt("height") != nil
+        if hasAspectRatio && (hasWidth || hasHeight) {
+            call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
+            return
+        }
+
+        let captureResolutionParseResult = CaptureResolutionSupport.parseStartCaptureResolution(call.getObject("captureResolution"))
+        if captureResolutionParseResult.isError {
+            call.reject(captureResolutionParseResult.errorMessage ?? "Invalid captureResolution")
+            return
+        }
+        if captureResolutionParseResult.width != nil, captureResolutionParseResult.height != nil {
+            if #unavailable(iOS 16.0) {
+                call.reject("captureResolution requires iOS 16 or later")
+                return
+            }
+        }
+
         self.isInitializing = true
         self.hasResolvedStartCall = false
         self.pendingStartCall = call
         self.startGeneration += 1
         let startToken = self.startGeneration
+
+        self.cameraController.setConfiguredCaptureResolution(
+            width: captureResolutionParseResult.width,
+            height: captureResolutionParseResult.height
+        )
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -781,27 +806,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
-
-        // Check for conflict between aspectRatio and size (width/height)
-        let hasAspectRatio = call.getString("aspectRatio") != nil
-        let hasWidth = call.getInt("width") != nil
-        let hasHeight = call.getInt("height") != nil
-
-        if hasAspectRatio && (hasWidth || hasHeight) {
-            self.pendingStartBarcodeScannerOptions = nil
-            call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
-            return
-        }
-
-        let captureResolutionParseResult = CaptureResolutionSupport.parseStartCaptureResolution(call.getObject("captureResolution"))
-        if captureResolutionParseResult.isError {
-            call.reject(captureResolutionParseResult.errorMessage ?? "Invalid captureResolution")
-            return
-        }
-        self.cameraController.setConfiguredCaptureResolution(
-            width: captureResolutionParseResult.width,
-            height: captureResolutionParseResult.height
-        )
 
         let beginStart: () -> Void = {
             if (self.cameraController.captureSession?.isRunning ?? false) && !force {
