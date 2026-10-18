@@ -201,6 +201,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
+    var allowHapticsAndSystemSoundsDuringRecording = false
     private let applicationAudioSessionRestoreCoordinator = ApplicationAudioSessionRestoreCoordinator()
     private var recordingIdByOutputFileURL: [URL: UInt64] = [:]
     private let recordingIdQueue = DispatchQueue(label: "com.capgo.camera.recordingIds")
@@ -527,6 +528,63 @@ class CameraController: NSObject, CXCallObserverDelegate {
     var requestedAspectRatio: String?
     var requestedAspectMode: String = "contain"
 
+    /// Still-capture sensor cap from `start({ captureResolution })`, when set on iOS.
+    var configuredCaptureResolutionWidth: Int?
+    var configuredCaptureResolutionHeight: Int?
+
+    func setConfiguredCaptureResolution(width: Int?, height: Int?) {
+        self.configuredCaptureResolutionWidth = width
+        self.configuredCaptureResolutionHeight = height
+    }
+
+    private func activeCaptureDevice() -> AVCaptureDevice? {
+        if let captureSession = self.captureSession {
+            for input in captureSession.inputs {
+                guard let deviceInput = input as? AVCaptureDeviceInput,
+                      deviceInput.device.hasMediaType(.video) else {
+                    continue
+                }
+                return deviceInput.device
+            }
+        }
+
+        switch currentCameraPosition {
+        case .front:
+            return self.frontCamera
+        case .rear:
+            return self.rearCamera
+        default:
+            return nil
+        }
+    }
+
+    private func configuredPhotoMaxDimensions() -> CMVideoDimensions? {
+        guard #available(iOS 16.0, *),
+              let photoOutput = self.photoOutput,
+              let width = self.configuredCaptureResolutionWidth,
+              let height = self.configuredCaptureResolutionHeight,
+              let device = self.activeCaptureDevice() else {
+            return nil
+        }
+
+        return CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: width,
+            configuredHeight: height,
+            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions,
+            deviceMax: photoOutput.maxPhotoDimensions
+        )
+    }
+
+    private func applyConfiguredCaptureResolutionToPhotoOutputIfNeeded() {
+        guard #available(iOS 16.0, *),
+              let photoOutput = self.photoOutput,
+              let dimensions = self.configuredPhotoMaxDimensions() else {
+            return
+        }
+
+        photoOutput.maxPhotoDimensions = dimensions
+    }
+
     func calculateAspectRatioFrame(for aspectRatio: String, in bounds: CGRect) -> CGRect {
         guard let ratio = parseAspectRatio(aspectRatio) else {
             return bounds
@@ -581,6 +639,56 @@ class CameraController: NSObject, CXCallObserverDelegate {
         }
 
         return (width: finalWidth, height: finalHeight)
+    }
+
+    /// Pixel dimensions of the active camera preview stream in the current interface orientation.
+    func capturePreviewContentSize() -> CGSize? {
+        let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera
+        guard let device = device else {
+            return nil
+        }
+
+        let dimensions = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        var width = CGFloat(dimensions.width)
+        var height = CGFloat(dimensions.height)
+        guard width > 0, height > 0 else {
+            return nil
+        }
+
+        let orientation = self.getVideoOrientation()
+        let isPortrait = orientation == .portrait || orientation == .portraitUpsideDown
+        if isPortrait {
+            swap(&width, &height)
+        }
+
+        return CGSize(width: width, height: height)
+    }
+
+    /// Web-view coordinates of the visible camera image (after letterboxing / pillarboxing).
+    func visiblePreviewRect(in previewView: UIView) -> CGRect {
+        let containerFrame = previewView.frame
+        guard let previewLayer = self.previewLayer else {
+            return containerFrame
+        }
+
+        let layerFrame = previewLayer.frame
+        let contentRectInPreviewView: CGRect
+
+        if self.requestedAspectMode == "cover" {
+            contentRectInPreviewView = layerFrame
+        } else if let contentSize = self.capturePreviewContentSize() {
+            contentRectInPreviewView = AspectRatioLayout.containContentRect(
+                contentSize: contentSize,
+                inside: layerFrame
+            )
+        } else {
+            contentRectInPreviewView = layerFrame
+        }
+
+        return AspectRatioLayout.previewContentRectInWebViewCoordinates(
+            contentRectInPreviewView: contentRectInPreviewView,
+            previewViewFrame: containerFrame
+        )
     }
 }
 
@@ -717,9 +825,10 @@ extension CameraController {
         return token != 0 && token == self.activePrepareToken
     }
 
-    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
-        print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
+    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", allowHapticsAndSystemSoundsDuringRecording: Bool = false, startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
+        print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1), allowHapticsAndSystemSoundsDuringRecording: \(allowHapticsAndSystemSoundsDuringRecording)")
 
+        self.allowHapticsAndSystemSoundsDuringRecording = allowHapticsAndSystemSoundsDuringRecording
         self.applicationAudioSessionRestoreCoordinator.beginPreviewSession()
         self.activePrepareToken = startToken
 
@@ -794,6 +903,7 @@ extension CameraController {
                 if let photoOutput = self.photoOutput, captureSession.canAddOutput(photoOutput) {
                     photoOutput.isHighResolutionCaptureEnabled = true
                     captureSession.addOutput(photoOutput)
+                    self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
                     // Set orientation immediately
                     self.setVideoOrientation(videoOrientation, on: photoOutput.connections)
                 }
@@ -832,6 +942,7 @@ extension CameraController {
 
                 // Start the session - all outputs are already configured
                 captureSession.startRunning()
+                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
 
                 // Bring to full opacity after a tiny moment to smooth any visual artifacts
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
@@ -1078,6 +1189,7 @@ extension CameraController {
                 self.audioInput = try AVCaptureDeviceInput(device: audioDevice)
                 if captureSession.canAddInput(self.audioInput!) {
                     captureSession.addInput(self.audioInput!)
+                    self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
                 } else {
                     throw CameraControllerError.inputsAreInvalid
                 }
@@ -1406,6 +1518,8 @@ extension CameraController {
             }
         }
 
+        self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
+
         // Keep orientation correct
         self.updateVideoOrientation()
     }
@@ -1431,9 +1545,16 @@ extension CameraController {
         let visibleFillRatio = self.visibleFillCaptureAspectRatio()
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
-        // Only use high res if explicitly requesting large dimensions
-        let shouldUseHighRes = width.map { $0 > 1920 } ?? false || height.map { $0 > 1920 } ?? false
+        let shouldUseHighRes = CaptureResolutionSupport.shouldEnableHighResolutionPhoto(
+            captureResolutionWidth: self.configuredCaptureResolutionWidth,
+            captureResolutionHeight: self.configuredCaptureResolutionHeight,
+            captureMaxWidth: width,
+            captureMaxHeight: height
+        )
         settings.isHighResolutionPhotoEnabled = shouldUseHighRes
+        if #available(iOS 16.0, *), let dimensions = self.configuredPhotoMaxDimensions() {
+            settings.maxPhotoDimensions = dimensions
+        }
         if #available(iOS 15.0, *) {
             if photoQualityPrioritization == "quality" {
                 settings.photoQualityPrioritization = .quality
@@ -2666,6 +2787,8 @@ extension CameraController {
             }
         }
 
+        self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
+
         // Update video orientation
         self.updateVideoOrientation()
     }
@@ -2680,6 +2803,16 @@ extension CameraController {
 
     private func captureApplicationAudioSessionSnapshotIfNeeded() {
         self.applicationAudioSessionRestoreCoordinator.captureSnapshotIfNeeded()
+    }
+
+    private func applyAllowHapticsAndSystemSoundsDuringRecordingPolicy() {
+        guard self.audioInput != nil else { return }
+        do {
+            try AVAudioSession.sharedInstance()
+                .setAllowHapticsAndSystemSoundsDuringRecording(self.allowHapticsAndSystemSoundsDuringRecording)
+        } catch {
+            print("[CameraPreview] Failed to set allowHapticsAndSystemSoundsDuringRecording: \(error)")
+        }
     }
 
     private static let insufficientAudioPriorityOSStatus = 561017449
@@ -2744,6 +2877,7 @@ extension CameraController {
             if session.canAddInput(input) {
                 session.addInput(input)
                 self.audioInput = input
+                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
             }
         } catch {
             print("[CameraPreview] Failed to restore audio input after interruption: \(error)")
@@ -2831,6 +2965,8 @@ extension CameraController {
     func cleanup() {
         self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
+        self.configuredCaptureResolutionWidth = nil
+        self.configuredCaptureResolutionHeight = nil
         configuredVideoFrameRate = nil
         stopBarcodeScanner()
         self.unregisterCaptureSessionObservers()
@@ -3319,12 +3455,13 @@ extension CameraController {
         // This reclaims the microphone even if other parts of the app changed the
         // AVAudioSession category (e.g. for UI sound effects) between recordings.
         if self.audioInput != nil {
+            self.allowHapticsAndSystemSoundsDuringRecording = allowHapticsAndSystemSoundsDuringRecording
             self.captureApplicationAudioSessionSnapshotIfNeeded()
             do {
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
                 try audioSession.setActive(true)
-                try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(allowHapticsAndSystemSoundsDuringRecording)
+                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
             } catch {
                 print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
             }
@@ -3561,34 +3698,25 @@ extension CameraController: UIGestureRecognizerDelegate {
 
 extension CameraController: AVCapturePhotoCaptureDelegate {
     public func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if let error = error {
-            self.photoCaptureCompletionBlock?(nil, nil, nil, error)
-            return
-        }
+        CapturePhotoProcessingQueue.async {
+            if let error = error {
+                self.photoCaptureCompletionBlock?(nil, nil, nil, error)
+                return
+            }
 
-        // Process photo in background to avoid blocking main thread
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Get the photo data using the modern API
             guard let imageData = photo.fileDataRepresentation() else {
-                DispatchQueue.main.async {
-                    self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
-                }
+                self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
                 return
             }
 
-            // Create image from data
             guard let image = UIImage(data: imageData) else {
-                DispatchQueue.main.async {
-                    self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
-                }
+                self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
                 return
             }
 
-            // Pass through original file data and metadata so callers can preserve EXIF
-            // Don't call fixedOrientation() here - let the completion block handle it after cropping
-            DispatchQueue.main.async {
-                self.photoCaptureCompletionBlock?(image, imageData, photo.metadata, nil)
-            }
+            // Pass through original file data and metadata so callers can preserve EXIF.
+            // Don't call fixedOrientation() here; the completion block handles cropping.
+            self.photoCaptureCompletionBlock?(image, imageData, photo.metadata, nil)
         }
     }
 }
