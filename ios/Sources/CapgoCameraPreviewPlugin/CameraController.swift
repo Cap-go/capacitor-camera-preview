@@ -1391,15 +1391,18 @@ extension CameraController {
         self.updateVideoOrientation()
     }
 
-    func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
+    func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, captureOrientationMode: String?, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
         guard let photoOutput = self.photoOutput else {
             completion(nil, nil, nil, NSError(domain: "Camera", code: 0, userInfo: [NSLocalizedDescriptionKey: "Photo output is not available"]))
             return
         }
 
-        // Make sure capture is getting the physical orientation not interface orientation
         if let connection = photoOutput.connection(with: .video) {
-            let captureOrientation = self.getPhysicalOrientation()
+            let captureOrientation = CaptureOrientationResolver.resolveOrientation(
+                mode: captureOrientationMode,
+                previewOrientation: self.getVideoOrientation(),
+                deviceOrientation: self.getPhysicalOrientation()
+            )
             self.lastCaptureOrientation = captureOrientation
             self.setVideoOrientation(captureOrientation, on: connection)
         }

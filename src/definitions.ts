@@ -516,6 +516,14 @@ export interface CameraPreviewPictureOptions {
    * @since 8.10.0
    */
   mirrorFrontCamera?: boolean;
+  /**
+   * Which orientation to apply to the captured photo.
+   * - `"preview"`: matches the on-screen preview (interface rotation). Use this for WYSIWYG capture, including retakes without stopping the camera.
+   * - `"device"`: uses physical device tilt from the accelerometer. Prefer this when the UI is rotation-locked but the user can still rotate the device.
+   * @default "preview"
+   * @since 8.13.0
+   */
+  orientation?: 'preview' | 'device';
 }
 
 /** Represents EXIF data extracted from an image. */
