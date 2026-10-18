@@ -647,15 +647,16 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     void _options; // Mark as intentionally unused
     await this.stopBarcodeScanner();
 
-    const video = document.getElementById(DEFAULT_VIDEO_ID) as HTMLVideoElement;
+    const video = this.videoElement;
     if (video) {
       video.pause();
-
       this.stopStream(video.srcObject);
-
-      video.remove();
-      this.isStarted = false;
+      if (video.isConnected) {
+        video.remove();
+      }
     }
+    this.videoElement = null;
+    this.isStarted = false;
 
     // Remove grid overlay if it exists
     const gridOverlay = document.getElementById('camera-grid-overlay');

@@ -84,6 +84,46 @@ enum AspectRatioLayout {
         return interfaceIsPortrait == captureIsPortrait ? ratio : 1 / ratio
     }
 
+    /// Rect of content with `contentSize` aspect ratio centered inside `container`
+    /// using `resizeAspect` / FIT_CENTER letterboxing.
+    static func containContentRect(contentSize: CGSize, inside container: CGRect) -> CGRect {
+        guard contentSize.width.isFinite, contentSize.height.isFinite,
+              contentSize.width > 0, contentSize.height > 0,
+              container.width.isFinite, container.height.isFinite,
+              container.width > 0, container.height > 0 else {
+            return container
+        }
+
+        let contentAspect = contentSize.width / contentSize.height
+        let containerAspect = container.width / container.height
+
+        let fittedSize: CGSize
+        if containerAspect > contentAspect {
+            fittedSize = CGSize(width: container.height * contentAspect, height: container.height)
+        } else {
+            fittedSize = CGSize(width: container.width, height: container.width / contentAspect)
+        }
+
+        let origin = CGPoint(
+            x: container.origin.x + (container.width - fittedSize.width) / 2,
+            y: container.origin.y + (container.height - fittedSize.height) / 2
+        )
+        return CGRect(origin: origin, size: fittedSize)
+    }
+
+    /// Maps a rect in preview-view coordinates to the same space as `previewView.frame`.
+    static func previewContentRectInWebViewCoordinates(
+        contentRectInPreviewView: CGRect,
+        previewViewFrame: CGRect
+    ) -> CGRect {
+        CGRect(
+            x: previewViewFrame.origin.x + contentRectInPreviewView.origin.x,
+            y: previewViewFrame.origin.y + contentRectInPreviewView.origin.y,
+            width: contentRectInPreviewView.width,
+            height: contentRectInPreviewView.height
+        )
+    }
+
     /// Centered crop rect with `targetAspectRatio` (width / height) inside `imageSize`,
     /// matching how `resizeAspectFill` centers the visible area.
     static func centerCropRect(imageSize: CGSize, targetAspectRatio: CGFloat) -> CGRect {

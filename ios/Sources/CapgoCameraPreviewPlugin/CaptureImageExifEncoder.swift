@@ -32,11 +32,6 @@ enum CaptureImageExifEncoder {
             return jpegEncoder(image, quality)
         }
 
-        let mutableData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(mutableData, kUTTypeJPEG, 1, nil) else {
-            return jpegEncoder(image, quality)
-        }
-
         var finalProperties = imageProperties
 
         // Ensure orientation reflects the pixel data (we pass an orientation-fixed UIImage)
@@ -80,10 +75,8 @@ enum CaptureImageExifEncoder {
         tiffDict[kCGImagePropertyTIFFOrientation as String] = 1
         finalProperties[kCGImagePropertyTIFFDictionary as String] = tiffDict
 
-        CGImageDestinationAddImage(destination, cgImage, finalProperties as CFDictionary)
-
-        if CGImageDestinationFinalize(destination) {
-            return mutableData as Data
+        if let encoded = ImageIOJpegEncoding.encode(cgImage: cgImage, properties: finalProperties, qualityPercent: quality) {
+            return encoded
         }
 
         return jpegEncoder(image, quality)

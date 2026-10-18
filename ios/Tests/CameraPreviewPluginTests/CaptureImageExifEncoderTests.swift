@@ -55,6 +55,41 @@ final class CaptureImageExifEncoderTests: XCTestCase {
         XCTAssertEqual(tiff[kCGImagePropertyTIFFMake as String] as? String, "Apple")
     }
 
+    func testHonorsRequestedQualityWhenOriginalPhotoDataProvided() {
+        let size = CGSize(width: 400, height: 300)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 50, y: 50, width: 300, height: 200))
+        }
+        guard let originalPhotoData = image.jpegData(compressionQuality: 1.0) else {
+            XCTFail("Failed to build fixture JPEG")
+            return
+        }
+
+        guard let lowQuality = CaptureImageExifEncoder.createImageData(
+            from: image,
+            quality: 20,
+            location: nil,
+            heading: nil,
+            originalPhotoData: originalPhotoData
+        ),
+        let highQuality = CaptureImageExifEncoder.createImageData(
+            from: image,
+            quality: 95,
+            location: nil,
+            heading: nil,
+            originalPhotoData: originalPhotoData
+        ) else {
+            XCTFail("Expected JPEG output at both quality levels")
+            return
+        }
+
+        XCTAssertLessThan(lowQuality.count, highQuality.count)
+    }
+
     func testEncodesWhenOriginalPhotoDataMissing() {
         let image = makeTestImage()
 
