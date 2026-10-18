@@ -44,8 +44,8 @@
     "verify:ios": "xcodebuild -scheme CapgoCameraPreview -destination generic/platform=iOS && bun run test:ios",
     "test:ios": "bash ./scripts/test-ios.sh",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
-    "verify:web": "bun run build && bun test",
-    "test:web": "bun test",
+    "verify:web": "bun run build && bun run test:web",
+    "test:web": "bun test src/web.stop.test.ts src/web-capture-scaling.test.ts",
     "lint": "bun run eslint && bun run prettier -- --check && bun run swiftlint -- lint",
     "fmt": "bun run eslint -- --fix && bun run prettier -- --write && bun run swiftlint -- --fix --format",
     "eslint": "eslint .",
@@ -83,7 +83,8 @@
     "rollup": "^4.53.2",
     "swiftlint": "^2.0.0",
     "typescript": "^6.0.3",
-    "prettier-pretty-check": "^0.2.0"
+    "prettier-pretty-check": "^0.2.0",
+    "happy-dom": "^20.0.0"
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"

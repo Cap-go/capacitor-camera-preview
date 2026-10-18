@@ -43,6 +43,32 @@ final class AspectRatioLayoutTests: XCTestCase {
         XCTAssertGreaterThan(dimensions.height, 500)
     }
 
+    func testContainContentRectLetterboxesFourThreeInTallContainer() {
+        let container = CGRect(x: 0, y: 0, width: 390, height: 700)
+        let content = AspectRatioLayout.containContentRect(
+            contentSize: CGSize(width: 3, height: 4),
+            inside: container
+        )
+
+        XCTAssertEqual(content.width, 390, accuracy: 0.5)
+        XCTAssertEqual(content.height, 520, accuracy: 0.5)
+        XCTAssertEqual(content.origin.x, 0, accuracy: 0.5)
+        XCTAssertEqual(content.origin.y, 90, accuracy: 0.5)
+    }
+
+    func testPreviewContentRectInWebViewCoordinatesOffsetsByPreviewViewOrigin() {
+        let content = CGRect(x: 0, y: 90, width: 390, height: 520)
+        let mapped = AspectRatioLayout.previewContentRectInWebViewCoordinates(
+            contentRectInPreviewView: content,
+            previewViewFrame: CGRect(x: 12, y: 48, width: 390, height: 700)
+        )
+
+        XCTAssertEqual(mapped.origin.x, 12, accuracy: 0.5)
+        XCTAssertEqual(mapped.origin.y, 138, accuracy: 0.5)
+        XCTAssertEqual(mapped.width, 390, accuracy: 0.5)
+        XCTAssertEqual(mapped.height, 520, accuracy: 0.5)
+    }
+
     func testMalformedRatioFallsBackToFullViewport() {
         XCTAssertNil(AspectRatioLayout.parseViewportAspectRatio("4:bad:3", isPortrait: true))
 

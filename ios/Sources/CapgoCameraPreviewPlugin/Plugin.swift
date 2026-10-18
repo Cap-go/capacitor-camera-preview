@@ -491,12 +491,16 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         self.updateCameraFrame()
 
-        // Return the actual preview bounds
+        return self.visiblePreviewSizeJSObject()
+    }
+
+    private func visiblePreviewSizeJSObject() -> JSObject {
+        let rect = self.cameraController.visiblePreviewRect(in: self.previewView)
         var result = JSObject()
-        result["x"] = Double(self.previewView.frame.origin.x)
-        result["y"] = Double(self.previewView.frame.origin.y)
-        result["width"] = Double(self.previewView.frame.width)
-        result["height"] = Double(self.previewView.frame.height)
+        result["x"] = Double(rect.origin.x)
+        result["y"] = Double(rect.origin.y)
+        result["width"] = Double(rect.width)
+        result["height"] = Double(rect.height)
         return result
     }
 
@@ -663,6 +667,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("  - force: \(call.getBool("force") ?? false)")
         print("  - videoQuality: \(call.getString("videoQuality") ?? "high")")
         print("  - videoStabilizationMode: \(call.getString("videoStabilizationMode") ?? "off")")
+        print("  - allowHapticsAndSystemSoundsDuringRecording: \(call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false)")
 
         let force = call.getBool("force") ?? false
 
@@ -718,11 +723,36 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        let hasAspectRatio = call.getString("aspectRatio") != nil
+        let hasWidth = call.getInt("width") != nil
+        let hasHeight = call.getInt("height") != nil
+        if hasAspectRatio && (hasWidth || hasHeight) {
+            call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
+            return
+        }
+
+        let captureResolutionParseResult = CaptureResolutionSupport.parseStartCaptureResolution(call.getObject("captureResolution"))
+        if captureResolutionParseResult.isError {
+            call.reject(captureResolutionParseResult.errorMessage ?? "Invalid captureResolution")
+            return
+        }
+        if captureResolutionParseResult.width != nil, captureResolutionParseResult.height != nil {
+            if #unavailable(iOS 16.0) {
+                call.reject("captureResolution requires iOS 16 or later")
+                return
+            }
+        }
+
         self.isInitializing = true
         self.hasResolvedStartCall = false
         self.pendingStartCall = call
         self.startGeneration += 1
         let startToken = self.startGeneration
+
+        self.cameraController.setConfiguredCaptureResolution(
+            width: captureResolutionParseResult.width,
+            height: captureResolutionParseResult.height
+        )
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -781,17 +811,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
+        let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
 
-        // Check for conflict between aspectRatio and size (width/height)
-        let hasAspectRatio = call.getString("aspectRatio") != nil
-        let hasWidth = call.getInt("width") != nil
-        let hasHeight = call.getInt("height") != nil
-
-        if hasAspectRatio && (hasWidth || hasHeight) {
-            self.pendingStartBarcodeScannerOptions = nil
-            call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
-            return
-        }
         let beginStart: () -> Void = {
             if (self.cameraController.captureSession?.isRunning ?? false) && !force {
                 DispatchQueue.main.async {
@@ -830,7 +851,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             }
 
-            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality, startToken: startToken) { error in
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality, allowHapticsAndSystemSoundsDuringRecording: allowHapticsAndSystemSoundsDuringRecording, startToken: startToken) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
@@ -994,12 +1015,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             DispatchQueue.main.async {
                 guard startToken == self.startGeneration else { return }
-                var returnedObject = JSObject()
-                returnedObject["width"] = self.previewView.frame.width as any JSValue
-                returnedObject["height"] = self.previewView.frame.height as any JSValue
-                returnedObject["x"] = self.previewView.frame.origin.x as any JSValue
-                returnedObject["y"] = self.previewView.frame.origin.y as any JSValue
-                self.resolveStartCall(call, returnedObject: returnedObject)
+                self.resolveStartCall(call, returnedObject: self.visiblePreviewSizeJSObject())
             }
         }
 
@@ -1009,12 +1025,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if self.cameraController.hasReceivedFirstFrame {
             DispatchQueue.main.async {
                 guard startToken == self.startGeneration else { return }
-                var returnedObject = JSObject()
-                returnedObject["width"] = self.previewView.frame.width as any JSValue
-                returnedObject["height"] = self.previewView.frame.height as any JSValue
-                returnedObject["x"] = self.previewView.frame.origin.x as any JSValue
-                returnedObject["y"] = self.previewView.frame.origin.y as any JSValue
-                self.resolveStartCall(call, returnedObject: returnedObject)
+                self.resolveStartCall(call, returnedObject: self.visiblePreviewSizeJSObject())
             }
         }
     }
@@ -1378,15 +1389,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front
         let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
+        let locationForExif = (withExifLocation ?? false) ? self.currentLocation : nil
+        let headingForExif = (withExifLocation ?? false) ? self.currentHeading : nil
+        let storeToFile = self.storeToFile
         self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
-            DispatchQueue.main.async {
-                print("[CameraPreview] Processing capture on main thread")
-                // Ensure heading updates are stopped on all exit paths (error, guard failure, or success)
+            CapturePhotoProcessingQueue.async {
+                print("[CameraPreview] Processing capture on background queue (isMain=\(Thread.isMainThread))")
                 defer {
                     if withExifLocation ?? false {
-                        self.locationManager?.stopUpdatingHeading()
-                        self.currentHeading = nil
+                        DispatchQueue.main.async {
+                            self.locationManager?.stopUpdatingHeading()
+                            self.currentHeading = nil
+                        }
                     }
                 }
                 if let error = error {
@@ -1411,8 +1426,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 guard let imageDataWithExif = self.createImageDataWithExif(
                         from: imageToEncode,
                         quality: Int(quality),
-                        location: withExifLocation ? self.currentLocation : nil,
-                        heading: withExifLocation ? self.currentHeading : nil,
+                        location: locationForExif,
+                        heading: headingForExif,
                         originalPhotoData: originalPhotoData
                       )
                 else {
@@ -1423,13 +1438,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
                 print("[CameraPreview] Image data created, size: \(imageDataWithExif.count) bytes")
 
-                // Prepare the result first
                 let exifData = self.getExifData(from: imageDataWithExif)
 
                 var result = JSObject()
                 result["exif"] = exifData
 
-                if self.storeToFile == false {
+                if storeToFile == false {
                     let base64Image = imageDataWithExif.base64EncodedString()
                     result["value"] = base64Image
                 } else {
@@ -1443,7 +1457,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     }
                 }
 
-                // Save to gallery asynchronously if requested
                 if saveToGallery {
                     print("[CameraPreview] Saving to gallery asynchronously...")
                     DispatchQueue.global(qos: .utility).async {
@@ -1453,7 +1466,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     }
                 }
 
-                print("[CameraPreview] Resolving capture call immediately")
+                print("[CameraPreview] Resolving capture call from background queue")
                 call.resolve(result)
             }
         }
@@ -1562,11 +1575,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return jpegDataAtQuality
         }
 
-        let mutableData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(mutableData, kUTTypeJPEG, 1, nil) else {
-            return jpegDataAtQuality
-        }
-
         var finalProperties = imageProperties
 
         // Ensure orientation reflects the pixel data (we pass an orientation-fixed UIImage)
@@ -1613,10 +1621,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         tiffDict[kCGImagePropertyTIFFOrientation as String] = 1
         finalProperties[kCGImagePropertyTIFFDictionary as String] = tiffDict
 
-        CGImageDestinationAddImage(destination, cgImage, finalProperties as CFDictionary)
-
-        if CGImageDestinationFinalize(destination) {
-            return mutableData as Data
+        if let encoded = ImageIOJpegEncoding.encode(cgImage: cgImage, properties: finalProperties, qualityPercent: quality) {
+            return encoded
         }
 
         return jpegDataAtQuality
@@ -1821,7 +1827,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             if let frameRate = call.getInt("frameRate") {
                 try self.cameraController.setVideoFrameRate(frameRate)
             }
-            let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
+            let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording")
+                ?? self.cameraController.allowHapticsAndSystemSoundsDuringRecording
             let mirrorFrontCamera = call.getBool("mirrorFrontCamera") ?? false
             try self.cameraController.captureVideo(
                 maxDuration: maxDuration,
@@ -2438,12 +2445,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
 
         DispatchQueue.main.async {
-            var result = JSObject()
-            result["x"] = Double(self.previewView.frame.origin.x)
-            result["y"] = Double(self.previewView.frame.origin.y)
-            result["width"] = Double(self.previewView.frame.width)
-            result["height"] = Double(self.previewView.frame.height)
-            call.resolve(result)
+            call.resolve(self.visiblePreviewSizeJSObject())
         }
     }
 
@@ -2480,13 +2482,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.updateCameraFrame()
             self.makeWebViewTransparent()
 
-            // Return the actual preview bounds
-            var result = JSObject()
-            result["x"] = Double(self.previewView.frame.origin.x)
-            result["y"] = Double(self.previewView.frame.origin.y)
-            result["width"] = Double(self.previewView.frame.width)
-            result["height"] = Double(self.previewView.frame.height)
-            call.resolve(result)
+            call.resolve(self.visiblePreviewSizeJSObject())
         }
     }
 
