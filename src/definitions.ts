@@ -361,15 +361,22 @@ export interface CameraPreviewOptions {
    */
   enableVideoMode?: boolean;
   /**
-   * Sets the Android still-capture resolution for the `ImageCapture` use case at session bind time.
-   * Preview resolution is unchanged. The shared ViewPort crop from the preview still applies to captures.
+   * Sets the still-capture sensor resolution cap at session start. Preview resolution is unchanged.
+   * The shared ViewPort crop from the preview still applies to captures.
    *
-   * When omitted, `ImageCapture` uses the highest resolution supported by the active camera
-   * (same as versions before 8.11.10). Set this to cap capture size for faster shots on high-megapixel
-   * sensors, for example `{ width: 1920, height: 1080 }` or `{ width: 1600, height: 1200 }`.
+   * On Android this binds the `ImageCapture` use case to the requested size. On iOS 16+ this sets
+   * `AVCapturePhotoSettings.maxPhotoDimensions` (and disables high-resolution photo capture when capped)
+   * so the sensor delivers fewer pixels instead of downscaling a full-sensor frame in software.
+   * On iOS 15, `start()` rejects this option.
    *
-   * @platform android
+   * When omitted, capture uses the highest resolution supported by the active camera
+   * (same as versions before 8.11.10 on Android, and the format default on iOS). Set this to cap
+   * capture size for faster shots on high-megapixel sensors, for example `{ width: 1920, height: 1080 }`
+   * or `{ width: 1600, height: 1200 }`.
+   *
+   * @platform android, ios
    * @since 8.12.0
+   * @since 8.13.0 (iOS)
    */
   captureResolution?: CameraCaptureResolution;
   /**
@@ -1018,7 +1025,12 @@ export interface CameraPreviewPlugin {
   getDeviceId(): Promise<{ deviceId: string }>;
 
   /**
-   * Gets the current preview size and position.
+   * Gets the current visible camera preview bounds in web-view coordinates.
+   *
+   * With `aspectMode: 'contain'`, this is the letterboxed camera image rect inside the
+   * preview container (not the full container when bars are shown). With `aspectMode: 'cover'`,
+   * this matches the preview container bounds on both platforms.
+   *
    * @returns {Promise<{x: number, y: number, width: number, height: number}>}
    * @since 7.5.0
    * @platform android, ios
@@ -1032,7 +1044,7 @@ export interface CameraPreviewPlugin {
   /**
    * Sets the preview size and position.
    * @param options The new position and dimensions.
-   * @returns {Promise<{ width: number; height: number; x: number; y: number }>} A promise that resolves with the actual preview dimensions and position.
+   * @returns {Promise<{ width: number; height: number; x: number; y: number }>} A promise that resolves with the visible camera preview bounds (same contract as {@link CameraPreviewPlugin.getPreviewSize}).
    * @since 7.5.0
    * @platform android, ios
    */
