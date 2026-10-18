@@ -28,6 +28,7 @@ import type {
   VideoQuality,
 } from './definitions';
 import { DeviceType } from './definitions';
+import { getWebCaptureImageDrawRects } from './web-capture-scaling';
 
 type WebPermissionState = 'granted' | 'denied' | 'prompt';
 type WebBarcodeDetectorResult = {
@@ -681,8 +682,6 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
         // Calculate capture dimensions
         let captureWidth = video.videoWidth;
         let captureHeight = video.videoHeight;
-        const sourceX = 0;
-        const sourceY = 0;
 
         // If width or height is specified, resize to fit within both maximums while maintaining aspect ratio
         if (options.width || options.height) {
@@ -722,7 +721,13 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
           context?.translate(captureWidth, 0);
           context?.scale(-1, 1);
         }
-        context?.drawImage(video, sourceX, sourceY, captureWidth, captureHeight, 0, 0, captureWidth, captureHeight);
+        const { sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight } = getWebCaptureImageDrawRects(
+          video.videoWidth,
+          video.videoHeight,
+          captureWidth,
+          captureHeight,
+        );
+        context?.drawImage(video, sx, sy, sWidth, sHeight, dx, dy, dWidth, dHeight);
 
         if (options.saveToGallery) {
           // saveToGallery is not supported on web
