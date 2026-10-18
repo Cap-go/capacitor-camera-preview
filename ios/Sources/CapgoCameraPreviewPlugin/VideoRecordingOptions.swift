@@ -11,18 +11,22 @@ enum VideoRecordingOptions {
             return intValue > 0 ? intValue : nil
         }
         if let doubleValue = value as? Double {
-            guard doubleValue.isFinite, doubleValue > 0, doubleValue <= Double(Int.max) else {
-                return nil
-            }
-            return Int(doubleValue.rounded())
+            return positiveInt(from: doubleValue)
         }
         if let stringValue = value as? String, let doubleValue = Double(stringValue) {
-            guard doubleValue.isFinite, doubleValue > 0, doubleValue <= Double(Int.max) else {
-                return nil
-            }
-            return Int(doubleValue.rounded())
+            return positiveInt(from: doubleValue)
+        }
+        if let numberValue = value as? NSNumber {
+            return positiveInt(from: numberValue.doubleValue)
         }
         return nil
+    }
+
+    private static func positiveInt(from doubleValue: Double) -> Int? {
+        guard doubleValue.isFinite, doubleValue > 0 else {
+            return nil
+        }
+        return Int(exactly: doubleValue.rounded())
     }
 
     static func movieFileOutputSettings(

@@ -807,9 +807,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Default to high if not provided
         let videoQuality = call.getString("videoQuality") ?? "high"
-        if call.options["videoBitrate"] != nil {
-            self.cameraController.setVideoBitrate(VideoRecordingOptions.parseVideoBitrate(from: call.options["videoBitrate"]))
-        }
+        self.cameraController.setPreviewVideoBitrate(
+            VideoRecordingOptions.parseVideoBitrate(from: call.options["videoBitrate"])
+        )
         let videoStabilizationMode = call.getString("videoStabilizationMode")
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
@@ -1812,9 +1812,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if let videoCodec = call.getString("videoCodec") {
             try? self.cameraController.setVideoCodec(videoCodec)
         }
-        if call.options["videoBitrate"] != nil {
-            self.cameraController.setVideoBitrate(VideoRecordingOptions.parseVideoBitrate(from: call.options["videoBitrate"]))
-        }
+        let recordingVideoBitrate = call.options["videoBitrate"] != nil
+            ? VideoRecordingOptions.parseVideoBitrate(from: call.options["videoBitrate"])
+            : nil
+        self.cameraController.applyRecordingVideoBitrateOverride(recordingVideoBitrate)
         if let videoStabilizationMode = call.getString("videoStabilizationMode") {
             do {
                 try self.cameraController.setVideoStabilizationMode(videoStabilizationMode)

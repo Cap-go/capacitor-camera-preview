@@ -126,6 +126,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     private CameraSessionConfiguration lastSessionConfig;
+    private Integer startVideoBitrate;
 
     private static final String TAG = "CameraPreview CameraXView";
     private static final int DEFAULT_WEB_VIEW_BACKGROUND = Color.WHITE;
@@ -1647,7 +1648,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 if (startVideoCodec != null) {
                     config.setVideoCodec(startVideoCodec);
                 }
-                config.setVideoBitrate(VideoRecordingOptions.parseVideoBitrate(call.getData()));
+                startVideoBitrate = VideoRecordingOptions.parseVideoBitrate(call.getData());
+                config.setVideoBitrate(startVideoBitrate);
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
                 if (barcodeScannerOptions == null) {
                     clearActiveBarcodeScanner();
@@ -2786,6 +2788,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
         if (!call.getData().has("videoBitrate") || call.getData().isNull("videoBitrate")) {
+            cameraXView.setVideoBitrateSetting(startVideoBitrate);
             return;
         }
         Integer parsed = VideoRecordingOptions.parseVideoBitrate(call.getData());

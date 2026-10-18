@@ -931,7 +931,13 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
     this.recordedChunks = [];
     const recorderOptions: MediaRecorderOptions = { mimeType };
-    if (options?.videoBitrate != null && options.videoBitrate > 0) {
+    if (
+      options?.videoBitrate != null &&
+      Number.isFinite(options.videoBitrate) &&
+      Number.isInteger(options.videoBitrate) &&
+      options.videoBitrate > 0 &&
+      options.videoBitrate <= 0xffffffff
+    ) {
       recorderOptions.videoBitsPerSecond = options.videoBitrate;
     }
     this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
