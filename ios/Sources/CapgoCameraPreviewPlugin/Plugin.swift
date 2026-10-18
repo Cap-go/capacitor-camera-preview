@@ -1579,11 +1579,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             return jpegDataAtQuality
         }
 
-        let mutableData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(mutableData, kUTTypeJPEG, 1, nil) else {
-            return jpegDataAtQuality
-        }
-
         var finalProperties = imageProperties
 
         // Ensure orientation reflects the pixel data (we pass an orientation-fixed UIImage)
@@ -1630,10 +1625,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         tiffDict[kCGImagePropertyTIFFOrientation as String] = 1
         finalProperties[kCGImagePropertyTIFFDictionary as String] = tiffDict
 
-        CGImageDestinationAddImage(destination, cgImage, finalProperties as CFDictionary)
-
-        if CGImageDestinationFinalize(destination) {
-            return mutableData as Data
+        if let encoded = ImageIOJpegEncoding.encode(cgImage: cgImage, properties: finalProperties, qualityPercent: quality) {
+            return encoded
         }
 
         return jpegDataAtQuality
