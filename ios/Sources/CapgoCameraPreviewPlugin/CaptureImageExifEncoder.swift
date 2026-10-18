@@ -18,7 +18,7 @@ enum CaptureImageExifEncoder {
             return jpegEncoder(image, quality)
         }
 
-        let sourceDataForMetadata: CFData?
+        let sourceDataForMetadata: CFData
         if let originalPhotoData {
             sourceDataForMetadata = originalPhotoData as CFData
         } else if let encoded = jpegEncoder(image, quality) {
