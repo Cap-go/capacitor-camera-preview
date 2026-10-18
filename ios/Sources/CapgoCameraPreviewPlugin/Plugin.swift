@@ -663,6 +663,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         print("  - force: \(call.getBool("force") ?? false)")
         print("  - videoQuality: \(call.getString("videoQuality") ?? "high")")
         print("  - videoStabilizationMode: \(call.getString("videoStabilizationMode") ?? "off")")
+        print("  - allowHapticsAndSystemSoundsDuringRecording: \(call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false)")
 
         let force = call.getBool("force") ?? false
 
@@ -781,6 +782,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
+        let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
 
         // Check for conflict between aspectRatio and size (width/height)
         let hasAspectRatio = call.getString("aspectRatio") != nil
@@ -830,7 +832,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             }
 
-            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality, startToken: startToken) { error in
+            self.cameraController.prepare(cameraPosition: self.cameraPosition, deviceId: deviceId, disableAudio: self.disableAudio, cameraMode: cameraMode, aspectRatio: self.aspectRatio, aspectMode: self.aspectMode, initialZoomLevel: initialZoomLevel, disableFocusIndicator: self.disableFocusIndicator, videoQuality: videoQuality, allowHapticsAndSystemSoundsDuringRecording: allowHapticsAndSystemSoundsDuringRecording, startToken: startToken) { error in
                 if let error = error {
                     print(error)
                     DispatchQueue.main.async {
@@ -1821,7 +1823,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             if let frameRate = call.getInt("frameRate") {
                 try self.cameraController.setVideoFrameRate(frameRate)
             }
-            let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
+            let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording")
+                ?? self.cameraController.allowHapticsAndSystemSoundsDuringRecording
             let mirrorFrontCamera = call.getBool("mirrorFrontCamera") ?? false
             try self.cameraController.captureVideo(
                 maxDuration: maxDuration,

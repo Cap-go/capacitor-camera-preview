@@ -182,6 +182,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
     private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
+    var allowHapticsAndSystemSoundsDuringRecording = false
     private let applicationAudioSessionRestoreCoordinator = ApplicationAudioSessionRestoreCoordinator()
     private var recordingIdByOutputFileURL: [URL: UInt64] = [:]
     private let recordingIdQueue = DispatchQueue(label: "com.capgo.camera.recordingIds")
@@ -698,9 +699,10 @@ extension CameraController {
         return token != 0 && token == self.activePrepareToken
     }
 
-    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
-        print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1)")
+    func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", allowHapticsAndSystemSoundsDuringRecording: Bool = false, startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
+        print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1), allowHapticsAndSystemSoundsDuringRecording: \(allowHapticsAndSystemSoundsDuringRecording)")
 
+        self.allowHapticsAndSystemSoundsDuringRecording = allowHapticsAndSystemSoundsDuringRecording
         self.applicationAudioSessionRestoreCoordinator.beginPreviewSession()
         self.activePrepareToken = startToken
 
@@ -813,6 +815,7 @@ extension CameraController {
 
                 // Start the session - all outputs are already configured
                 captureSession.startRunning()
+                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
 
                 // Bring to full opacity after a tiny moment to smooth any visual artifacts
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
@@ -1059,6 +1062,7 @@ extension CameraController {
                 self.audioInput = try AVCaptureDeviceInput(device: audioDevice)
                 if captureSession.canAddInput(self.audioInput!) {
                     captureSession.addInput(self.audioInput!)
+                    self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
                 } else {
                     throw CameraControllerError.inputsAreInvalid
                 }
@@ -2659,6 +2663,16 @@ extension CameraController {
         self.applicationAudioSessionRestoreCoordinator.captureSnapshotIfNeeded()
     }
 
+    private func applyAllowHapticsAndSystemSoundsDuringRecordingPolicy() {
+        guard self.audioInput != nil else { return }
+        do {
+            try AVAudioSession.sharedInstance()
+                .setAllowHapticsAndSystemSoundsDuringRecording(self.allowHapticsAndSystemSoundsDuringRecording)
+        } catch {
+            print("[CameraPreview] Failed to set allowHapticsAndSystemSoundsDuringRecording: \(error)")
+        }
+    }
+
     private static let insufficientAudioPriorityOSStatus = 561017449
 
     private func isAudioPriorityError(_ error: NSError) -> Bool {
@@ -2721,6 +2735,7 @@ extension CameraController {
             if session.canAddInput(input) {
                 session.addInput(input)
                 self.audioInput = input
+                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
             }
         } catch {
             print("[CameraPreview] Failed to restore audio input after interruption: \(error)")
@@ -3296,12 +3311,13 @@ extension CameraController {
         // This reclaims the microphone even if other parts of the app changed the
         // AVAudioSession category (e.g. for UI sound effects) between recordings.
         if self.audioInput != nil {
+            self.allowHapticsAndSystemSoundsDuringRecording = allowHapticsAndSystemSoundsDuringRecording
             self.captureApplicationAudioSessionSnapshotIfNeeded()
             do {
                 let audioSession = AVAudioSession.sharedInstance()
                 try audioSession.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker])
                 try audioSession.setActive(true)
-                try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(allowHapticsAndSystemSoundsDuringRecording)
+                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
             } catch {
                 print("[CameraPreview] Failed to configure AVAudioSession for video recording: \(error)")
             }
