@@ -97,6 +97,8 @@ jobs:
       - name: Lint
         id: lint_code
         run: bun run lint
+      - name: Web unit tests
+        run: bun run test:web
       - name: Verify packed package in example app (Web)
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh web
