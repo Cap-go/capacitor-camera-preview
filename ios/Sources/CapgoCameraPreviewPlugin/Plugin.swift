@@ -718,11 +718,36 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             }
         }
 
+        let hasAspectRatio = call.getString("aspectRatio") != nil
+        let hasWidth = call.getInt("width") != nil
+        let hasHeight = call.getInt("height") != nil
+        if hasAspectRatio && (hasWidth || hasHeight) {
+            call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
+            return
+        }
+
+        let captureResolutionParseResult = CaptureResolutionSupport.parseStartCaptureResolution(call.getObject("captureResolution"))
+        if captureResolutionParseResult.isError {
+            call.reject(captureResolutionParseResult.errorMessage ?? "Invalid captureResolution")
+            return
+        }
+        if captureResolutionParseResult.width != nil, captureResolutionParseResult.height != nil {
+            if #unavailable(iOS 16.0) {
+                call.reject("captureResolution requires iOS 16 or later")
+                return
+            }
+        }
+
         self.isInitializing = true
         self.hasResolvedStartCall = false
         self.pendingStartCall = call
         self.startGeneration += 1
         let startToken = self.startGeneration
+
+        self.cameraController.setConfiguredCaptureResolution(
+            width: captureResolutionParseResult.width,
+            height: captureResolutionParseResult.height
+        )
 
         self.cameraPosition = call.getString("position") ?? "rear"
         let deviceId = call.getString("deviceId")
@@ -782,16 +807,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
 
-        // Check for conflict between aspectRatio and size (width/height)
-        let hasAspectRatio = call.getString("aspectRatio") != nil
-        let hasWidth = call.getInt("width") != nil
-        let hasHeight = call.getInt("height") != nil
-
-        if hasAspectRatio && (hasWidth || hasHeight) {
-            self.pendingStartBarcodeScannerOptions = nil
-            call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.")
-            return
-        }
         let beginStart: () -> Void = {
             if (self.cameraController.captureSession?.isRunning ?? false) && !force {
                 DispatchQueue.main.async {
@@ -1378,15 +1393,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front
         let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
+        let locationForExif = (withExifLocation ?? false) ? self.currentLocation : nil
+        let headingForExif = (withExifLocation ?? false) ? self.currentHeading : nil
+        let storeToFile = self.storeToFile
         self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
-            DispatchQueue.main.async {
-                print("[CameraPreview] Processing capture on main thread")
-                // Ensure heading updates are stopped on all exit paths (error, guard failure, or success)
+            CapturePhotoProcessingQueue.async {
+                print("[CameraPreview] Processing capture on background queue (isMain=\(Thread.isMainThread))")
                 defer {
                     if withExifLocation ?? false {
-                        self.locationManager?.stopUpdatingHeading()
-                        self.currentHeading = nil
+                        DispatchQueue.main.async {
+                            self.locationManager?.stopUpdatingHeading()
+                            self.currentHeading = nil
+                        }
                     }
                 }
                 if let error = error {
@@ -1411,8 +1430,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 guard let imageDataWithExif = self.createImageDataWithExif(
                         from: imageToEncode,
                         quality: Int(quality),
-                        location: withExifLocation ? self.currentLocation : nil,
-                        heading: withExifLocation ? self.currentHeading : nil,
+                        location: locationForExif,
+                        heading: headingForExif,
                         originalPhotoData: originalPhotoData
                       )
                 else {
@@ -1423,13 +1442,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
                 print("[CameraPreview] Image data created, size: \(imageDataWithExif.count) bytes")
 
-                // Prepare the result first
                 let exifData = self.getExifData(from: imageDataWithExif)
 
                 var result = JSObject()
                 result["exif"] = exifData
 
-                if self.storeToFile == false {
+                if storeToFile == false {
                     let base64Image = imageDataWithExif.base64EncodedString()
                     result["value"] = base64Image
                 } else {
@@ -1443,7 +1461,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     }
                 }
 
-                // Save to gallery asynchronously if requested
                 if saveToGallery {
                     print("[CameraPreview] Saving to gallery asynchronously...")
                     DispatchQueue.global(qos: .utility).async {
@@ -1453,7 +1470,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     }
                 }
 
-                print("[CameraPreview] Resolving capture call immediately")
+                print("[CameraPreview] Resolving capture call from background queue")
                 call.resolve(result)
             }
         }

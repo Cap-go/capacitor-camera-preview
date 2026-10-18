@@ -508,6 +508,63 @@ class CameraController: NSObject, CXCallObserverDelegate {
     var requestedAspectRatio: String?
     var requestedAspectMode: String = "contain"
 
+    /// Still-capture sensor cap from `start({ captureResolution })`, when set on iOS.
+    var configuredCaptureResolutionWidth: Int?
+    var configuredCaptureResolutionHeight: Int?
+
+    func setConfiguredCaptureResolution(width: Int?, height: Int?) {
+        self.configuredCaptureResolutionWidth = width
+        self.configuredCaptureResolutionHeight = height
+    }
+
+    private func activeCaptureDevice() -> AVCaptureDevice? {
+        if let captureSession = self.captureSession {
+            for input in captureSession.inputs {
+                guard let deviceInput = input as? AVCaptureDeviceInput,
+                      deviceInput.device.hasMediaType(.video) else {
+                    continue
+                }
+                return deviceInput.device
+            }
+        }
+
+        switch currentCameraPosition {
+        case .front:
+            return self.frontCamera
+        case .rear:
+            return self.rearCamera
+        default:
+            return nil
+        }
+    }
+
+    private func configuredPhotoMaxDimensions() -> CMVideoDimensions? {
+        guard #available(iOS 16.0, *),
+              let photoOutput = self.photoOutput,
+              let width = self.configuredCaptureResolutionWidth,
+              let height = self.configuredCaptureResolutionHeight,
+              let device = self.activeCaptureDevice() else {
+            return nil
+        }
+
+        return CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: width,
+            configuredHeight: height,
+            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions,
+            deviceMax: photoOutput.maxPhotoDimensions
+        )
+    }
+
+    private func applyConfiguredCaptureResolutionToPhotoOutputIfNeeded() {
+        guard #available(iOS 16.0, *),
+              let photoOutput = self.photoOutput,
+              let dimensions = self.configuredPhotoMaxDimensions() else {
+            return
+        }
+
+        photoOutput.maxPhotoDimensions = dimensions
+    }
+
     func calculateAspectRatioFrame(for aspectRatio: String, in bounds: CGRect) -> CGRect {
         guard let ratio = parseAspectRatio(aspectRatio) else {
             return bounds
@@ -775,6 +832,7 @@ extension CameraController {
                 if let photoOutput = self.photoOutput, captureSession.canAddOutput(photoOutput) {
                     photoOutput.isHighResolutionCaptureEnabled = true
                     captureSession.addOutput(photoOutput)
+                    self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
                     // Set orientation immediately
                     self.setVideoOrientation(videoOrientation, on: photoOutput.connections)
                 }
@@ -1387,6 +1445,8 @@ extension CameraController {
             }
         }
 
+        self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
+
         // Keep orientation correct
         self.updateVideoOrientation()
     }
@@ -1408,9 +1468,16 @@ extension CameraController {
         let visibleFillRatio = self.visibleFillCaptureAspectRatio()
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
-        // Only use high res if explicitly requesting large dimensions
-        let shouldUseHighRes = width.map { $0 > 1920 } ?? false || height.map { $0 > 1920 } ?? false
+        let shouldUseHighRes = CaptureResolutionSupport.shouldEnableHighResolutionPhoto(
+            captureResolutionWidth: self.configuredCaptureResolutionWidth,
+            captureResolutionHeight: self.configuredCaptureResolutionHeight,
+            captureMaxWidth: width,
+            captureMaxHeight: height
+        )
         settings.isHighResolutionPhotoEnabled = shouldUseHighRes
+        if #available(iOS 16.0, *), let dimensions = self.configuredPhotoMaxDimensions() {
+            settings.maxPhotoDimensions = dimensions
+        }
         if #available(iOS 15.0, *) {
             if photoQualityPrioritization == "quality" {
                 settings.photoQualityPrioritization = .quality
@@ -2643,6 +2710,8 @@ extension CameraController {
             }
         }
 
+        self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
+
         // Update video orientation
         self.updateVideoOrientation()
     }
@@ -2808,6 +2877,8 @@ extension CameraController {
     func cleanup() {
         self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
+        self.configuredCaptureResolutionWidth = nil
+        self.configuredCaptureResolutionHeight = nil
         configuredVideoFrameRate = nil
         stopBarcodeScanner()
         self.unregisterCaptureSessionObservers()
@@ -3538,34 +3609,25 @@ extension CameraController: UIGestureRecognizerDelegate {
 
 extension CameraController: AVCapturePhotoCaptureDelegate {
     public func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if let error = error {
-            self.photoCaptureCompletionBlock?(nil, nil, nil, error)
-            return
-        }
+        CapturePhotoProcessingQueue.async {
+            if let error = error {
+                self.photoCaptureCompletionBlock?(nil, nil, nil, error)
+                return
+            }
 
-        // Process photo in background to avoid blocking main thread
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Get the photo data using the modern API
             guard let imageData = photo.fileDataRepresentation() else {
-                DispatchQueue.main.async {
-                    self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
-                }
+                self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
                 return
             }
 
-            // Create image from data
             guard let image = UIImage(data: imageData) else {
-                DispatchQueue.main.async {
-                    self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
-                }
+                self.photoCaptureCompletionBlock?(nil, nil, nil, CameraControllerError.unknown)
                 return
             }
 
-            // Pass through original file data and metadata so callers can preserve EXIF
-            // Don't call fixedOrientation() here - let the completion block handle it after cropping
-            DispatchQueue.main.async {
-                self.photoCaptureCompletionBlock?(image, imageData, photo.metadata, nil)
-            }
+            // Pass through original file data and metadata so callers can preserve EXIF.
+            // Don't call fixedOrientation() here; the completion block handles cropping.
+            self.photoCaptureCompletionBlock?(image, imageData, photo.metadata, nil)
         }
     }
 }
