@@ -1114,7 +1114,11 @@ On Android, if a physical-lens request falls back to a logical camera, this retu
 getPreviewSize() => Promise<{ x: number; y: number; width: number; height: number; }>
 ```
 
-Gets the current preview size and position.
+Gets the current visible camera preview bounds in web-view coordinates.
+
+With `aspectMode: 'contain'`, this is the letterboxed camera image rect inside the
+preview container (not the full container when bars are shown). With `aspectMode: 'cover'`,
+this matches the preview container bounds on both platforms.
 
 **Returns:** <code>Promise&lt;{ x: number; y: number; width: number; height: number; }&gt;</code>
 
