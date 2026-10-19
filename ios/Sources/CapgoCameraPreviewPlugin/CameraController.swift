@@ -1584,7 +1584,13 @@ extension CameraController {
             }
         }
 
-        self.isCapturingPhoto = true
+        if Thread.isMainThread {
+            self.isCapturingPhoto = true
+        } else {
+            DispatchQueue.main.sync {
+                self.isCapturingPhoto = true
+            }
+        }
 
         self.photoCaptureCompletionBlock = { [weak self] (image, photoData, metadata, error) in
             guard let self = self else { return }

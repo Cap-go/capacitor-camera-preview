@@ -54,7 +54,7 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         XCTAssertEqual(cleanupCount, 1)
     }
 
-    func testMainThreadFinishAfterDeferredStopMatchesReportedRace() {
+    func testMainThreadDeferredStopAndFinishCleansUpOnce() {
         var state = CaptureLifecycleState()
         state.isCapturingPhoto = true
         var cleanupCount = 0
