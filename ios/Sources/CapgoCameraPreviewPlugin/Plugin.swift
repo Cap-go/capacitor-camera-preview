@@ -35,7 +35,7 @@ extension UIWindow {
  */
 @objc(CameraPreview)
 public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
-    private let pluginVersion: String = "8.12.5"
+    private let pluginVersion: String = "8.13.0"
     public let identifier = "CameraPreviewPlugin"
     public let jsName = "CameraPreview"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -676,7 +676,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             if let pendingStartCall = self.pendingStartCall, !self.hasResolvedStartCall {
                 self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
             }
-            if self.isInitializing || self.isInitialized || self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+            let captureLifecycleBusy = DispatchQueue.main.sync {
+                self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture
+            }
+            if self.isInitializing || self.isInitialized || captureLifecycleBusy {
                 self.startGeneration += 1
                 self.cancelFirstFrameTimeout()
                 // Force stop everything synchronously
@@ -717,7 +720,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
             // Guard against starting while a deferred stop is pending due to in-flight capture
-            if self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+            let captureLifecycleBusy = DispatchQueue.main.sync {
+                self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture
+            }
+            if captureLifecycleBusy {
                 call.reject("camera is stopping or busy, please retry shortly")
                 return
             }
@@ -1171,16 +1177,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.isGeneratingDeviceOrientationNotifications = false
             }
 
-            if self.cameraController.isCapturingPhoto && !force {
-                // Defer heavy cleanup until capture callback completes (only if not forcing)
-                self.cameraController.stopRequestedAfterCapture = true
-            } else {
-                // Force stop or no capture pending; cleanup now
-                if force {
-                    self.cameraController.stopRequestedAfterCapture = false
-                }
-                self.cameraController.cleanup()
-            }
+            CaptureLifecycleCoordination.handleStop(
+                state: &self.cameraController.captureLifecycle,
+                force: force,
+                cleanup: { self.cameraController.cleanup() }
+            )
 
             call.resolve()
         }
@@ -1367,10 +1368,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let height = call.getInt("height")
         let photoQualityPrioritization = call.getString("photoQualityPrioritization", "speed")
         let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
+        let captureOrientation = call.getString("orientation", CaptureOrientationResolver.orientationDevice)
 
         print("[CameraPreview] Raw parameter values - width: \(String(describing: width)), height: \(String(describing: height))")
 
-        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera)")
+        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera), orientation: \(captureOrientation ?? CaptureOrientationResolver.orientationDevice)")
         print("[CameraPreview] Current location: \(self.currentLocation?.description ?? "nil")")
         // Safely read frame from main thread for logging
         let (previewWidth, previewHeight): (CGFloat, CGFloat) = {
@@ -1391,7 +1393,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
         let locationForExif = (withExifLocation ?? false) ? self.currentLocation : nil
         let storeToFile = self.storeToFile
-        self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
+        self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization, captureOrientationMode: captureOrientation) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
             CapturePhotoProcessingQueue.async {
                 print("[CameraPreview] Processing capture on background queue (isMain=\(Thread.isMainThread))")
@@ -1432,7 +1434,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     headingForExif = nil
                 }
 
-                guard let imageDataWithExif = self.createImageDataWithExif(
+                guard let imageDataWithExif = CaptureImageExifEncoder.createImageData(
                         from: imageToEncode,
                         quality: Int(quality),
                         location: locationForExif,
@@ -1569,62 +1571,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             call.resolve(result)
         }
-    }
-
-    private func createImageDataWithExif(from image: UIImage, quality: Int, location: CLLocation?, heading: CLHeading?, originalPhotoData: Data?) -> Data? {
-        guard let jpegDataAtQuality = image.jpegData(compressionQuality: CGFloat(Double(quality) / 100.0)) else {
-            return nil
-        }
-
-        // Prefer metadata from the original AVCapturePhoto file data to preserve lens/EXIF
-        let sourceDataForMetadata = (originalPhotoData ?? jpegDataAtQuality) as CFData
-        guard let imageSource = CGImageSourceCreateWithData(sourceDataForMetadata, nil),
-              let imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [String: Any],
-              let cgImage = image.cgImage else {
-            return jpegDataAtQuality
-        }
-
-        var finalProperties = imageProperties
-
-        // Ensure orientation reflects the pixel data (we pass an orientation-fixed UIImage)
-        finalProperties[kCGImagePropertyOrientation as String] = 1
-
-        // Add GPS location if available
-        if let location = location {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-            formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-            var gpsDict: [String: Any] = [
-                kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-                kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-                kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-                kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-                kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-                kCGImagePropertyGPSAltitude as String: location.altitude,
-                kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-            ]
-
-            if let direction = heading.flatMap(CaptureExifGps.imageDirection) {
-                gpsDict[kCGImagePropertyGPSImgDirection as String] = direction.degrees
-                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = direction.reference
-            }
-
-            finalProperties[kCGImagePropertyGPSDictionary as String] = gpsDict
-        }
-
-        // Create or update TIFF dictionary for device info and set orientation to Up
-        var tiffDict = finalProperties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
-        tiffDict[kCGImagePropertyTIFFMake as String] = "Apple"
-        tiffDict[kCGImagePropertyTIFFModel as String] = UIDevice.current.model
-        tiffDict[kCGImagePropertyTIFFOrientation as String] = 1
-        finalProperties[kCGImagePropertyTIFFDictionary as String] = tiffDict
-
-        if let encoded = ImageIOJpegEncoding.encode(cgImage: cgImage, properties: finalProperties, qualityPercent: quality) {
-            return encoded
-        }
-
-        return jpegDataAtQuality
     }
 
     @objc func captureSample(_ call: CAPPluginCall) {
