@@ -2165,7 +2165,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     private func getCurrentLocation(completion: @escaping (CLLocation?) -> Void) {
         print("[CameraPreview] getCurrentLocation called")
-        self.currentHeading = nil
+        self.currentHeading = CaptureExifHeadingReader.preservedHeadingOnLocationRefreshStart(self.currentHeading)
         self.locationCompletion = completion
         self.locationManager?.startUpdatingLocation()
         print("[CameraPreview] Started updating location")

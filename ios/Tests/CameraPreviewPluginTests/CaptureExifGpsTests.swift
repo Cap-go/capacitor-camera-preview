@@ -46,4 +46,14 @@ final class CaptureExifGpsTests: XCTestCase {
         }
         wait(for: [expectation], timeout: 5)
     }
+
+    func testHeadingFallbackAfterLocationRefresh() {
+        let priorDirection = CaptureExifGps.imageDirection(
+            trueHeading: 88.0,
+            magneticHeading: 90.0,
+            headingAccuracy: 4
+        )
+        let retained = CaptureExifHeadingReader.preservedHeadingOnLocationRefreshStart(priorDirection)
+        XCTAssertEqual(retained, priorDirection)
+    }
 }
