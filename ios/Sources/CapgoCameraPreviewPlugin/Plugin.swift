@@ -1367,10 +1367,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let height = call.getInt("height")
         let photoQualityPrioritization = call.getString("photoQualityPrioritization", "speed")
         let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
+        let captureOrientation = call.getString("orientation", CaptureOrientationResolver.orientationDevice)
 
         print("[CameraPreview] Raw parameter values - width: \(String(describing: width)), height: \(String(describing: height))")
 
-        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera)")
+        print("[CameraPreview] Capture params - quality: \(quality), saveToGallery: \(saveToGallery), withExifLocation: \(withExifLocation ?? false), embedTimestamp: \(embedTimestamp), embedLocation: \(effectiveEmbedLocation) (requested=\(embedLocationRequested)), width: \(width ?? -1), height: \(height ?? -1), mirrorFrontCamera: \(mirrorFrontCamera), orientation: \(captureOrientation ?? CaptureOrientationResolver.orientationDevice)")
         print("[CameraPreview] Current location: \(self.currentLocation?.description ?? "nil")")
         // Safely read frame from main thread for logging
         let (previewWidth, previewHeight): (CGFloat, CGFloat) = {
@@ -1392,7 +1393,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let locationForExif = (withExifLocation ?? false) ? self.currentLocation : nil
         let headingForExif = (withExifLocation ?? false) ? self.currentHeading : nil
         let storeToFile = self.storeToFile
-        self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
+        self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization, captureOrientationMode: captureOrientation) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
             CapturePhotoProcessingQueue.async {
                 print("[CameraPreview] Processing capture on background queue (isMain=\(Thread.isMainThread))")

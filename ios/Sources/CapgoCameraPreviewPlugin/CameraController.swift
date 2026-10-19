@@ -55,6 +55,22 @@ class CameraController: NSObject, CXCallObserverDelegate {
         return orientation
     }
 
+    private func getPreviewLayerVideoOrientation() -> AVCaptureVideoOrientation? {
+        if Thread.isMainThread {
+            if let connection = self.previewLayer?.connection, connection.isVideoOrientationSupported {
+                return connection.videoOrientation
+            }
+            return nil
+        }
+        var orientation: AVCaptureVideoOrientation?
+        DispatchQueue.main.sync {
+            if let connection = self.previewLayer?.connection, connection.isVideoOrientationSupported {
+                orientation = connection.videoOrientation
+            }
+        }
+        return orientation
+    }
+
     // For capture only - uses accelerometer to detect physical orientation to properly position videos/images
     private var lastReliableCaptureOrientation: AVCaptureVideoOrientation?
 
@@ -1505,21 +1521,29 @@ extension CameraController {
         self.updateVideoOrientation()
     }
 
-    func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
+    func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, captureOrientationMode: String?, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
         guard let photoOutput = self.photoOutput else {
             completion(nil, nil, nil, NSError(domain: "Camera", code: 0, userInfo: [NSLocalizedDescriptionKey: "Photo output is not available"]))
             return
         }
 
-        // Make sure capture is getting the physical orientation not interface orientation
+        var orientationUsedForCapture = self.getPhysicalOrientation()
         if let connection = photoOutput.connection(with: .video) {
-            let captureOrientation = self.getPhysicalOrientation()
-            self.lastCaptureOrientation = captureOrientation
+            let previewOrientation = self.getPreviewLayerVideoOrientation() ?? self.getVideoOrientation()
+            let captureOrientation = CaptureOrientationResolver.resolveOrientation(
+                mode: captureOrientationMode,
+                previewOrientation: previewOrientation,
+                deviceOrientation: self.getPhysicalOrientation()
+            )
+            orientationUsedForCapture = captureOrientation
+            if CaptureOrientationResolver.usesDeviceOrientation(mode: captureOrientationMode) {
+                self.lastCaptureOrientation = captureOrientation
+            }
             self.setVideoOrientation(captureOrientation, on: connection)
         }
         // For fill + cover the preview shows a centered crop of the frame. Snapshot its
         // shape now so the photo can be cropped to the same visible area.
-        let visibleFillRatio = self.visibleFillCaptureAspectRatio()
+        let visibleFillRatio = self.visibleFillCaptureAspectRatio(captureOrientation: orientationUsedForCapture)
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
         let shouldUseHighRes = CaptureResolutionSupport.shouldEnableHighResolutionPhoto(
@@ -1598,7 +1622,12 @@ extension CameraController {
                 // When max dimensions are specified, we used high-res capture
                 // First crop to aspect ratio if needed, then resize to max dimensions
                 if let aspectRatio = self.requestedAspectRatio {
-                    finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
+                    finalImage = self.cropCapturedImage(
+                        image,
+                        aspectRatio: aspectRatio,
+                        visibleFillRatio: visibleFillRatio,
+                        captureOrientation: orientationUsedForCapture
+                    )
                     print("[CameraPreview] Cropped high-res image to aspect ratio \(aspectRatio)")
                 }
                 // Then resize to fit within maximum dimensions while maintaining aspect ratio
@@ -1607,7 +1636,12 @@ extension CameraController {
             } else if let aspectRatio = self.requestedAspectRatio {
                 // No max dimensions specified, but aspect ratio is specified
                 // Always apply aspect ratio cropping to ensure correct orientation
-                finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
+                finalImage = self.cropCapturedImage(
+                    image,
+                    aspectRatio: aspectRatio,
+                    visibleFillRatio: visibleFillRatio,
+                    captureOrientation: orientationUsedForCapture
+                )
                 print("[CameraPreview] Applied aspect ratio cropping for \(aspectRatio): \(finalImage.size.width)x\(finalImage.size.height)")
             }
 
@@ -1926,7 +1960,7 @@ extension CameraController {
 
     /// Ratio of the visible preview area for `fill` + `cover`, in capture orientation.
     /// Returns `nil` for numeric ratios and for `contain`, where the full frame is visible.
-    func visibleFillCaptureAspectRatio() -> CGFloat? {
+    func visibleFillCaptureAspectRatio(captureOrientation: AVCaptureVideoOrientation? = nil) -> CGFloat? {
         guard let aspectRatio = self.requestedAspectRatio,
               AspectRatioLayout.isFillMode(aspectRatio),
               self.requestedAspectMode == "cover",
@@ -1934,7 +1968,7 @@ extension CameraController {
             return nil
         }
 
-        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
+        let orientation = captureOrientation ?? self.lastCaptureOrientation ?? self.getPhysicalOrientation()
         let captureIsPortrait = orientation == .portrait || orientation == .portraitUpsideDown
         let screenBounds = UIScreen.main.bounds
         return AspectRatioLayout.visibleFillCaptureAspectRatio(
@@ -1945,7 +1979,12 @@ extension CameraController {
     }
 
     /// Crops a captured photo so it matches what the preview shows.
-    func cropCapturedImage(_ image: UIImage, aspectRatio: String, visibleFillRatio: CGFloat?) -> UIImage {
+    func cropCapturedImage(
+        _ image: UIImage,
+        aspectRatio: String,
+        visibleFillRatio: CGFloat?,
+        captureOrientation: AVCaptureVideoOrientation? = nil
+    ) -> UIImage {
         if AspectRatioLayout.isFillMode(aspectRatio) {
             guard let ratio = visibleFillRatio else {
                 // fill + contain shows the whole frame, so keep the full photo.
@@ -1953,7 +1992,11 @@ extension CameraController {
             }
             return cropImage(image, toAspectRatio: ratio) ?? image
         }
-        return cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+        return cropImageToAspectRatio(
+            image: image,
+            aspectRatio: aspectRatio,
+            captureOrientation: captureOrientation
+        ) ?? image
     }
 
     /// Center-crops `image` (after normalizing its orientation) to a width / height ratio.
@@ -1973,7 +2016,11 @@ extension CameraController {
         return UIImage(cgImage: croppedCGImage, scale: normalizedImage.scale, orientation: .up)
     }
 
-    func cropImageToAspectRatio(image: UIImage, aspectRatio: String) -> UIImage? {
+    func cropImageToAspectRatio(
+        image: UIImage,
+        aspectRatio: String,
+        captureOrientation: AVCaptureVideoOrientation? = nil
+    ) -> UIImage? {
         let components = aspectRatio.split(separator: ":").compactMap {Float(String($0))}
         guard components.count == 2 else {
             print("[CameraPreview] cropImageToAspectRatio - Failed to parse aspect ratio: \(aspectRatio)")
@@ -1981,7 +2028,7 @@ extension CameraController {
         }
 
         // Use physical orientation for capture works with portrait lock
-        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
+        let orientation = captureOrientation ?? self.lastCaptureOrientation ?? self.getPhysicalOrientation()
         let isPortrait = (orientation == .portrait || orientation == .portraitUpsideDown)
 
         let ratioWidth: CGFloat
