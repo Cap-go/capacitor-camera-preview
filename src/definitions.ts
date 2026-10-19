@@ -366,7 +366,9 @@ export interface CameraPreviewOptions {
    *
    * On Android this binds the `ImageCapture` use case to the requested size. On iOS 16+ this sets
    * `AVCapturePhotoSettings.maxPhotoDimensions` (and disables high-resolution photo capture when capped)
-   * so the sensor delivers fewer pixels instead of downscaling a full-sensor frame in software.
+   * to the largest supported sensor size at or below the requested cap. When the active format exposes
+   * no supported size under the cap, iOS uses the smallest supported `maxPhotoDimensions` entry (same
+   * fallback as Android) so `start()` never assigns an unsupported dimension.
    * On iOS 15, `start()` rejects this option.
    *
    * When omitted, capture uses the highest resolution supported by the active camera

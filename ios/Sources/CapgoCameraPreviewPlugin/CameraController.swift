@@ -588,15 +588,20 @@ class CameraController: NSObject, CXCallObserverDelegate {
         return CaptureResolutionSupport.photoMaxDimensions(
             configuredWidth: width,
             configuredHeight: height,
-            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions,
-            deviceMax: photoOutput.maxPhotoDimensions
+            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions
         )
     }
 
     private func applyConfiguredCaptureResolutionToPhotoOutputIfNeeded() {
         guard #available(iOS 16.0, *),
               let photoOutput = self.photoOutput,
-              let dimensions = self.configuredPhotoMaxDimensions() else {
+              let dimensions = self.configuredPhotoMaxDimensions(),
+              let device = self.activeCaptureDevice() else {
+            return
+        }
+
+        let supported = device.activeFormat.supportedMaxPhotoDimensions
+        guard CaptureResolutionSupport.isSupportedPhotoDimension(dimensions, in: supported) else {
             return
         }
 
