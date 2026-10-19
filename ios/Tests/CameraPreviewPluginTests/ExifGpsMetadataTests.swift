@@ -85,7 +85,7 @@ final class ExifGpsMetadataTests: XCTestCase {
     private static func decodeGpsTimeStamp(_ value: Any?) -> String? {
         guard let value = value else { return nil }
         if let string = value as? String {
-            return string
+            return normalizeExifGpsTimeStampString(string)
         }
         guard let components = value as? [Any], components.count == 3 else { return nil }
         guard let hours = rationalValue(components[0]),
@@ -98,6 +98,20 @@ final class ExifGpsMetadataTests: XCTestCase {
         let secondWhole = Int(seconds)
         let centiseconds = Int(((seconds - Double(secondWhole)) * 100).rounded())
         return String(format: "%02d:%02d:%02d.%02d", hour, minute, secondWhole, centiseconds)
+    }
+
+    private static func normalizeExifGpsTimeStampString(_ value: String) -> String {
+        if let dotIndex = value.firstIndex(of: ".") {
+            let base = String(value[..<dotIndex])
+            var fraction = String(value[value.index(after: dotIndex)...])
+            if fraction.count < 2 {
+                fraction += String(repeating: "0", count: 2 - fraction.count)
+            } else if fraction.count > 2 {
+                fraction = String(fraction.prefix(2))
+            }
+            return "\(base).\(fraction)"
+        }
+        return "\(value).00"
     }
 
     private static func rationalValue(_ component: Any) -> Double? {
