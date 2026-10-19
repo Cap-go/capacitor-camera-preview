@@ -90,6 +90,27 @@ final class CaptureImageExifEncoderTests: XCTestCase {
         XCTAssertLessThan(lowQuality.count, highQuality.count)
     }
 
+    func testFallsBackToJpegEncoderWhenMetadataReadFails() {
+        let image = makeTestImage()
+        let invalidOriginalData = Data([0x00, 0x01, 0x02, 0x03])
+
+        var encodeCallCount = 0
+        let result = CaptureImageExifEncoder.createImageData(
+            from: image,
+            quality: 85,
+            location: nil,
+            heading: nil,
+            originalPhotoData: invalidOriginalData,
+            jpegEncoder: { _, _ in
+                encodeCallCount += 1
+                return image.jpegData(compressionQuality: 0.85)
+            }
+        )
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(encodeCallCount, 1)
+    }
+
     func testEncodesWhenOriginalPhotoDataMissing() {
         let image = makeTestImage()
 
