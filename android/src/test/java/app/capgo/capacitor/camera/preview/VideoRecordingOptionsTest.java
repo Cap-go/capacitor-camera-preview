@@ -33,4 +33,31 @@ public class VideoRecordingOptionsTest {
         assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":\"bad\"}")));
         assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":9223372036854775808}")));
     }
+
+    @Test
+    public void resolveRecordingVideoBitrate_restoresPreviewAfterPerCallOverride() throws Exception {
+        Integer previewBitrate = 1_000_000;
+        assertEquals(
+            Integer.valueOf(5_000_000),
+            VideoRecordingOptions.resolveRecordingVideoBitrate(previewBitrate, new JSONObject("{\"videoBitrate\":5000000}"))
+        );
+        assertEquals(previewBitrate, VideoRecordingOptions.resolveRecordingVideoBitrate(previewBitrate, new JSONObject()));
+        assertEquals(
+            previewBitrate,
+            VideoRecordingOptions.resolveRecordingVideoBitrate(previewBitrate, new JSONObject("{\"videoBitrate\":null}"))
+        );
+    }
+
+    @Test
+    public void resolveRecordingVideoBitrate_invalidPerCallValueRestoresPreview() throws Exception {
+        Integer previewBitrate = 1_000_000;
+        assertEquals(
+            previewBitrate,
+            VideoRecordingOptions.resolveRecordingVideoBitrate(previewBitrate, new JSONObject("{\"videoBitrate\":0}"))
+        );
+        assertEquals(
+            previewBitrate,
+            VideoRecordingOptions.resolveRecordingVideoBitrate(previewBitrate, new JSONObject("{\"videoBitrate\":\"bad\"}"))
+        );
+    }
 }

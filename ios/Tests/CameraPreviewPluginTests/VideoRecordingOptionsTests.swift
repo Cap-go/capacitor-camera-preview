@@ -29,4 +29,25 @@ final class VideoRecordingOptionsTests: XCTestCase {
         XCTAssertEqual(settings[AVVideoCodecKey] as? AVVideoCodecType, .h264)
         XCTAssertNil(settings[AVVideoCompressionPropertiesKey])
     }
+
+    func testResolveRecordingVideoBitrateOverrideRestoresPreviewOnSecondRecording() {
+        let controller = CameraController()
+        controller.setPreviewVideoBitrate(1_000_000)
+        controller.applyRecordingVideoBitrateOverride(5_000_000)
+        XCTAssertEqual(controller.getVideoBitrate(), 5_000_000)
+
+        let secondOverride = VideoRecordingOptions.resolveRecordingVideoBitrateOverride(from: nil, isKeyPresent: false)
+        controller.applyRecordingVideoBitrateOverride(secondOverride)
+        XCTAssertEqual(controller.getVideoBitrate(), 1_000_000)
+    }
+
+    func testResolveRecordingVideoBitrateOverrideInvalidValueRestoresPreview() {
+        let controller = CameraController()
+        controller.setPreviewVideoBitrate(1_000_000)
+        controller.applyRecordingVideoBitrateOverride(5_000_000)
+
+        let invalidOverride = VideoRecordingOptions.resolveRecordingVideoBitrateOverride(from: 0, isKeyPresent: true)
+        controller.applyRecordingVideoBitrateOverride(invalidOverride)
+        XCTAssertEqual(controller.getVideoBitrate(), 1_000_000)
+    }
 }

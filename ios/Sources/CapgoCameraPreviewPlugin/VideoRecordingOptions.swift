@@ -29,6 +29,14 @@ enum VideoRecordingOptions {
         return Int(exactly: doubleValue.rounded())
     }
 
+    /// Per-call override when the key is present and valid; `nil` when omitted or invalid (restore preview bitrate).
+    static func resolveRecordingVideoBitrateOverride(from value: Any?, isKeyPresent: Bool) -> Int? {
+        guard isKeyPresent else {
+            return nil
+        }
+        return parseVideoBitrate(from: value)
+    }
+
     static func movieFileOutputSettings(
         codecType: AVVideoCodecType,
         videoBitrate: Int?

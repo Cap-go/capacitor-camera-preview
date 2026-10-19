@@ -38,4 +38,16 @@ public final class VideoRecordingOptions {
         }
         return null;
     }
+
+    /**
+     * Bitrate for a single {@code startRecordVideo} call: a valid per-call override, otherwise the preview
+     * bitrate from {@code start()} (may be {@code null} for the platform default).
+     */
+    public static Integer resolveRecordingVideoBitrate(Integer previewBitrate, JSONObject data) {
+        if (data == null || !data.has("videoBitrate") || data.isNull("videoBitrate")) {
+            return previewBitrate;
+        }
+        Integer parsed = parseVideoBitrate(data);
+        return parsed != null ? parsed : previewBitrate;
+    }
 }

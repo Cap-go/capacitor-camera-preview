@@ -1812,9 +1812,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if let videoCodec = call.getString("videoCodec") {
             try? self.cameraController.setVideoCodec(videoCodec)
         }
-        let recordingVideoBitrate = call.options["videoBitrate"] != nil
-            ? VideoRecordingOptions.parseVideoBitrate(from: call.options["videoBitrate"])
-            : nil
+        let recordingVideoBitrate = VideoRecordingOptions.resolveRecordingVideoBitrateOverride(
+            from: call.options["videoBitrate"],
+            isKeyPresent: call.options["videoBitrate"] != nil
+        )
         self.cameraController.applyRecordingVideoBitrateOverride(recordingVideoBitrate)
         if let videoStabilizationMode = call.getString("videoStabilizationMode") {
             do {

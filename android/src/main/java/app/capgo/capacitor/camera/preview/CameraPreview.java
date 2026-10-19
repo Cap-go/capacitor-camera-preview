@@ -2787,15 +2787,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (cameraXView == null) {
             return;
         }
-        if (!call.getData().has("videoBitrate") || call.getData().isNull("videoBitrate")) {
-            cameraXView.setVideoBitrateSetting(startVideoBitrate);
-            return;
-        }
-        Integer parsed = VideoRecordingOptions.parseVideoBitrate(call.getData());
-        if (parsed == null) {
-            return;
-        }
-        cameraXView.setVideoBitrateSetting(parsed);
+        cameraXView.setVideoBitrateSetting(VideoRecordingOptions.resolveRecordingVideoBitrate(startVideoBitrate, call.getData()));
     }
 
     private void applyVideoStabilizationFromCall(PluginCall call) {
