@@ -1171,16 +1171,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.isGeneratingDeviceOrientationNotifications = false
             }
 
-            if self.cameraController.isCapturingPhoto && !force {
-                // Defer heavy cleanup until capture callback completes (only if not forcing)
-                self.cameraController.stopRequestedAfterCapture = true
-            } else {
-                // Force stop or no capture pending; cleanup now
-                if force {
-                    self.cameraController.stopRequestedAfterCapture = false
-                }
-                self.cameraController.cleanup()
-            }
+            CaptureLifecycleCoordination.handleStop(
+                state: &self.cameraController.captureLifecycle,
+                force: force,
+                cleanup: { self.cameraController.cleanup() }
+            )
 
             call.resolve()
         }

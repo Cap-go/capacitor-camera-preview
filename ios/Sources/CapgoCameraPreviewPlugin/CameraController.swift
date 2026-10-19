@@ -482,9 +482,30 @@ class CameraController: NSObject, CXCallObserverDelegate {
     // Track output preparation status
     private var outputsPrepared: Bool = false
 
-    // Capture/stop coordination
-    var isCapturingPhoto: Bool = false
-    var stopRequestedAfterCapture: Bool = false
+    // Capture/stop coordination (main-thread only; see CaptureLifecycleCoordination)
+    var captureLifecycle = CaptureLifecycleState()
+
+    var isCapturingPhoto: Bool {
+        get { self.captureLifecycle.isCapturingPhoto }
+        set { self.captureLifecycle.isCapturingPhoto = newValue }
+    }
+
+    var stopRequestedAfterCapture: Bool {
+        get { self.captureLifecycle.stopRequestedAfterCapture }
+        set { self.captureLifecycle.stopRequestedAfterCapture = newValue }
+    }
+
+    func finishPhotoCaptureLifecycle() {
+        let work = { [weak self] in
+            guard let self = self else { return }
+            CaptureLifecycleCoordination.finishCapture(state: &self.captureLifecycle, cleanup: { self.cleanup() })
+        }
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
 
     var isUsingMultiLensVirtualCamera: Bool {
         guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else { return false }
@@ -1569,21 +1590,13 @@ extension CameraController {
             guard let self = self else { return }
             if let error = error {
                 completion(nil, nil, nil, error)
-                // End capture lifecycle
-                self.isCapturingPhoto = false
-                if self.stopRequestedAfterCapture {
-                    DispatchQueue.main.async { self.cleanup(); self.stopRequestedAfterCapture = false }
-                }
+                self.finishPhotoCaptureLifecycle()
                 return
             }
 
             guard let image = image else {
                 completion(nil, nil, nil, NSError(domain: "Camera", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to capture image"]))
-                // End capture lifecycle
-                self.isCapturingPhoto = false
-                if self.stopRequestedAfterCapture {
-                    DispatchQueue.main.async { self.cleanup(); self.stopRequestedAfterCapture = false }
-                }
+                self.finishPhotoCaptureLifecycle()
                 return
             }
 
@@ -1629,12 +1642,7 @@ extension CameraController {
             }
 
             completion(finalImage, photoData, metadata, nil)
-
-            // End capture lifecycle
-            self.isCapturingPhoto = false
-            if self.stopRequestedAfterCapture {
-                DispatchQueue.main.async { self.cleanup(); self.stopRequestedAfterCapture = false }
-            }
+            self.finishPhotoCaptureLifecycle()
         }
 
         photoOutput.capturePhoto(with: settings, delegate: self)
