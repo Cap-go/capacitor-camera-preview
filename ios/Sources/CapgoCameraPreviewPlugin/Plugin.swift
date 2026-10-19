@@ -1392,7 +1392,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front
         let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
         let locationForExif = (withExifLocation ?? false) ? self.currentLocation : nil
-        let headingForExif = (withExifLocation ?? false) ? self.currentHeading : nil
         let storeToFile = self.storeToFile
         self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization, captureOrientationMode: captureOrientation) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
@@ -1402,7 +1401,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     if withExifLocation ?? false {
                         DispatchQueue.main.async {
                             self.locationManager?.stopUpdatingHeading()
-                            self.currentHeading = nil
+                            self.currentHeading = CaptureExifHeadingLifecycle.heading(
+                                after: .captureExifFinished,
+                                current: self.currentHeading
+                            )
                         }
                     }
                 }
@@ -1423,6 +1425,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     imageToEncode = self.cameraController.mirrorImageHorizontally(capturedImage)
                 } else {
                     imageToEncode = capturedImage
+                }
+
+                let headingForExif: CLHeading?
+                if withExifLocation ?? false {
+                    headingForExif = CaptureExifHeadingReader.readCurrentHeading { self.currentHeading }
+                } else {
+                    headingForExif = nil
                 }
 
                 guard let imageDataWithExif = CaptureImageExifEncoder.createImageData(
@@ -2105,7 +2114,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     private func getCurrentLocation(completion: @escaping (CLLocation?) -> Void) {
         print("[CameraPreview] getCurrentLocation called")
-        self.currentHeading = nil
+        self.currentHeading = CaptureExifHeadingLifecycle.heading(
+            after: .locationRefreshStarted,
+            current: self.currentHeading
+        )
         self.locationCompletion = completion
         self.locationManager?.startUpdatingLocation()
         print("[CameraPreview] Started updating location")
