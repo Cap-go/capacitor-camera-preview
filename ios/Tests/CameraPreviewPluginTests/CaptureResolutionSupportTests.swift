@@ -46,7 +46,6 @@ final class CaptureResolutionSupportTests: XCTestCase {
     }
 
     func testPhotoMaxDimensionsSelectsSupportedValueWithinCap() {
-        let deviceMax = CMVideoDimensions(width: 4032, height: 3024)
         let supported = [
             CMVideoDimensions(width: 4032, height: 3024),
             CMVideoDimensions(width: 1920, height: 1080),
@@ -55,15 +54,13 @@ final class CaptureResolutionSupportTests: XCTestCase {
         let dimensions = CaptureResolutionSupport.photoMaxDimensions(
             configuredWidth: 1080,
             configuredHeight: 1920,
-            supportedDimensions: supported,
-            deviceMax: deviceMax
+            supportedDimensions: supported
         )
-        XCTAssertEqual(dimensions.width, 1920)
-        XCTAssertEqual(dimensions.height, 1080)
+        XCTAssertEqual(dimensions?.width, 1920)
+        XCTAssertEqual(dimensions?.height, 1080)
     }
 
-    func testPhotoMaxDimensionsClampsToConfiguredCapWhenNoSupportedSizeFits() {
-        let deviceMax = CMVideoDimensions(width: 4032, height: 3024)
+    func testPhotoMaxDimensionsFallsBackToSmallestSupportedWhenNoSizeFitsUnderCap() {
         let supported = [
             CMVideoDimensions(width: 4032, height: 3024),
             CMVideoDimensions(width: 1920, height: 1080)
@@ -71,11 +68,68 @@ final class CaptureResolutionSupportTests: XCTestCase {
         let dimensions = CaptureResolutionSupport.photoMaxDimensions(
             configuredWidth: 640,
             configuredHeight: 480,
-            supportedDimensions: supported,
-            deviceMax: deviceMax
+            supportedDimensions: supported
         )
-        XCTAssertEqual(dimensions.width, 640)
-        XCTAssertEqual(dimensions.height, 480)
+        XCTAssertEqual(dimensions?.width, 1920)
+        XCTAssertEqual(dimensions?.height, 1080)
+    }
+
+    func testPhotoMaxDimensionsSingleSupportedEntryLargerThanTarget() {
+        let fullSensor = CMVideoDimensions(width: 4032, height: 3024)
+        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: 1600,
+            configuredHeight: 1200,
+            supportedDimensions: [fullSensor]
+        )
+        XCTAssertEqual(dimensions?.width, 4032)
+        XCTAssertEqual(dimensions?.height, 3024)
+        XCTAssertTrue(CaptureResolutionSupport.isSupportedPhotoDimension(dimensions!, in: [fullSensor]))
+    }
+
+    func testPhotoMaxDimensionsSingleSupportedEntrySmallerThanTarget() {
+        let small = CMVideoDimensions(width: 1280, height: 720)
+        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: 1920,
+            configuredHeight: 1080,
+            supportedDimensions: [small]
+        )
+        XCTAssertEqual(dimensions?.width, 1280)
+        XCTAssertEqual(dimensions?.height, 720)
+    }
+
+    func testPhotoMaxDimensionsExactMatch() {
+        let exact = CMVideoDimensions(width: 1600, height: 1200)
+        let supported = [
+            CMVideoDimensions(width: 4032, height: 3024),
+            exact,
+            CMVideoDimensions(width: 1280, height: 720)
+        ]
+        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: 1200,
+            configuredHeight: 1600,
+            supportedDimensions: supported
+        )
+        XCTAssertTrue(CaptureResolutionSupport.dimensionsEqual(dimensions!, exact))
+    }
+
+    func testPhotoMaxDimensionsEmptySupportedListReturnsNil() {
+        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: 1920,
+            configuredHeight: 1080,
+            supportedDimensions: []
+        )
+        XCTAssertNil(dimensions)
+    }
+
+    func testPhotoMaxDimensionsReproIssue472OnlyFullSensorListed() {
+        let fullSensor = CMVideoDimensions(width: 4032, height: 3024)
+        let dimensions = CaptureResolutionSupport.photoMaxDimensions(
+            configuredWidth: 1600,
+            configuredHeight: 1200,
+            supportedDimensions: [fullSensor]
+        )
+        XCTAssertNotNil(dimensions)
+        XCTAssertTrue(CaptureResolutionSupport.isSupportedPhotoDimension(dimensions!, in: [fullSensor]))
     }
 
     func testParseCaptureResolutionRejectsInt32Overflow() {
