@@ -74,18 +74,43 @@ final class ExifGpsMetadataTests: XCTestCase {
         let dateStamp = readGps[kCGImagePropertyGPSDateStamp as String] as? String
         XCTAssertEqual(dateStamp, ExifGpsMetadata.gpsDateStamp(from: location.timestamp))
 
-        let timeStamp = readGps[kCGImagePropertyGPSTimeStamp as String]
-        XCTAssertNotNil(timeStamp)
-        if let timeStampString = timeStamp as? String {
-            XCTAssertFalse(timeStampString.contains("0/0"))
-        } else if let timeStampArray = timeStamp as? [Any] {
-            for component in timeStampArray {
-                if let rational = component as? [String: Any],
-                   let numerator = rational["numerator"] as? Int,
-                   let denominator = rational["denominator"] as? Int {
-                    XCTAssertFalse(numerator == 0 && denominator == 0)
-                }
-            }
+        let expectedTimeStamp = ExifGpsMetadata.gpsTimeStamp(from: location.timestamp)
+        guard let decodedTimeStamp = Self.decodeGpsTimeStamp(readGps[kCGImagePropertyGPSTimeStamp as String]) else {
+            XCTFail("Unsupported or malformed GPSTimeStamp: \(String(describing: readGps[kCGImagePropertyGPSTimeStamp as String]))")
+            return
         }
+        XCTAssertEqual(decodedTimeStamp, expectedTimeStamp)
+    }
+
+    private static func decodeGpsTimeStamp(_ value: Any?) -> String? {
+        guard let value = value else { return nil }
+        if let string = value as? String {
+            return string
+        }
+        guard let components = value as? [Any], components.count == 3 else { return nil }
+        guard let hours = rationalValue(components[0]),
+              let minutes = rationalValue(components[1]),
+              let seconds = rationalValue(components[2]) else {
+            return nil
+        }
+        let hour = Int(hours.rounded())
+        let minute = Int(minutes.rounded())
+        let secondWhole = Int(seconds)
+        let centiseconds = Int(((seconds - Double(secondWhole)) * 100).rounded())
+        return String(format: "%02d:%02d:%02d.%02d", hour, minute, secondWhole, centiseconds)
+    }
+
+    private static func rationalValue(_ component: Any) -> Double? {
+        if let number = component as? NSNumber {
+            return number.doubleValue
+        }
+        if let rational = component as? [String: Any],
+           let numerator = rational["numerator"] as? Int,
+           let denominator = rational["denominator"] as? Int {
+            if numerator == 0 && denominator == 0 { return nil }
+            guard denominator != 0 else { return nil }
+            return Double(numerator) / Double(denominator)
+        }
+        return nil
     }
 }
