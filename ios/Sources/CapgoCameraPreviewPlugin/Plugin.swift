@@ -1390,7 +1390,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front
         let gpsForThisCapture = (withExifLocation ?? false) ? self.currentLocation : nil
         let locationForExif = (withExifLocation ?? false) ? self.currentLocation : nil
-        let headingForExif = (withExifLocation ?? false) ? self.currentHeading : nil
         let storeToFile = self.storeToFile
         self.cameraController.captureImage(width: width, height: height, quality: quality, gpsLocation: gpsForThisCapture, embedTimestamp: embedTimestamp, embedLocation: effectiveEmbedLocation, photoQualityPrioritization: photoQualityPrioritization) { (image, originalPhotoData, _, error) in
             print("[CameraPreview] captureImage callback received")
@@ -1421,6 +1420,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     imageToEncode = self.cameraController.mirrorImageHorizontally(capturedImage)
                 } else {
                     imageToEncode = capturedImage
+                }
+
+                let headingForExif: CLHeading?
+                if withExifLocation ?? false {
+                    headingForExif = CaptureExifHeadingReader.readCurrentHeading { self.currentHeading }
+                } else {
+                    headingForExif = nil
                 }
 
                 guard let imageDataWithExif = self.createImageDataWithExif(
@@ -1596,19 +1602,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
             ]
 
-            // Add image direction (compass heading) when available
-            if let heading = heading {
-                let directionDegrees: Double
-                let directionRef: String
-                if heading.trueHeading >= 0 {
-                    directionDegrees = heading.trueHeading
-                    directionRef = "T"
-                } else {
-                    directionDegrees = heading.magneticHeading
-                    directionRef = "M"
-                }
-                gpsDict[kCGImagePropertyGPSImgDirection as String] = directionDegrees
-                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = directionRef
+            if let direction = heading.flatMap(CaptureExifGps.imageDirection) {
+                gpsDict[kCGImagePropertyGPSImgDirection as String] = direction.degrees
+                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = direction.reference
             }
 
             finalProperties[kCGImagePropertyGPSDictionary as String] = gpsDict
