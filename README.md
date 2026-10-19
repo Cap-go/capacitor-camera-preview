@@ -1605,7 +1605,7 @@ Defines the configuration options for starting the camera preview.
 
 #### CameraCaptureResolution
 
-Target still-capture resolution for the Android `ImageCapture` use case.
+Target still-capture resolution for still captures on Android and iOS.
 
 Width and height define the resolution strategy target. The plugin also filters out
 supported capture sizes whose long edge exceeds `max(width, height)`.

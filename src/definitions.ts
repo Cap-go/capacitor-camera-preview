@@ -11,7 +11,7 @@ export type CameraPositioning = 'center' | 'top' | 'bottom';
 export type CameraPreviewAspectRatio = '4:3' | '16:9' | 'fill';
 
 /**
- * Target still-capture resolution for the Android `ImageCapture` use case.
+ * Target still-capture resolution for still captures on Android and iOS.
  *
  * Width and height define the resolution strategy target. The plugin also filters out
  * supported capture sizes whose long edge exceeds `max(width, height)`.

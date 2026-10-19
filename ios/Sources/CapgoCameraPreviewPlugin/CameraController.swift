@@ -3475,6 +3475,7 @@ extension CameraController {
             device.activeVideoMinFrameDuration = frameDuration
             device.activeVideoMaxFrameDuration = frameDuration
             device.unlockForConfiguration()
+            self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
             self.configuredVideoFrameRate = frameRate
         } catch {
             throw CameraControllerError.invalidOperation
