@@ -38,9 +38,21 @@ enum CaptureExifHeadingReader {
         }
         return DispatchQueue.main.sync { provider() }
     }
+}
 
-    /// Last known heading is kept when starting a new location fix until `didUpdateHeading` replaces it.
-    static func preservedHeadingOnLocationRefreshStart<T>(_ heading: T?) -> T? {
-        heading
+/// Heading storage rules shared by `getCurrentLocation` and capture cleanup.
+enum CaptureExifHeadingLifecycle {
+    enum Event {
+        case locationRefreshStarted
+        case captureExifFinished
+    }
+
+    static func heading(after event: Event, current: CLHeading?) -> CLHeading? {
+        switch event {
+        case .locationRefreshStarted:
+            return current
+        case .captureExifFinished:
+            return nil
+        }
     }
 }
