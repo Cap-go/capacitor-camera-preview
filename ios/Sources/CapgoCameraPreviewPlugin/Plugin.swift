@@ -676,7 +676,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             if let pendingStartCall = self.pendingStartCall, !self.hasResolvedStartCall {
                 self.failPendingStart(pendingStartCall, message: "Camera start cancelled")
             }
-            if self.isInitializing || self.isInitialized || self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+            let captureLifecycleBusy = DispatchQueue.main.sync {
+                self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture
+            }
+            if self.isInitializing || self.isInitialized || captureLifecycleBusy {
                 self.startGeneration += 1
                 self.cancelFirstFrameTimeout()
                 // Force stop everything synchronously
@@ -717,7 +720,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
             // Guard against starting while a deferred stop is pending due to in-flight capture
-            if self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture {
+            let captureLifecycleBusy = DispatchQueue.main.sync {
+                self.cameraController.isCapturingPhoto || self.cameraController.stopRequestedAfterCapture
+            }
+            if captureLifecycleBusy {
                 call.reject("camera is stopping or busy, please retry shortly")
                 return
             }
@@ -1171,16 +1177,11 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.isGeneratingDeviceOrientationNotifications = false
             }
 
-            if self.cameraController.isCapturingPhoto && !force {
-                // Defer heavy cleanup until capture callback completes (only if not forcing)
-                self.cameraController.stopRequestedAfterCapture = true
-            } else {
-                // Force stop or no capture pending; cleanup now
-                if force {
-                    self.cameraController.stopRequestedAfterCapture = false
-                }
-                self.cameraController.cleanup()
-            }
+            CaptureLifecycleCoordination.handleStop(
+                state: &self.cameraController.captureLifecycle,
+                force: force,
+                cleanup: { self.cameraController.cleanup() }
+            )
 
             call.resolve()
         }
