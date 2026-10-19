@@ -23,10 +23,10 @@ enum VideoRecordingOptions {
     }
 
     private static func positiveInt(from doubleValue: Double) -> Int? {
-        guard doubleValue.isFinite, doubleValue > 0 else {
+        guard doubleValue.isFinite, doubleValue > 0, doubleValue.rounded() == doubleValue else {
             return nil
         }
-        return Int(exactly: doubleValue.rounded())
+        return Int(exactly: doubleValue)
     }
 
     /// Per-call override when the key is present and valid; `nil` when omitted or invalid (restore preview bitrate).

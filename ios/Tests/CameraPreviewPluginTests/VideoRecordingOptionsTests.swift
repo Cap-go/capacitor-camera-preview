@@ -15,6 +15,8 @@ final class VideoRecordingOptionsTests: XCTestCase {
         XCTAssertNil(VideoRecordingOptions.parseVideoBitrate(from: -1))
         XCTAssertNil(VideoRecordingOptions.parseVideoBitrate(from: "not-a-number"))
         XCTAssertNil(VideoRecordingOptions.parseVideoBitrate(from: "9223372036854775808"))
+        XCTAssertNil(VideoRecordingOptions.parseVideoBitrate(from: 1_000_000.5))
+        XCTAssertNil(VideoRecordingOptions.parseVideoBitrate(from: 0.4))
     }
 
     func testMovieFileOutputSettingsIncludesBitrateWhenSet() {

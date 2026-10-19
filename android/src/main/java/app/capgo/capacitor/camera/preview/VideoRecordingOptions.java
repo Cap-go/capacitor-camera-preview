@@ -20,18 +20,18 @@ public final class VideoRecordingOptions {
         Object raw = data.opt("videoBitrate");
         if (raw instanceof Number) {
             double value = ((Number) raw).doubleValue();
-            if (!Double.isFinite(value) || value <= 0D || value > Integer.MAX_VALUE) {
+            if (!Double.isFinite(value) || value <= 0D || value > Integer.MAX_VALUE || value != Math.floor(value)) {
                 return null;
             }
-            return (int) Math.round(value);
+            return (int) value;
         }
         if (raw instanceof String) {
             try {
                 double value = Double.parseDouble((String) raw);
-                if (!Double.isFinite(value) || value <= 0D || value > Integer.MAX_VALUE) {
+                if (!Double.isFinite(value) || value <= 0D || value > Integer.MAX_VALUE || value != Math.floor(value)) {
                     return null;
                 }
-                return (int) Math.round(value);
+                return (int) value;
             } catch (NumberFormatException ignored) {
                 return null;
             }

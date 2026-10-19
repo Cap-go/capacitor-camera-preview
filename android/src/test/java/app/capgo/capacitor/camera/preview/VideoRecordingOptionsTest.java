@@ -32,6 +32,8 @@ public class VideoRecordingOptionsTest {
         assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":-1}")));
         assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":\"bad\"}")));
         assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":9223372036854775808}")));
+        assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":1000000.5}")));
+        assertNull(VideoRecordingOptions.parseVideoBitrate(new JSONObject("{\"videoBitrate\":0.4}")));
     }
 
     @Test
