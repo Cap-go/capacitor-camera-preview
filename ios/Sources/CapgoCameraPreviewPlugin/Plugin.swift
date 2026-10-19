@@ -1424,7 +1424,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     imageToEncode = capturedImage
                 }
 
-                guard let imageDataWithExif = self.createImageDataWithExif(
+                guard let imageDataWithExif = CaptureImageExifEncoder.createImageData(
                         from: imageToEncode,
                         quality: Int(quality),
                         location: locationForExif,
@@ -1561,72 +1561,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             call.resolve(result)
         }
-    }
-
-    private func createImageDataWithExif(from image: UIImage, quality: Int, location: CLLocation?, heading: CLHeading?, originalPhotoData: Data?) -> Data? {
-        guard let jpegDataAtQuality = image.jpegData(compressionQuality: CGFloat(Double(quality) / 100.0)) else {
-            return nil
-        }
-
-        // Prefer metadata from the original AVCapturePhoto file data to preserve lens/EXIF
-        let sourceDataForMetadata = (originalPhotoData ?? jpegDataAtQuality) as CFData
-        guard let imageSource = CGImageSourceCreateWithData(sourceDataForMetadata, nil),
-              let imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [String: Any],
-              let cgImage = image.cgImage else {
-            return jpegDataAtQuality
-        }
-
-        var finalProperties = imageProperties
-
-        // Ensure orientation reflects the pixel data (we pass an orientation-fixed UIImage)
-        finalProperties[kCGImagePropertyOrientation as String] = 1
-
-        // Add GPS location if available
-        if let location = location {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-            formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-            var gpsDict: [String: Any] = [
-                kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-                kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-                kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-                kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-                kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-                kCGImagePropertyGPSAltitude as String: location.altitude,
-                kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-            ]
-
-            // Add image direction (compass heading) when available
-            if let heading = heading {
-                let directionDegrees: Double
-                let directionRef: String
-                if heading.trueHeading >= 0 {
-                    directionDegrees = heading.trueHeading
-                    directionRef = "T"
-                } else {
-                    directionDegrees = heading.magneticHeading
-                    directionRef = "M"
-                }
-                gpsDict[kCGImagePropertyGPSImgDirection as String] = directionDegrees
-                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = directionRef
-            }
-
-            finalProperties[kCGImagePropertyGPSDictionary as String] = gpsDict
-        }
-
-        // Create or update TIFF dictionary for device info and set orientation to Up
-        var tiffDict = finalProperties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]
-        tiffDict[kCGImagePropertyTIFFMake as String] = "Apple"
-        tiffDict[kCGImagePropertyTIFFModel as String] = UIDevice.current.model
-        tiffDict[kCGImagePropertyTIFFOrientation as String] = 1
-        finalProperties[kCGImagePropertyTIFFDictionary as String] = tiffDict
-
-        if let encoded = ImageIOJpegEncoding.encode(cgImage: cgImage, properties: finalProperties, qualityPercent: quality) {
-            return encoded
-        }
-
-        return jpegDataAtQuality
     }
 
     @objc func captureSample(_ call: CAPPluginCall) {
