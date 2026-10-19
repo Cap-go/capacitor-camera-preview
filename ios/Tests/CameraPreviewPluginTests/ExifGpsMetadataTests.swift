@@ -39,7 +39,7 @@ final class ExifGpsMetadataTests: XCTestCase {
             altitude: 120.5,
             horizontalAccuracy: 5,
             verticalAccuracy: 5,
-            timestamp: Date(timeIntervalSince1970: 1_760_867_494)
+            timestamp: Date(timeIntervalSince1970: 1_760_867_494.06)
         )
         let gpsDict = ExifGpsMetadata.gpsDictionary(for: location)
         XCTAssertNotNil(gpsDict[kCGImagePropertyGPSDateStamp as String])
