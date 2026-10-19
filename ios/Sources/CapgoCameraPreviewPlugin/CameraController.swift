@@ -1860,21 +1860,7 @@ extension CameraController {
 
         var metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-        let gpsDict: [String: Any] = [
-            kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-            kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-            kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-            kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-            kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-            kCGImagePropertyGPSAltitude as String: location.altitude,
-            kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-        ]
-
-        metadata[kCGImagePropertyGPSDictionary as String] = gpsDict
+        metadata[kCGImagePropertyGPSDictionary as String] = ExifGpsMetadata.gpsDictionary(for: location)
 
         let destData = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(destData, uti, 1, nil) else { return }

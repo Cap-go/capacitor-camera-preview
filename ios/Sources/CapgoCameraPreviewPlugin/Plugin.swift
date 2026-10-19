@@ -1582,36 +1582,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         // Add GPS location if available
         if let location = location {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-            formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-            var gpsDict: [String: Any] = [
-                kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-                kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-                kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-                kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-                kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-                kCGImagePropertyGPSAltitude as String: location.altitude,
-                kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-            ]
-
-            // Add image direction (compass heading) when available
-            if let heading = heading {
-                let directionDegrees: Double
-                let directionRef: String
-                if heading.trueHeading >= 0 {
-                    directionDegrees = heading.trueHeading
-                    directionRef = "T"
-                } else {
-                    directionDegrees = heading.magneticHeading
-                    directionRef = "M"
-                }
-                gpsDict[kCGImagePropertyGPSImgDirection as String] = directionDegrees
-                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = directionRef
-            }
-
-            finalProperties[kCGImagePropertyGPSDictionary as String] = gpsDict
+            finalProperties[kCGImagePropertyGPSDictionary as String] = ExifGpsMetadata.gpsDictionary(
+                for: location,
+                heading: heading
+            )
         }
 
         // Create or update TIFF dictionary for device info and set orientation to Up
