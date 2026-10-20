@@ -2149,15 +2149,17 @@ extension CameraController {
     func captureSample(completion: @escaping (UIImage?, Error?) -> Void) {
         let wrappedCompletion: (UIImage?, Error?) -> Void = { [weak self] image, error in
             guard let self = self else { return }
-            let clearState = {
-                self.captureLifecycle.isAwaitingSampleCapture = false
+            let claimDelivery: () -> Bool = {
+                guard CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &self.captureLifecycle) else {
+                    return false
+                }
                 self.sampleBufferCaptureCompletionBlock = nil
+                return true
             }
-            if Thread.isMainThread {
-                clearState()
-            } else {
-                DispatchQueue.main.sync(execute: clearState)
-            }
+            let claimed = Thread.isMainThread
+                ? claimDelivery()
+                : DispatchQueue.main.sync(execute: claimDelivery)
+            guard claimed else { return }
             CapturePhotoProcessingQueue.async {
                 completion(image, error)
             }

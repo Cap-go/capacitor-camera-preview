@@ -43,6 +43,13 @@ enum CaptureLifecycleCoordination {
         guard isAwaiting else { return }
         cancel()
     }
+
+    /// Main-thread only: one-shot claim before delivering a sample capture result.
+    static func claimAwaitingSampleCapture(state: inout CaptureLifecycleState) -> Bool {
+        guard state.isAwaitingSampleCapture else { return false }
+        state.isAwaitingSampleCapture = false
+        return true
+    }
     /// Handles `stop()` when a capture may be in flight. Call on the main thread only.
     static func handleStop(
         state: inout CaptureLifecycleState,

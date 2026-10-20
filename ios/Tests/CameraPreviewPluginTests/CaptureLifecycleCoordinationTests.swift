@@ -46,6 +46,15 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         XCTAssertTrue(isCapturing)
     }
 
+    func testClaimAwaitingSampleCaptureIsOneShot() {
+        var state = CaptureLifecycleState()
+        XCTAssertFalse(CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &state))
+        state.isAwaitingSampleCapture = true
+        XCTAssertTrue(CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &state))
+        XCTAssertFalse(state.isAwaitingSampleCapture)
+        XCTAssertFalse(CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &state))
+    }
+
     func testCancelAwaitingSampleCaptureOnlyWhenAwaiting() {
         var cancelCount = 0
         CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(isAwaiting: false) { cancelCount += 1 }
