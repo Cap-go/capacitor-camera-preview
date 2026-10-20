@@ -1635,10 +1635,6 @@ extension CameraController {
                 return
             }
 
-            if let location = gpsLocation {
-                self.addGPSMetadata(to: image, location: location)
-            }
-
             var finalImage = image
 
             // Determine what to do based on parameters
@@ -1904,21 +1900,6 @@ extension CameraController {
         }
 
         return newJPEG
-    }
-
-    func addGPSMetadata(to image: UIImage, location: CLLocation) {
-        guard let jpegData = image.jpegData(compressionQuality: 1.0),
-              let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
-              let uti = CGImageSourceGetType(source) else { return }
-
-        var metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
-
-        metadata[kCGImagePropertyGPSDictionary as String] = ExifGpsMetadata.gpsDictionary(for: location)
-
-        let destData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(destData, uti, 1, nil) else { return }
-        CGImageDestinationAddImageFromSource(destination, source, 0, metadata as CFDictionary)
-        CGImageDestinationFinalize(destination)
     }
 
     func resizeImage(image: UIImage, to size: CGSize) -> UIImage? {
