@@ -11,7 +11,7 @@ export type CameraPositioning = 'center' | 'top' | 'bottom';
 export type CameraPreviewAspectRatio = '4:3' | '16:9' | 'fill';
 
 /**
- * Target still-capture resolution for the Android `ImageCapture` use case.
+ * Target still-capture resolution for still captures on Android and iOS.
  *
  * Width and height define the resolution strategy target. The plugin also filters out
  * supported capture sizes whose long edge exceeds `max(width, height)`.
@@ -366,7 +366,9 @@ export interface CameraPreviewOptions {
    *
    * On Android this binds the `ImageCapture` use case to the requested size. On iOS 16+ this sets
    * `AVCapturePhotoSettings.maxPhotoDimensions` (and disables high-resolution photo capture when capped)
-   * so the sensor delivers fewer pixels instead of downscaling a full-sensor frame in software.
+   * to the largest supported sensor size at or below the requested cap. When the active format exposes
+   * no supported size under the cap, iOS uses the smallest supported `maxPhotoDimensions` entry (same
+   * fallback as Android) so `start()` never assigns an unsupported dimension.
    * On iOS 15, `start()` rejects this option.
    *
    * When omitted, capture uses the highest resolution supported by the active camera
@@ -531,6 +533,14 @@ export interface CameraPreviewPictureOptions {
    * @since 8.10.0
    */
   mirrorFrontCamera?: boolean;
+  /**
+   * Which orientation to apply to the captured photo.
+   * - `"device"`: uses physical device tilt from the accelerometer (default). Preserves landscape captures when the app UI is rotation-locked.
+   * - `"preview"`: matches the on-screen preview. Use for WYSIWYG capture, including retakes without stopping the camera.
+   * @default "device"
+   * @since 8.13.0
+   */
+  orientation?: 'preview' | 'device';
 }
 
 /** Represents EXIF data extracted from an image. */

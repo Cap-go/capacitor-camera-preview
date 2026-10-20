@@ -522,8 +522,19 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean embedTimestamp = Boolean.TRUE.equals(call.getBoolean("embedTimestamp"));
         final boolean embedLocation = Boolean.TRUE.equals(call.getBoolean("embedLocation"));
         final boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera"));
+        final String orientation = call.getString("orientation", CaptureOrientationResolver.ORIENTATION_DEVICE);
 
-        cameraXView.capturePhoto(quality, saveToGallery, width, height, location, embedTimestamp, embedLocation, mirrorFrontCamera);
+        cameraXView.capturePhoto(
+            quality,
+            saveToGallery,
+            width,
+            height,
+            location,
+            embedTimestamp,
+            embedLocation,
+            mirrorFrontCamera,
+            orientation
+        );
     }
 
     @PluginMethod

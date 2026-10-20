@@ -2257,7 +2257,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Location location,
         final boolean embedTimestamp,
         final boolean embedLocation,
-        final boolean mirrorFrontCamera
+        final boolean mirrorFrontCamera,
+        String orientationMode
     ) {
         if (imageCapture == null) {
             if (listener != null) {
@@ -2272,11 +2273,23 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
 
-        // Set rotation from accelerometer for device orientation regardless of lock
-        int rotation = getRotationFromAccelerometer();
+        int displayRotation = getDisplayRotationFallback();
+        int deviceRotation = getRotationFromAccelerometer();
+        int rotation = CaptureOrientationResolver.resolveRotation(orientationMode, displayRotation, deviceRotation);
         lastCaptureRotation = rotation;
         imageCapture.setTargetRotation(rotation);
-        Log.d(TAG, "capturePhoto: Set target rotation to " + rotation + " from accelerometer");
+        Log.d(
+            TAG,
+            "capturePhoto: Set target rotation to " +
+                rotation +
+                " (mode=" +
+                orientationMode +
+                ", display=" +
+                displayRotation +
+                ", device=" +
+                deviceRotation +
+                ")"
+        );
 
         Log.d(
             TAG,
