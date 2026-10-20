@@ -4,6 +4,7 @@ import Foundation
 struct CaptureLifecycleState {
     var isCapturingPhoto: Bool = false
     var stopRequestedAfterCapture: Bool = false
+    var isAwaitingSampleCapture: Bool = false
 }
 
 enum CaptureReadiness {
@@ -13,7 +14,19 @@ enum CaptureReadiness {
     }
 }
 
+enum CaptureSubmissionGate {
+    /// Blocks `AVCapturePhotoOutput.capturePhoto` once teardown started or the session stopped.
+    static func blocksPhotoCaptureSubmission(sessionTeardownStarted: Bool, isCaptureSessionRunning: Bool) -> Bool {
+        sessionTeardownStarted || !isCaptureSessionRunning
+    }
+}
+
 enum CaptureLifecycleCoordination {
+    /// Rejects a pending sample-buffer capture when teardown begins (call on the main thread).
+    static func cancelAwaitingSampleCaptureIfNeeded(isAwaiting: Bool, cancel: () -> Void) {
+        guard isAwaiting else { return }
+        cancel()
+    }
     /// Handles `stop()` when a capture may be in flight. Call on the main thread only.
     static func handleStop(
         state: inout CaptureLifecycleState,

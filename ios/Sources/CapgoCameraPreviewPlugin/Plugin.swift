@@ -1177,6 +1177,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 self.isGeneratingDeviceOrientationNotifications = false
             }
 
+            self.cameraController.cancelPendingSampleCapture()
+
             CaptureLifecycleCoordination.handleStop(
                 state: &self.cameraController.captureLifecycle,
                 force: force,
@@ -1285,6 +1287,21 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         return fileUrl
     }
 
+    private func stopExifHeadingUpdatesAfterAbortedCapture() {
+        let work = {
+            self.locationManager?.stopUpdatingHeading()
+            self.currentHeading = CaptureExifHeadingLifecycle.heading(
+                after: .captureExifFinished,
+                current: self.currentHeading
+            )
+        }
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
+
     private func rejectUnlessCameraRunning(_ call: CAPPluginCall) -> Bool {
         let canCapture: Bool = {
             if Thread.isMainThread {
@@ -1383,6 +1400,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private func performCapture(call: CAPPluginCall) {
         print("[CameraPreview] performCapture called")
         guard rejectUnlessCameraRunning(call) else {
+            if call.getBool("withExifLocation", false) ?? false {
+                self.stopExifHeadingUpdatesAfterAbortedCapture()
+            }
             return
         }
         print("[CameraPreview] Call parameters: \(call.options ?? [:])")

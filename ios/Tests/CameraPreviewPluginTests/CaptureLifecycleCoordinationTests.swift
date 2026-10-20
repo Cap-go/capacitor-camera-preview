@@ -9,6 +9,22 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         XCTAssertTrue(CaptureReadiness.canPerformCapture(isInitialized: true, isCaptureSessionRunning: true))
     }
 
+    func testPhotoCaptureSubmissionBlockedWhenTeardownStartedOrSessionStopped() {
+        XCTAssertTrue(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: true, isCaptureSessionRunning: true))
+        XCTAssertTrue(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: false, isCaptureSessionRunning: false))
+        XCTAssertTrue(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: true, isCaptureSessionRunning: false))
+        XCTAssertFalse(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: false, isCaptureSessionRunning: true))
+    }
+
+    func testCancelAwaitingSampleCaptureOnlyWhenAwaiting() {
+        var cancelCount = 0
+        CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(isAwaiting: false) { cancelCount += 1 }
+        XCTAssertEqual(cancelCount, 0)
+
+        CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(isAwaiting: true) { cancelCount += 1 }
+        XCTAssertEqual(cancelCount, 1)
+    }
+
     func testDeferredStopRunsCleanupWhenCaptureFinishes() {
         var state = CaptureLifecycleState()
         state.isCapturingPhoto = true
