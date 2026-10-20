@@ -7,6 +7,9 @@ enum VideoRecordingOptions {
         guard let value = value else {
             return nil
         }
+        if value is Bool {
+            return nil
+        }
         if let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() {
             return nil
         }
