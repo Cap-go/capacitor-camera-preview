@@ -29,6 +29,53 @@ final class CaptureImageExifEncoderTests: XCTestCase {
         XCTAssertEqual(encodeCallCount, 0)
     }
 
+    func testWritesGpsMetadataWhenLocationProvided() {
+        let image = makeTestImage()
+        guard let originalPhotoData = image.jpegData(compressionQuality: 0.9) else {
+            XCTFail("Failed to build fixture JPEG")
+            return
+        }
+
+        let location = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 32.65, longitude: -16.91),
+            altitude: 100,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+
+        let result = CaptureImageExifEncoder.createImageData(
+            from: image,
+            quality: 85,
+            location: location,
+            heading: nil,
+            originalPhotoData: originalPhotoData
+        )
+
+        guard let result,
+              let source = CGImageSourceCreateWithData(result as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+              let gps = properties[kCGImagePropertyGPSDictionary as String] as? [String: Any] else {
+            XCTFail("Expected JPEG output with GPS metadata")
+            return
+        }
+
+        guard let latitude = gps[kCGImagePropertyGPSLatitude as String] as? Double,
+              let longitude = gps[kCGImagePropertyGPSLongitude as String] as? Double,
+              let altitude = gps[kCGImagePropertyGPSAltitude as String] as? Double else {
+            XCTFail("Expected GPS latitude, longitude, and altitude as Double")
+            return
+        }
+
+        XCTAssertEqual(latitude, 32.65, accuracy: 0.0001)
+        XCTAssertEqual(gps[kCGImagePropertyGPSLatitudeRef as String] as? String, "N")
+        XCTAssertEqual(longitude, 16.91, accuracy: 0.0001)
+        XCTAssertEqual(gps[kCGImagePropertyGPSLongitudeRef as String] as? String, "W")
+        XCTAssertEqual(altitude, 100, accuracy: 0.0001)
+        XCTAssertEqual(gps[kCGImagePropertyGPSAltitudeRef as String] as? Int, 0)
+        XCTAssertNotNil(gps[kCGImagePropertyGPSTimeStamp as String] as? String)
+    }
+
     func testProducesJpegWithTiffMetadata() {
         let image = makeTestImage()
         guard let originalPhotoData = image.jpegData(compressionQuality: 0.9) else {
