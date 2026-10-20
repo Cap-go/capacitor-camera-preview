@@ -60,11 +60,18 @@ final class CaptureImageExifEncoderTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(gps[kCGImagePropertyGPSLatitude as String] as? Double, 32.65, accuracy: 0.0001)
+        guard let latitude = gps[kCGImagePropertyGPSLatitude as String] as? Double,
+              let longitude = gps[kCGImagePropertyGPSLongitude as String] as? Double,
+              let altitude = gps[kCGImagePropertyGPSAltitude as String] as? Double else {
+            XCTFail("Expected GPS latitude, longitude, and altitude as Double")
+            return
+        }
+
+        XCTAssertEqual(latitude, 32.65, accuracy: 0.0001)
         XCTAssertEqual(gps[kCGImagePropertyGPSLatitudeRef as String] as? String, "N")
-        XCTAssertEqual(gps[kCGImagePropertyGPSLongitude as String] as? Double, 16.91, accuracy: 0.0001)
+        XCTAssertEqual(longitude, 16.91, accuracy: 0.0001)
         XCTAssertEqual(gps[kCGImagePropertyGPSLongitudeRef as String] as? String, "W")
-        XCTAssertEqual(gps[kCGImagePropertyGPSAltitude as String] as? Double, 100, accuracy: 0.0001)
+        XCTAssertEqual(altitude, 100, accuracy: 0.0001)
         XCTAssertEqual(gps[kCGImagePropertyGPSAltitudeRef as String] as? Int, 0)
         XCTAssertNotNil(gps[kCGImagePropertyGPSTimeStamp as String] as? String)
     }
