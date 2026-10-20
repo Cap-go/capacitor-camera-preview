@@ -645,13 +645,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   }
 
   private parseVideoBitrate(value: number | undefined | null): number | null {
-    if (
-      value != null &&
-      Number.isFinite(value) &&
-      Number.isInteger(value) &&
-      value > 0 &&
-      value <= 0xffffffff
-    ) {
+    if (value != null && Number.isFinite(value) && Number.isInteger(value) && value > 0 && value <= 0xffffffff) {
       return value;
     }
     return null;
