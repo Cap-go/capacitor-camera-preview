@@ -48,6 +48,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private orientationListenerBound = false;
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: BlobPart[] = [];
+  private startVideoBitrate: number | null = null;
   private currentAspectRatio: CameraPreviewAspectRatio = '4:3';
   private barcodeDetector: any = null;
   private barcodeScannerTimer: number | null = null;
@@ -236,6 +237,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       await this.stop({ force: true });
     }
 
+    this.startVideoBitrate = this.parseVideoBitrate(options?.videoBitrate);
     this.isBackCamera = true;
     this.isStarted = false;
     const parent = document.getElementById(options?.parent || '');
@@ -642,6 +644,27 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     }
   }
 
+  private parseVideoBitrate(value: number | undefined | null): number | null {
+    if (
+      value != null &&
+      Number.isFinite(value) &&
+      Number.isInteger(value) &&
+      value > 0 &&
+      value <= 0xffffffff
+    ) {
+      return value;
+    }
+    return null;
+  }
+
+  private resolveRecordingVideoBitrate(options?: CameraPreviewOptions): number | null {
+    const perCall = this.parseVideoBitrate(options?.videoBitrate ?? null);
+    if (perCall != null) {
+      return perCall;
+    }
+    return this.startVideoBitrate;
+  }
+
   async stop(_options?: { force?: boolean }): Promise<void> {
     // Force option doesn't change behavior on web - we always stop immediately
     void _options; // Mark as intentionally unused
@@ -657,6 +680,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     }
     this.videoElement = null;
     this.isStarted = false;
+    this.startVideoBitrate = null;
 
     // Remove grid overlay if it exists
     const gridOverlay = document.getElementById('camera-grid-overlay');
@@ -931,14 +955,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
 
     this.recordedChunks = [];
     const recorderOptions: MediaRecorderOptions = { mimeType };
-    if (
-      options?.videoBitrate != null &&
-      Number.isFinite(options.videoBitrate) &&
-      Number.isInteger(options.videoBitrate) &&
-      options.videoBitrate > 0 &&
-      options.videoBitrate <= 0xffffffff
-    ) {
-      recorderOptions.videoBitsPerSecond = options.videoBitrate;
+    const videoBitrate = this.resolveRecordingVideoBitrate(options);
+    if (videoBitrate != null) {
+      recorderOptions.videoBitsPerSecond = videoBitrate;
     }
     this.mediaRecorder = new MediaRecorder(stream, recorderOptions);
     this.mediaRecorder.ondataavailable = (event) => {
