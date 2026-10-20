@@ -4,6 +4,32 @@ import UIKit
 import XCTest
 @testable import CapgoCameraPreview
 
+private final class CaptureExifGpsEncoderTestHeading: CLHeading {
+    private let storedTrue: CLLocationDirection
+    private let storedMagnetic: CLLocationDirection
+    private let storedAccuracy: CLLocationAccuracy
+
+    init(
+        trueHeading: CLLocationDirection,
+        magneticHeading: CLLocationDirection,
+        headingAccuracy: CLLocationAccuracy
+    ) {
+        self.storedTrue = trueHeading
+        self.storedMagnetic = magneticHeading
+        self.storedAccuracy = headingAccuracy
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var trueHeading: CLLocationDirection { storedTrue }
+    override var magneticHeading: CLLocationDirection { storedMagnetic }
+    override var headingAccuracy: CLLocationAccuracy { storedAccuracy }
+}
+
 final class CaptureImageExifEncoderTests: XCTestCase {
     func testSkipsJpegEncodeWhenOriginalPhotoDataProvided() {
         let image = makeTestImage()
@@ -109,6 +135,48 @@ final class CaptureImageExifEncoderTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertEqual(encodeCallCount, 1)
+    }
+
+    func testEmbedsGpsDateTimeAndImageDirectionWhenLocationAndHeadingProvided() {
+        let image = makeTestImage()
+        guard let originalPhotoData = image.jpegData(compressionQuality: 0.9) else {
+            XCTFail("Failed to build fixture JPEG")
+            return
+        }
+
+        let location = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 38.72, longitude: -9.14),
+            altitude: 120.5,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            timestamp: Date(timeIntervalSince1970: 1_760_867_494.06)
+        )
+        let heading = CaptureExifGpsEncoderTestHeading(trueHeading: 88.0, magneticHeading: 90.0, headingAccuracy: 4)
+
+        guard let result = CaptureImageExifEncoder.createImageData(
+            from: image,
+            quality: 85,
+            location: location,
+            heading: heading,
+            originalPhotoData: originalPhotoData
+        ),
+        let source = CGImageSourceCreateWithData(result as CFData, nil),
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+        let gps = properties[kCGImagePropertyGPSDictionary as String] as? [String: Any] else {
+            XCTFail("Expected JPEG output with GPS metadata")
+            return
+        }
+
+        XCTAssertEqual(gps[kCGImagePropertyGPSDateStamp as String] as? String, ExifGpsMetadata.gpsDateStamp(from: location.timestamp))
+        let wholeSeconds = floor(location.timestamp.timeIntervalSince1970)
+        let expectedTimeStamp = ExifGpsMetadata.gpsTimeStamp(from: Date(timeIntervalSince1970: wholeSeconds))
+        if let readTime = gps[kCGImagePropertyGPSTimeStamp as String] as? String {
+            XCTAssertEqual(readTime, expectedTimeStamp)
+        } else {
+            XCTAssertNotNil(gps[kCGImagePropertyGPSTimeStamp as String])
+        }
+        XCTAssertEqual(gps[kCGImagePropertyGPSImgDirection as String] as? Double, 88.0)
+        XCTAssertEqual(gps[kCGImagePropertyGPSImgDirectionRef as String] as? String, "T")
     }
 
     func testEncodesWhenOriginalPhotoDataMissing() {

@@ -78,13 +78,17 @@ enum CaptureResolutionSupport {
         Int64(dimensions.width) * Int64(dimensions.height)
     }
 
-    /// Picks a supported `maxPhotoDimensions` value at or below the configured cap.
+    /// Picks a value from `supportedMaxPhotoDimensions` at or below the configured cap when possible.
+    /// When no supported size fits under the cap (for example a single full-sensor entry), returns the
+    /// smallest supported size by long edge, matching Android `filterCaptureResolutionCandidates`.
+    /// Returns `nil` when `supportedDimensions` is empty so callers never assign an unsupported value.
     static func photoMaxDimensions(
         configuredWidth: Int,
         configuredHeight: Int,
-        supportedDimensions: [CMVideoDimensions],
-        deviceMax: CMVideoDimensions
-    ) -> CMVideoDimensions {
+        supportedDimensions: [CMVideoDimensions]
+    ) -> CMVideoDimensions? {
+        guard !supportedDimensions.isEmpty else { return nil }
+
         let normalized = normalizedCaptureTargetResolution(configuredWidth: configuredWidth, configuredHeight: configuredHeight)
         let targetLong = Int32(normalized.width)
         let targetShort = Int32(normalized.height)
@@ -97,24 +101,20 @@ enum CaptureResolutionSupport {
             return bestFit
         }
 
-        return clampPhotoDimensions(
-            width: targetLong,
-            height: targetShort,
-            deviceMax: deviceMax
-        )
+        return smallestSupportedPhotoDimension(supportedDimensions)
     }
 
-    static func clampPhotoDimensions(width: Int32, height: Int32, deviceMax: CMVideoDimensions) -> CMVideoDimensions {
-        var clampedWidth = width
-        var clampedHeight = height
-        let deviceWidth = deviceMax.width
-        let deviceHeight = deviceMax.height
-        if clampedWidth > deviceWidth || clampedHeight > deviceHeight {
-            let scale = min(Double(deviceWidth) / Double(clampedWidth), Double(deviceHeight) / Double(clampedHeight))
-            clampedWidth = max(1, Int32((Double(clampedWidth) * scale).rounded(.down)))
-            clampedHeight = max(1, Int32((Double(clampedHeight) * scale).rounded(.down)))
-        }
-        return CMVideoDimensions(width: clampedWidth, height: clampedHeight)
+    static func smallestSupportedPhotoDimension(_ supportedDimensions: [CMVideoDimensions]) -> CMVideoDimensions? {
+        guard !supportedDimensions.isEmpty else { return nil }
+        return supportedDimensions.min(by: { longEdge($0) < longEdge($1) })
+    }
+
+    static func dimensionsEqual(_ lhs: CMVideoDimensions, _ rhs: CMVideoDimensions) -> Bool {
+        lhs.width == rhs.width && lhs.height == rhs.height
+    }
+
+    static func isSupportedPhotoDimension(_ dimension: CMVideoDimensions, in supportedDimensions: [CMVideoDimensions]) -> Bool {
+        supportedDimensions.contains { dimensionsEqual($0, dimension) }
     }
 
     static func shouldEnableHighResolutionPhoto(

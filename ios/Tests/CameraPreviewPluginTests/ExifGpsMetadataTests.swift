@@ -3,6 +3,32 @@ import ImageIO
 import XCTest
 @testable import CapgoCameraPreview
 
+private final class ExifGpsTestCLHeading: CLHeading {
+    private let storedTrue: CLLocationDirection
+    private let storedMagnetic: CLLocationDirection
+    private let storedAccuracy: CLLocationAccuracy
+
+    init(
+        trueHeading: CLLocationDirection,
+        magneticHeading: CLLocationDirection,
+        headingAccuracy: CLLocationAccuracy
+    ) {
+        self.storedTrue = trueHeading
+        self.storedMagnetic = magneticHeading
+        self.storedAccuracy = headingAccuracy
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var trueHeading: CLLocationDirection { storedTrue }
+    override var magneticHeading: CLLocationDirection { storedMagnetic }
+    override var headingAccuracy: CLLocationAccuracy { storedAccuracy }
+}
+
 final class ExifGpsMetadataTests: XCTestCase {
     func testGpsDateStampUsesExifFormatInUtc() {
         var components = DateComponents()
@@ -31,6 +57,29 @@ final class ExifGpsMetadataTests: XCTestCase {
         components.nanosecond = 60_000_000
         let date = components.date!
         XCTAssertEqual(ExifGpsMetadata.gpsTimeStamp(from: date), "10:31:34.06")
+    }
+
+    func testGpsDictionaryIncludesImageDirectionWhenHeadingAvailable() {
+        let location = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 38.72, longitude: -9.14),
+            altitude: 120.5,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            timestamp: Date(timeIntervalSince1970: 1_760_867_494)
+        )
+        let heading = ExifGpsTestCLHeading(trueHeading: 175.4, magneticHeading: 180.0, headingAccuracy: 5)
+        let gpsDict = ExifGpsMetadata.gpsDictionary(for: location, heading: heading)
+
+        XCTAssertEqual(gpsDict[kCGImagePropertyGPSImgDirection as String] as? Double, 175.4)
+        XCTAssertEqual(gpsDict[kCGImagePropertyGPSImgDirectionRef as String] as? String, "T")
+        XCTAssertEqual(
+            gpsDict[kCGImagePropertyGPSDateStamp as String] as? String,
+            ExifGpsMetadata.gpsDateStamp(from: location.timestamp)
+        )
+        XCTAssertEqual(
+            gpsDict[kCGImagePropertyGPSTimeStamp as String] as? String,
+            ExifGpsMetadata.gpsTimeStamp(from: location.timestamp)
+        )
     }
 
     func testGpsDictionaryRoundTripThroughImageIOAvoidsZeroRationals() throws {
