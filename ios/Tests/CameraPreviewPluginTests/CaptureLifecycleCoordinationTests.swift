@@ -2,6 +2,13 @@ import XCTest
 @testable import CapgoCameraPreview
 
 final class CaptureLifecycleCoordinationTests: XCTestCase {
+    func testCaptureReadinessRequiresInitializedSessionAndRunningCaptureSession() {
+        XCTAssertFalse(CaptureReadiness.canPerformCapture(isInitialized: false, isCaptureSessionRunning: false))
+        XCTAssertFalse(CaptureReadiness.canPerformCapture(isInitialized: false, isCaptureSessionRunning: true))
+        XCTAssertFalse(CaptureReadiness.canPerformCapture(isInitialized: true, isCaptureSessionRunning: false))
+        XCTAssertTrue(CaptureReadiness.canPerformCapture(isInitialized: true, isCaptureSessionRunning: true))
+    }
+
     func testDeferredStopRunsCleanupWhenCaptureFinishes() {
         var state = CaptureLifecycleState()
         state.isCapturingPhoto = true

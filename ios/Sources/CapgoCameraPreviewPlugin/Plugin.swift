@@ -1285,8 +1285,33 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         return fileUrl
     }
 
+    private func rejectUnlessCameraRunning(_ call: CAPPluginCall) -> Bool {
+        let canCapture: Bool = {
+            if Thread.isMainThread {
+                return CaptureReadiness.canPerformCapture(
+                    isInitialized: self.isInitialized,
+                    isCaptureSessionRunning: self.cameraController.captureSession?.isRunning ?? false
+                )
+            }
+            return DispatchQueue.main.sync {
+                CaptureReadiness.canPerformCapture(
+                    isInitialized: self.isInitialized,
+                    isCaptureSessionRunning: self.cameraController.captureSession?.isRunning ?? false
+                )
+            }
+        }()
+        if !canCapture {
+            call.reject("Camera is not running")
+            return false
+        }
+        return true
+    }
+
     @objc func capture(_ call: CAPPluginCall) {
         print("[CameraPreview] capture called with options: \(call.options ?? [:])")
+        guard rejectUnlessCameraRunning(call) else {
+            return
+        }
         let withExifLocation = call.getBool("withExifLocation", false)
         print("[CameraPreview] capture called, withExifLocation: \(withExifLocation)")
 
@@ -1357,6 +1382,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     private func performCapture(call: CAPPluginCall) {
         print("[CameraPreview] performCapture called")
+        guard rejectUnlessCameraRunning(call) else {
+            return
+        }
         print("[CameraPreview] Call parameters: \(call.options ?? [:])")
         let quality = call.getFloat("quality", 85)
         let saveToGallery = call.getBool("saveToGallery", false)
@@ -1377,13 +1405,13 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         // Safely read frame from main thread for logging
         let (previewWidth, previewHeight): (CGFloat, CGFloat) = {
             if Thread.isMainThread {
-                return (self.previewView.frame.width, self.previewView.frame.height)
+                return (self.previewView?.frame.width ?? 0, self.previewView?.frame.height ?? 0)
             }
             var width: CGFloat = 0
             var height: CGFloat = 0
             DispatchQueue.main.sync {
-                width = self.previewView.frame.width
-                height = self.previewView.frame.height
+                width = self.previewView?.frame.width ?? 0
+                height = self.previewView?.frame.height ?? 0
             }
             return (width, height)
         }()
@@ -1574,6 +1602,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     @objc func captureSample(_ call: CAPPluginCall) {
+        guard rejectUnlessCameraRunning(call) else {
+            return
+        }
         let quality: Int = call.getInt("quality") ?? 85
         let mirrorFrontCamera = call.getBool("mirrorFrontCamera", false) ?? false
         let capturedFromFrontCamera = self.cameraController.currentCameraPosition == .front

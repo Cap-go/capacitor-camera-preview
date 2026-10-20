@@ -6,6 +6,13 @@ struct CaptureLifecycleState {
     var stopRequestedAfterCapture: Bool = false
 }
 
+enum CaptureReadiness {
+    /// Matches `isRunning()` and capture guards: preview started and capture session active.
+    static func canPerformCapture(isInitialized: Bool, isCaptureSessionRunning: Bool) -> Bool {
+        isInitialized && isCaptureSessionRunning
+    }
+}
+
 enum CaptureLifecycleCoordination {
     /// Handles `stop()` when a capture may be in flight. Call on the main thread only.
     static func handleStop(
