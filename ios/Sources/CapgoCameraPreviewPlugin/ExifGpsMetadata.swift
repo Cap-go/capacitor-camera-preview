@@ -34,18 +34,9 @@ enum ExifGpsMetadata {
             kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
         ]
 
-        if let heading = heading {
-            let directionDegrees: Double
-            let directionRef: String
-            if heading.trueHeading >= 0 {
-                directionDegrees = heading.trueHeading
-                directionRef = "T"
-            } else {
-                directionDegrees = heading.magneticHeading
-                directionRef = "M"
-            }
-            gpsDict[kCGImagePropertyGPSImgDirection as String] = directionDegrees
-            gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = directionRef
+        if let direction = heading.flatMap(CaptureExifGps.imageDirection) {
+            gpsDict[kCGImagePropertyGPSImgDirection as String] = direction.degrees
+            gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = direction.reference
         }
 
         return gpsDict
