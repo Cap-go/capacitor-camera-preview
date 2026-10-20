@@ -1694,21 +1694,21 @@ extension CameraController {
             self.finishPhotoCaptureLifecycle()
         }
 
-        if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
-            sessionTeardownStarted: self.captureSessionTeardownStarted,
-            isCaptureSessionRunning: self.captureSession?.isRunning ?? false
-        ) {
+        let claimSubmission: () -> Bool = {
+            if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: self.captureSession?.isRunning ?? false
+            ) {
+                return false
+            }
+            self.isCapturingPhoto = true
+            return true
+        }
+        let claimed = Thread.isMainThread ? claimSubmission() : DispatchQueue.main.sync(execute: claimSubmission)
+        guard claimed else {
             self.photoCaptureCompletionBlock = nil
             completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
             return
-        }
-
-        if Thread.isMainThread {
-            self.isCapturingPhoto = true
-        } else {
-            DispatchQueue.main.sync {
-                self.isCapturingPhoto = true
-            }
         }
 
         photoOutput.capturePhoto(with: settings, delegate: self)
@@ -2193,16 +2193,16 @@ extension CameraController {
 
         let wrappedCompletion: (UIImage?, Error?) -> Void = { [weak self] image, error in
             guard let self = self else { return }
-            let finish = {
+            let clearState = {
                 self.captureLifecycle.isAwaitingSampleCapture = false
                 self.sampleBufferCaptureCompletionBlock = nil
-                completion(image, error)
             }
             if Thread.isMainThread {
-                finish()
+                clearState()
             } else {
-                DispatchQueue.main.async(execute: finish)
+                DispatchQueue.main.sync(execute: clearState)
             }
+            completion(image, error)
         }
 
         let register = { [weak self] in
@@ -2234,15 +2234,8 @@ extension CameraController {
     }
 
     private func deliverPendingSampleCapture(image: UIImage?, error: Error?) {
-        let deliver = { [weak self] in
-            guard let self = self, let handler = self.sampleBufferCaptureCompletionBlock else { return }
-            handler(image, error)
-        }
-        if Thread.isMainThread {
-            deliver()
-        } else {
-            DispatchQueue.main.async(execute: deliver)
-        }
+        guard let handler = sampleBufferCaptureCompletionBlock else { return }
+        handler(image, error)
     }
 
     func startBarcodeScanner(formats: [String], detectionIntervalMs: Int, callback: @escaping ([[String: Any]]) -> Void) throws {

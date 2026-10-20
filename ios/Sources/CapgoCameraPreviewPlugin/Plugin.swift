@@ -1636,25 +1636,27 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
 
-            var outputImage = image
-            if mirrorFrontCamera, capturedFromFrontCamera {
-                outputImage = self.cameraController.mirrorImageHorizontally(image)
-            }
-            let imageData = outputImage.jpegData(compressionQuality: CGFloat(quality)/100)
-
-            if self.storeToFile == false {
-                guard let imageBase64 = imageData?.base64EncodedString() else {
-                    call.reject("Failed to encode image to base64")
-                    return
+            CapturePhotoProcessingQueue.async {
+                var outputImage = image
+                if mirrorFrontCamera, capturedFromFrontCamera {
+                    outputImage = self.cameraController.mirrorImageHorizontally(image)
                 }
-                call.resolve(["value": imageBase64])
-            } else {
-                do {
-                    let fileUrl = self.getTempFilePath()
-                    try imageData?.write(to: fileUrl)
-                    call.resolve(["value": fileUrl.absoluteString])
-                } catch {
-                    call.reject("Error writing image to file")
+                let imageData = outputImage.jpegData(compressionQuality: CGFloat(quality)/100)
+
+                if self.storeToFile == false {
+                    guard let imageBase64 = imageData?.base64EncodedString() else {
+                        call.reject("Failed to encode image to base64")
+                        return
+                    }
+                    call.resolve(["value": imageBase64])
+                } else {
+                    do {
+                        let fileUrl = self.getTempFilePath()
+                        try imageData?.write(to: fileUrl)
+                        call.resolve(["value": fileUrl.absoluteString])
+                    } catch {
+                        call.reject("Error writing image to file")
+                    }
                 }
             }
         }
