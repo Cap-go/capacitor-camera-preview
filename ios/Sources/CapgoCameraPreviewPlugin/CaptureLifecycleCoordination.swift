@@ -15,9 +15,25 @@ enum CaptureReadiness {
 }
 
 enum CaptureSubmissionGate {
-    /// Blocks `AVCapturePhotoOutput.capturePhoto` once teardown started or the session stopped.
+    /// Blocks still capture submission once teardown started or the session stopped.
     static func blocksPhotoCaptureSubmission(sessionTeardownStarted: Bool, isCaptureSessionRunning: Bool) -> Bool {
         sessionTeardownStarted || !isCaptureSessionRunning
+    }
+
+    /// Main-thread only: gate check and `isCapturingPhoto = true` in one step.
+    static func tryClaimPhotoCapture(
+        sessionTeardownStarted: Bool,
+        isCaptureSessionRunning: Bool,
+        isCapturingPhoto: inout Bool
+    ) -> Bool {
+        if blocksPhotoCaptureSubmission(
+            sessionTeardownStarted: sessionTeardownStarted,
+            isCaptureSessionRunning: isCaptureSessionRunning
+        ) {
+            return false
+        }
+        isCapturingPhoto = true
+        return true
     }
 }
 

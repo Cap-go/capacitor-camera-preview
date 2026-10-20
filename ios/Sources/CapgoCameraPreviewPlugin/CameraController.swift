@@ -1625,6 +1625,19 @@ extension CameraController {
             }
         }
 
+        let claimSubmission: () -> Bool = {
+            CaptureSubmissionGate.tryClaimPhotoCapture(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: self.captureSession?.isRunning ?? false,
+                isCapturingPhoto: &self.captureLifecycle.isCapturingPhoto
+            )
+        }
+        let claimed = Thread.isMainThread ? claimSubmission() : DispatchQueue.main.sync(execute: claimSubmission)
+        guard claimed else {
+            completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
+            return
+        }
+
         self.photoCaptureCompletionBlock = { [weak self] (image, photoData, metadata, error) in
             guard let self = self else { return }
             if let error = error {
@@ -1688,23 +1701,6 @@ extension CameraController {
 
             completion(finalImage, photoData, metadata, nil)
             self.finishPhotoCaptureLifecycle()
-        }
-
-        let claimSubmission: () -> Bool = {
-            if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
-                sessionTeardownStarted: self.captureSessionTeardownStarted,
-                isCaptureSessionRunning: self.captureSession?.isRunning ?? false
-            ) {
-                return false
-            }
-            self.isCapturingPhoto = true
-            return true
-        }
-        let claimed = Thread.isMainThread ? claimSubmission() : DispatchQueue.main.sync(execute: claimSubmission)
-        guard claimed else {
-            self.photoCaptureCompletionBlock = nil
-            completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
-            return
         }
 
         photoOutput.capturePhoto(with: settings, delegate: self)
@@ -2151,13 +2147,6 @@ extension CameraController {
     }
 
     func captureSample(completion: @escaping (UIImage?, Error?) -> Void) {
-        guard let captureSession = captureSession,
-              captureSession.isRunning,
-              !captureSessionTeardownStarted else {
-            completion(nil, CameraControllerError.captureSessionIsMissing)
-            return
-        }
-
         let wrappedCompletion: (UIImage?, Error?) -> Void = { [weak self] image, error in
             guard let self = self else { return }
             let clearState = {
@@ -2169,18 +2158,28 @@ extension CameraController {
             } else {
                 DispatchQueue.main.sync(execute: clearState)
             }
-            completion(image, error)
+            CapturePhotoProcessingQueue.async {
+                completion(image, error)
+            }
         }
 
-        let register = { [weak self] in
-            guard let self = self else { return }
+        let claimAndRegister: () -> Bool = { [weak self] in
+            guard let self = self else { return false }
+            let sessionRunning = self.captureSession?.isRunning ?? false
+            if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: sessionRunning
+            ) {
+                return false
+            }
             self.captureLifecycle.isAwaitingSampleCapture = true
             self.sampleBufferCaptureCompletionBlock = wrappedCompletion
+            return true
         }
-        if Thread.isMainThread {
-            register()
-        } else {
-            DispatchQueue.main.sync(execute: register)
+
+        let registered = Thread.isMainThread ? claimAndRegister() : DispatchQueue.main.sync(execute: claimAndRegister)
+        if !registered {
+            completion(nil, CameraControllerError.captureSessionIsMissing)
         }
     }
 
