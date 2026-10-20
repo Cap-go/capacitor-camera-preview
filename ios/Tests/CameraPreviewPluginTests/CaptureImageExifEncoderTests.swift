@@ -171,7 +171,7 @@ final class CaptureImageExifEncoderTests: XCTestCase {
         let wholeSeconds = floor(location.timestamp.timeIntervalSince1970)
         let expectedTimeStamp = ExifGpsMetadata.gpsTimeStamp(from: Date(timeIntervalSince1970: wholeSeconds))
         if let readTime = gps[kCGImagePropertyGPSTimeStamp as String] as? String {
-            XCTAssertEqual(readTime, expectedTimeStamp)
+            XCTAssertEqual(normalizeGpsTimeStampString(readTime), expectedTimeStamp)
         } else {
             XCTAssertNotNil(gps[kCGImagePropertyGPSTimeStamp as String])
         }
@@ -197,6 +197,20 @@ final class CaptureImageExifEncoderTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertGreaterThanOrEqual(encodeCallCount, 1)
+    }
+
+    private func normalizeGpsTimeStampString(_ value: String) -> String {
+        if let dotIndex = value.firstIndex(of: ".") {
+            let base = String(value[..<dotIndex])
+            var fraction = String(value[value.index(after: dotIndex)...])
+            if fraction.count < 2 {
+                fraction += String(repeating: "0", count: 2 - fraction.count)
+            } else if fraction.count > 2 {
+                fraction = String(fraction.prefix(2))
+            }
+            return "\(base).\(fraction)"
+        }
+        return "\(value).00"
     }
 
     private func makeTestImage() -> UIImage {
