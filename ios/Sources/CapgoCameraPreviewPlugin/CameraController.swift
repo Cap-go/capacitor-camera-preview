@@ -1635,10 +1635,6 @@ extension CameraController {
                 return
             }
 
-            if let location = gpsLocation {
-                self.addGPSMetadata(to: image, location: location)
-            }
-
             var finalImage = image
 
             // Determine what to do based on parameters
@@ -1904,35 +1900,6 @@ extension CameraController {
         }
 
         return newJPEG
-    }
-
-    func addGPSMetadata(to image: UIImage, location: CLLocation) {
-        guard let jpegData = image.jpegData(compressionQuality: 1.0),
-              let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
-              let uti = CGImageSourceGetType(source) else { return }
-
-        var metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-        let gpsDict: [String: Any] = [
-            kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-            kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-            kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-            kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-            kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-            kCGImagePropertyGPSAltitude as String: location.altitude,
-            kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-        ]
-
-        metadata[kCGImagePropertyGPSDictionary as String] = gpsDict
-
-        let destData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(destData, uti, 1, nil) else { return }
-        CGImageDestinationAddImageFromSource(destination, source, 0, metadata as CFDictionary)
-        CGImageDestinationFinalize(destination)
     }
 
     func resizeImage(image: UIImage, to size: CGSize) -> UIImage? {
