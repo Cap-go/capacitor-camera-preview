@@ -55,6 +55,22 @@ class CameraController: NSObject, CXCallObserverDelegate {
         return orientation
     }
 
+    private func getPreviewLayerVideoOrientation() -> AVCaptureVideoOrientation? {
+        if Thread.isMainThread {
+            if let connection = self.previewLayer?.connection, connection.isVideoOrientationSupported {
+                return connection.videoOrientation
+            }
+            return nil
+        }
+        var orientation: AVCaptureVideoOrientation?
+        DispatchQueue.main.sync {
+            if let connection = self.previewLayer?.connection, connection.isVideoOrientationSupported {
+                orientation = connection.videoOrientation
+            }
+        }
+        return orientation
+    }
+
     // For capture only - uses accelerometer to detect physical orientation to properly position videos/images
     private var lastReliableCaptureOrientation: AVCaptureVideoOrientation?
 
@@ -204,6 +220,8 @@ class CameraController: NSObject, CXCallObserverDelegate {
     var videoQuality: String = "high"
     private var configuredVideoFrameRate: Int?
     var videoCodec: String = "avc1"
+    var videoBitrate: Int?
+    private var previewVideoBitrate: Int?
     var videoStabilizationMode: String = "off"
     private var cachedSupportedVideoStabilizationModes: [String] = []
     private var isSupportedVideoStabilizationModesCacheValid = false
@@ -263,6 +281,31 @@ class CameraController: NSObject, CXCallObserverDelegate {
 
     func getVideoCodec() -> String {
         return self.videoCodec
+    }
+
+    func setPreviewVideoBitrate(_ bitrate: Int?) {
+        if let bitrate = bitrate, bitrate > 0 {
+            self.previewVideoBitrate = bitrate
+        } else {
+            self.previewVideoBitrate = nil
+        }
+        self.videoBitrate = self.previewVideoBitrate
+    }
+
+    func getPreviewVideoBitrate() -> Int? {
+        return self.previewVideoBitrate
+    }
+
+    func applyRecordingVideoBitrateOverride(_ bitrate: Int?) {
+        if let bitrate = bitrate, bitrate > 0 {
+            self.videoBitrate = bitrate
+        } else {
+            self.videoBitrate = self.previewVideoBitrate
+        }
+    }
+
+    func getVideoBitrate() -> Int? {
+        return self.videoBitrate
     }
 
     func isVideoStabilizationSupported() -> Bool {
@@ -482,9 +525,31 @@ class CameraController: NSObject, CXCallObserverDelegate {
     // Track output preparation status
     private var outputsPrepared: Bool = false
 
-    // Capture/stop coordination
-    var isCapturingPhoto: Bool = false
-    var stopRequestedAfterCapture: Bool = false
+    // Capture/stop coordination (main-thread only; see CaptureLifecycleCoordination)
+    var captureLifecycle = CaptureLifecycleState()
+    private(set) var captureSessionTeardownStarted = false
+
+    var isCapturingPhoto: Bool {
+        get { self.captureLifecycle.isCapturingPhoto }
+        set { self.captureLifecycle.isCapturingPhoto = newValue }
+    }
+
+    var stopRequestedAfterCapture: Bool {
+        get { self.captureLifecycle.stopRequestedAfterCapture }
+        set { self.captureLifecycle.stopRequestedAfterCapture = newValue }
+    }
+
+    func finishPhotoCaptureLifecycle() {
+        let work = { [weak self] in
+            guard let self = self else { return }
+            CaptureLifecycleCoordination.finishCapture(state: &self.captureLifecycle, cleanup: { self.cleanup() })
+        }
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
+        }
+    }
 
     var isUsingMultiLensVirtualCamera: Bool {
         guard let device = (currentCameraPosition == .rear) ? rearCamera : frontCamera else { return false }
@@ -551,15 +616,20 @@ class CameraController: NSObject, CXCallObserverDelegate {
         return CaptureResolutionSupport.photoMaxDimensions(
             configuredWidth: width,
             configuredHeight: height,
-            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions,
-            deviceMax: photoOutput.maxPhotoDimensions
+            supportedDimensions: device.activeFormat.supportedMaxPhotoDimensions
         )
     }
 
     private func applyConfiguredCaptureResolutionToPhotoOutputIfNeeded() {
         guard #available(iOS 16.0, *),
               let photoOutput = self.photoOutput,
-              let dimensions = self.configuredPhotoMaxDimensions() else {
+              let dimensions = self.configuredPhotoMaxDimensions(),
+              let device = self.activeCaptureDevice() else {
+            return
+        }
+
+        let supported = device.activeFormat.supportedMaxPhotoDimensions
+        guard CaptureResolutionSupport.isSupportedPhotoDimension(dimensions, in: supported) else {
             return
         }
 
@@ -679,6 +749,7 @@ extension CameraController {
         // Kept for backward compatibility
         guard self.captureSession == nil else { return }
 
+        self.captureSessionTeardownStarted = false
         self.captureSession = AVCaptureSession()
     }
 
@@ -838,6 +909,7 @@ extension CameraController {
             do {
                 // Create session if needed
                 if self.captureSession == nil {
+                    self.captureSessionTeardownStarted = false
                     self.captureSession = AVCaptureSession()
                 }
 
@@ -1505,21 +1577,38 @@ extension CameraController {
         self.updateVideoOrientation()
     }
 
-    func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
+    func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, captureOrientationMode: String?, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
         guard let photoOutput = self.photoOutput else {
             completion(nil, nil, nil, NSError(domain: "Camera", code: 0, userInfo: [NSLocalizedDescriptionKey: "Photo output is not available"]))
             return
         }
 
-        // Make sure capture is getting the physical orientation not interface orientation
+        let sessionRunning = self.captureSession?.isRunning ?? false
+        if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
+            sessionTeardownStarted: self.captureSessionTeardownStarted,
+            isCaptureSessionRunning: sessionRunning
+        ) {
+            completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
+            return
+        }
+
+        var orientationUsedForCapture = self.getPhysicalOrientation()
         if let connection = photoOutput.connection(with: .video) {
-            let captureOrientation = self.getPhysicalOrientation()
-            self.lastCaptureOrientation = captureOrientation
+            let previewOrientation = self.getPreviewLayerVideoOrientation() ?? self.getVideoOrientation()
+            let captureOrientation = CaptureOrientationResolver.resolveOrientation(
+                mode: captureOrientationMode,
+                previewOrientation: previewOrientation,
+                deviceOrientation: self.getPhysicalOrientation()
+            )
+            orientationUsedForCapture = captureOrientation
+            if CaptureOrientationResolver.usesDeviceOrientation(mode: captureOrientationMode) {
+                self.lastCaptureOrientation = captureOrientation
+            }
             self.setVideoOrientation(captureOrientation, on: connection)
         }
         // For fill + cover the preview shows a centered crop of the frame. Snapshot its
         // shape now so the photo can be cropped to the same visible area.
-        let visibleFillRatio = self.visibleFillCaptureAspectRatio()
+        let visibleFillRatio = self.visibleFillCaptureAspectRatio(captureOrientation: orientationUsedForCapture)
         let settings = AVCapturePhotoSettings()
         // Configure photo capture settings optimized for speed
         let shouldUseHighRes = CaptureResolutionSupport.shouldEnableHighResolutionPhoto(
@@ -1563,32 +1652,31 @@ extension CameraController {
             }
         }
 
-        self.isCapturingPhoto = true
+        let claimSubmission: () -> Bool = {
+            CaptureSubmissionGate.tryClaimPhotoCapture(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: self.captureSession?.isRunning ?? false,
+                isCapturingPhoto: &self.captureLifecycle.isCapturingPhoto
+            )
+        }
+        let claimed = Thread.isMainThread ? claimSubmission() : DispatchQueue.main.sync(execute: claimSubmission)
+        guard claimed else {
+            completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
+            return
+        }
 
         self.photoCaptureCompletionBlock = { [weak self] (image, photoData, metadata, error) in
             guard let self = self else { return }
             if let error = error {
                 completion(nil, nil, nil, error)
-                // End capture lifecycle
-                self.isCapturingPhoto = false
-                if self.stopRequestedAfterCapture {
-                    DispatchQueue.main.async { self.cleanup(); self.stopRequestedAfterCapture = false }
-                }
+                self.finishPhotoCaptureLifecycle()
                 return
             }
 
             guard let image = image else {
                 completion(nil, nil, nil, NSError(domain: "Camera", code: 0, userInfo: [NSLocalizedDescriptionKey: "Failed to capture image"]))
-                // End capture lifecycle
-                self.isCapturingPhoto = false
-                if self.stopRequestedAfterCapture {
-                    DispatchQueue.main.async { self.cleanup(); self.stopRequestedAfterCapture = false }
-                }
+                self.finishPhotoCaptureLifecycle()
                 return
-            }
-
-            if let location = gpsLocation {
-                self.addGPSMetadata(to: image, location: location)
             }
 
             var finalImage = image
@@ -1598,7 +1686,12 @@ extension CameraController {
                 // When max dimensions are specified, we used high-res capture
                 // First crop to aspect ratio if needed, then resize to max dimensions
                 if let aspectRatio = self.requestedAspectRatio {
-                    finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
+                    finalImage = self.cropCapturedImage(
+                        image,
+                        aspectRatio: aspectRatio,
+                        visibleFillRatio: visibleFillRatio,
+                        captureOrientation: orientationUsedForCapture
+                    )
                     print("[CameraPreview] Cropped high-res image to aspect ratio \(aspectRatio)")
                 }
                 // Then resize to fit within maximum dimensions while maintaining aspect ratio
@@ -1607,7 +1700,12 @@ extension CameraController {
             } else if let aspectRatio = self.requestedAspectRatio {
                 // No max dimensions specified, but aspect ratio is specified
                 // Always apply aspect ratio cropping to ensure correct orientation
-                finalImage = self.cropCapturedImage(image, aspectRatio: aspectRatio, visibleFillRatio: visibleFillRatio)
+                finalImage = self.cropCapturedImage(
+                    image,
+                    aspectRatio: aspectRatio,
+                    visibleFillRatio: visibleFillRatio,
+                    captureOrientation: orientationUsedForCapture
+                )
                 print("[CameraPreview] Applied aspect ratio cropping for \(aspectRatio): \(finalImage.size.width)x\(finalImage.size.height)")
             }
 
@@ -1629,12 +1727,7 @@ extension CameraController {
             }
 
             completion(finalImage, photoData, metadata, nil)
-
-            // End capture lifecycle
-            self.isCapturingPhoto = false
-            if self.stopRequestedAfterCapture {
-                DispatchQueue.main.async { self.cleanup(); self.stopRequestedAfterCapture = false }
-            }
+            self.finishPhotoCaptureLifecycle()
         }
 
         photoOutput.capturePhoto(with: settings, delegate: self)
@@ -1853,35 +1946,6 @@ extension CameraController {
         return newJPEG
     }
 
-    func addGPSMetadata(to image: UIImage, location: CLLocation) {
-        guard let jpegData = image.jpegData(compressionQuality: 1.0),
-              let source = CGImageSourceCreateWithData(jpegData as CFData, nil),
-              let uti = CGImageSourceGetType(source) else { return }
-
-        var metadata = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] ?? [:]
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-        let gpsDict: [String: Any] = [
-            kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-            kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-            kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-            kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-            kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-            kCGImagePropertyGPSAltitude as String: location.altitude,
-            kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-        ]
-
-        metadata[kCGImagePropertyGPSDictionary as String] = gpsDict
-
-        let destData = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(destData, uti, 1, nil) else { return }
-        CGImageDestinationAddImageFromSource(destination, source, 0, metadata as CFDictionary)
-        CGImageDestinationFinalize(destination)
-    }
-
     func resizeImage(image: UIImage, to size: CGSize) -> UIImage? {
         // Create a renderer with scale 1.0 to ensure we get exact pixel dimensions
         let format = UIGraphicsImageRendererFormat()
@@ -1926,7 +1990,7 @@ extension CameraController {
 
     /// Ratio of the visible preview area for `fill` + `cover`, in capture orientation.
     /// Returns `nil` for numeric ratios and for `contain`, where the full frame is visible.
-    func visibleFillCaptureAspectRatio() -> CGFloat? {
+    func visibleFillCaptureAspectRatio(captureOrientation: AVCaptureVideoOrientation? = nil) -> CGFloat? {
         guard let aspectRatio = self.requestedAspectRatio,
               AspectRatioLayout.isFillMode(aspectRatio),
               self.requestedAspectMode == "cover",
@@ -1934,7 +1998,7 @@ extension CameraController {
             return nil
         }
 
-        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
+        let orientation = captureOrientation ?? self.lastCaptureOrientation ?? self.getPhysicalOrientation()
         let captureIsPortrait = orientation == .portrait || orientation == .portraitUpsideDown
         let screenBounds = UIScreen.main.bounds
         return AspectRatioLayout.visibleFillCaptureAspectRatio(
@@ -1945,7 +2009,12 @@ extension CameraController {
     }
 
     /// Crops a captured photo so it matches what the preview shows.
-    func cropCapturedImage(_ image: UIImage, aspectRatio: String, visibleFillRatio: CGFloat?) -> UIImage {
+    func cropCapturedImage(
+        _ image: UIImage,
+        aspectRatio: String,
+        visibleFillRatio: CGFloat?,
+        captureOrientation: AVCaptureVideoOrientation? = nil
+    ) -> UIImage {
         if AspectRatioLayout.isFillMode(aspectRatio) {
             guard let ratio = visibleFillRatio else {
                 // fill + contain shows the whole frame, so keep the full photo.
@@ -1953,7 +2022,11 @@ extension CameraController {
             }
             return cropImage(image, toAspectRatio: ratio) ?? image
         }
-        return cropImageToAspectRatio(image: image, aspectRatio: aspectRatio) ?? image
+        return cropImageToAspectRatio(
+            image: image,
+            aspectRatio: aspectRatio,
+            captureOrientation: captureOrientation
+        ) ?? image
     }
 
     /// Center-crops `image` (after normalizing its orientation) to a width / height ratio.
@@ -1973,7 +2046,11 @@ extension CameraController {
         return UIImage(cgImage: croppedCGImage, scale: normalizedImage.scale, orientation: .up)
     }
 
-    func cropImageToAspectRatio(image: UIImage, aspectRatio: String) -> UIImage? {
+    func cropImageToAspectRatio(
+        image: UIImage,
+        aspectRatio: String,
+        captureOrientation: AVCaptureVideoOrientation? = nil
+    ) -> UIImage? {
         let components = aspectRatio.split(separator: ":").compactMap {Float(String($0))}
         guard components.count == 2 else {
             print("[CameraPreview] cropImageToAspectRatio - Failed to parse aspect ratio: \(aspectRatio)")
@@ -1981,7 +2058,7 @@ extension CameraController {
         }
 
         // Use physical orientation for capture works with portrait lock
-        let orientation = self.lastCaptureOrientation ?? self.getPhysicalOrientation()
+        let orientation = captureOrientation ?? self.lastCaptureOrientation ?? self.getPhysicalOrientation()
         let isPortrait = (orientation == .portrait || orientation == .portraitUpsideDown)
 
         let ratioWidth: CGFloat
@@ -2097,13 +2174,63 @@ extension CameraController {
     }
 
     func captureSample(completion: @escaping (UIImage?, Error?) -> Void) {
-        guard let captureSession = captureSession,
-              captureSession.isRunning else {
-            completion(nil, CameraControllerError.captureSessionIsMissing)
-            return
+        let wrappedCompletion: (UIImage?, Error?) -> Void = { [weak self] image, error in
+            guard let self = self else { return }
+            let claimDelivery: () -> Bool = {
+                guard CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &self.captureLifecycle) else {
+                    return false
+                }
+                self.sampleBufferCaptureCompletionBlock = nil
+                return true
+            }
+            let claimed = Thread.isMainThread
+                ? claimDelivery()
+                : DispatchQueue.main.sync(execute: claimDelivery)
+            guard claimed else { return }
+            CapturePhotoProcessingQueue.async {
+                completion(image, error)
+            }
         }
 
-        self.sampleBufferCaptureCompletionBlock = completion
+        let claimAndRegister: () -> Bool = { [weak self] in
+            guard let self = self else { return false }
+            let sessionRunning = self.captureSession?.isRunning ?? false
+            if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: sessionRunning
+            ) {
+                return false
+            }
+            self.captureLifecycle.isAwaitingSampleCapture = true
+            self.sampleBufferCaptureCompletionBlock = wrappedCompletion
+            return true
+        }
+
+        let registered = Thread.isMainThread ? claimAndRegister() : DispatchQueue.main.sync(execute: claimAndRegister)
+        if !registered {
+            completion(nil, CameraControllerError.captureSessionIsMissing)
+        }
+    }
+
+    func cancelPendingSampleCapture() {
+        let cancel = { [weak self] in
+            guard let self = self else { return }
+            CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(
+                isAwaiting: self.captureLifecycle.isAwaitingSampleCapture
+            ) {
+                self.deliverPendingSampleCapture(image: nil, error: CameraControllerError.captureSessionIsMissing)
+            }
+        }
+        if Thread.isMainThread {
+            cancel()
+        } else {
+            DispatchQueue.main.sync(execute: cancel)
+        }
+    }
+
+    private func deliverPendingSampleCapture(image: UIImage?, error: Error?) {
+        guard let handler = sampleBufferCaptureCompletionBlock else { return }
+        handler(image, error)
     }
 
     func startBarcodeScanner(formats: [String], detectionIntervalMs: Int, callback: @escaping ([[String: Any]]) -> Void) throws {
@@ -2940,11 +3067,15 @@ extension CameraController {
     }
 
     func cleanup() {
+        self.captureSessionTeardownStarted = true
+        self.cancelPendingSampleCapture()
         self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
         self.configuredCaptureResolutionWidth = nil
         self.configuredCaptureResolutionHeight = nil
         configuredVideoFrameRate = nil
+        self.previewVideoBitrate = nil
+        self.videoBitrate = nil
         stopBarcodeScanner()
         self.unregisterCaptureSessionObservers()
         self.onCameraInterrupted = nil
@@ -3409,6 +3540,7 @@ extension CameraController {
             device.activeVideoMinFrameDuration = frameDuration
             device.activeVideoMaxFrameDuration = frameDuration
             device.unlockForConfiguration()
+            self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
             self.configuredVideoFrameRate = frameRate
         } catch {
             throw CameraControllerError.invalidOperation
@@ -3495,7 +3627,14 @@ extension CameraController {
         if let connection = fileVideoOutput.connection(with: .video),
            let codecType = avVideoCodecType(for: self.videoCodec),
            fileVideoOutput.availableVideoCodecTypes.contains(codecType) {
-            fileVideoOutput.setOutputSettings([AVVideoCodecKey: codecType], for: connection)
+            let supportedKeys = fileVideoOutput.supportedOutputSettingsKeys(for: connection)
+            let outputSettings = VideoRecordingOptions.movieFileOutputSettings(
+                codecType: codecType,
+                videoBitrate: supportedKeys.contains(AVVideoCompressionPropertiesKey)
+                    ? self.videoBitrate
+                    : nil
+            )
+            fileVideoOutput.setOutputSettings(outputSettings, for: connection)
         }
 
         self.configureCaptureSession {
@@ -3711,10 +3850,15 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
             }
         }
 
-        guard let completion = sampleBufferCaptureCompletionBlock else { return }
+        guard sampleBufferCaptureCompletionBlock != nil else { return }
+
+        if captureSessionTeardownStarted {
+            deliverPendingSampleCapture(image: nil, error: CameraControllerError.captureSessionIsMissing)
+            return
+        }
 
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-            completion(nil, CameraControllerError.unknown)
+            deliverPendingSampleCapture(image: nil, error: CameraControllerError.unknown)
             return
         }
 
@@ -3740,14 +3884,12 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         )
 
         guard let cgImage = context?.makeImage() else {
-            completion(nil, CameraControllerError.unknown)
+            deliverPendingSampleCapture(image: nil, error: CameraControllerError.unknown)
             return
         }
 
         let image = UIImage(cgImage: cgImage)
-        completion(image.fixedOrientation(), nil)
-
-        sampleBufferCaptureCompletionBlock = nil
+        deliverPendingSampleCapture(image: image.fixedOrientation(), error: nil)
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

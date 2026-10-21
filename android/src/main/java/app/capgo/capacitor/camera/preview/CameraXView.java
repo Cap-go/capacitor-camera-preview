@@ -1170,6 +1170,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     if ("hvc1".equalsIgnoreCase(videoCodec)) {
                         recorderBuilder.setVideoCapabilitiesSource(Recorder.VIDEO_CAPABILITIES_SOURCE_CODEC_CAPABILITIES);
                     }
+                    Integer videoBitrate = sessionConfig.getVideoBitrate();
+                    if (videoBitrate != null && videoBitrate > 0) {
+                        recorderBuilder.setTargetVideoEncodingBitRate(videoBitrate);
+                    }
                     Recorder recorder = recorderBuilder.build();
                     VideoCapture.Builder<Recorder> videoCaptureBuilder = new VideoCapture.Builder<>(recorder);
                     videoCaptureBuilder = applyTargetFpsToVideoCaptureBuilder(videoCaptureBuilder);
@@ -2149,6 +2153,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
         target.setBarcodeScannerEnabled(source.isBarcodeScannerEnabled());
         target.copyCaptureResolutionFrom(source);
+        target.setVideoCodec(source.getVideoCodec());
+        target.setVideoBitrate(source.getVideoBitrate());
     }
 
     private void requestEnumeratedDeviceCacheRefresh() {
@@ -2251,7 +2257,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         Location location,
         final boolean embedTimestamp,
         final boolean embedLocation,
-        final boolean mirrorFrontCamera
+        final boolean mirrorFrontCamera,
+        String orientationMode
     ) {
         if (imageCapture == null) {
             if (listener != null) {
@@ -2266,11 +2273,23 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
 
-        // Set rotation from accelerometer for device orientation regardless of lock
-        int rotation = getRotationFromAccelerometer();
+        int displayRotation = getDisplayRotationFallback();
+        int deviceRotation = getRotationFromAccelerometer();
+        int rotation = CaptureOrientationResolver.resolveRotation(orientationMode, displayRotation, deviceRotation);
         lastCaptureRotation = rotation;
         imageCapture.setTargetRotation(rotation);
-        Log.d(TAG, "capturePhoto: Set target rotation to " + rotation + " from accelerometer");
+        Log.d(
+            TAG,
+            "capturePhoto: Set target rotation to " +
+                rotation +
+                " (mode=" +
+                orientationMode +
+                ", display=" +
+                displayRotation +
+                ", device=" +
+                deviceRotation +
+                ")"
+        );
 
         Log.d(
             TAG,
@@ -5576,6 +5595,21 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
         sessionConfig.setVideoCodec(normalized);
+        if (sessionConfig.isVideoModeEnabled() && isRunning) {
+            mainExecutor.execute(this::bindCameraUseCases);
+        }
+    }
+
+    public void setVideoBitrateSetting(Integer videoBitrate) {
+        if (sessionConfig == null) {
+            throw new IllegalStateException("Camera session is not running");
+        }
+        Integer normalized = videoBitrate != null && videoBitrate > 0 ? videoBitrate : null;
+        Integer current = sessionConfig.getVideoBitrate();
+        if ((current == null && normalized == null) || (current != null && current.equals(normalized))) {
+            return;
+        }
+        sessionConfig.setVideoBitrate(normalized);
         if (sessionConfig.isVideoModeEnabled() && isRunning) {
             mainExecutor.execute(this::bindCameraUseCases);
         }
