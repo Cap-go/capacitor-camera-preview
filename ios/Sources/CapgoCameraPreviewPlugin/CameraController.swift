@@ -542,7 +542,9 @@ class CameraController: NSObject, CXCallObserverDelegate {
     func finishPhotoCaptureLifecycle() {
         let work = { [weak self] in
             guard let self = self else { return }
-            CaptureLifecycleCoordination.finishCapture(state: &self.captureLifecycle, cleanup: { self.cleanup() })
+            if CaptureLifecycleCoordination.finishCapture(state: &self.captureLifecycle) {
+                self.cleanup()
+            }
         }
         if Thread.isMainThread {
             work()

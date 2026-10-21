@@ -69,13 +69,15 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         state.isCapturingPhoto = true
         var cleanupCount = 0
 
-        CaptureLifecycleCoordination.handleStop(state: &state, force: false, cleanup: { cleanupCount += 1 })
+        XCTAssertFalse(CaptureLifecycleCoordination.handleStop(state: &state, force: false))
 
         XCTAssertTrue(state.stopRequestedAfterCapture)
         XCTAssertTrue(state.isCapturingPhoto)
         XCTAssertEqual(cleanupCount, 0)
 
-        CaptureLifecycleCoordination.finishCapture(state: &state, cleanup: { cleanupCount += 1 })
+        if CaptureLifecycleCoordination.finishCapture(state: &state) {
+            cleanupCount += 1
+        }
 
         XCTAssertFalse(state.isCapturingPhoto)
         XCTAssertFalse(state.stopRequestedAfterCapture)
@@ -87,7 +89,9 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         state.isCapturingPhoto = true
         var cleanupCount = 0
 
-        CaptureLifecycleCoordination.handleStop(state: &state, force: true, cleanup: { cleanupCount += 1 })
+        if CaptureLifecycleCoordination.handleStop(state: &state, force: true) {
+            cleanupCount += 1
+        }
 
         XCTAssertFalse(state.stopRequestedAfterCapture)
         XCTAssertEqual(cleanupCount, 1)
@@ -98,7 +102,9 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         state.isCapturingPhoto = true
         var cleanupCount = 0
 
-        CaptureLifecycleCoordination.finishCapture(state: &state, cleanup: { cleanupCount += 1 })
+        if CaptureLifecycleCoordination.finishCapture(state: &state) {
+            cleanupCount += 1
+        }
 
         XCTAssertFalse(state.isCapturingPhoto)
         XCTAssertFalse(state.stopRequestedAfterCapture)
@@ -110,7 +116,9 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         state.isCapturingPhoto = false
         var cleanupCount = 0
 
-        CaptureLifecycleCoordination.handleStop(state: &state, force: false, cleanup: { cleanupCount += 1 })
+        if CaptureLifecycleCoordination.handleStop(state: &state, force: false) {
+            cleanupCount += 1
+        }
 
         XCTAssertFalse(state.stopRequestedAfterCapture)
         XCTAssertEqual(cleanupCount, 1)
@@ -123,13 +131,44 @@ final class CaptureLifecycleCoordinationTests: XCTestCase {
         let finishExpectation = expectation(description: "finish on main")
 
         DispatchQueue.main.async {
-            CaptureLifecycleCoordination.handleStop(state: &state, force: false, cleanup: { cleanupCount += 1 })
-            CaptureLifecycleCoordination.finishCapture(state: &state, cleanup: { cleanupCount += 1 })
+            if CaptureLifecycleCoordination.handleStop(state: &state, force: false) {
+                cleanupCount += 1
+            }
+            if CaptureLifecycleCoordination.finishCapture(state: &state) {
+                cleanupCount += 1
+            }
             finishExpectation.fulfill()
         }
 
         waitForExpectations(timeout: 5)
         XCTAssertEqual(cleanupCount, 1)
         XCTAssertFalse(state.stopRequestedAfterCapture)
+    }
+
+    /// Mirrors `stop()` -> `cleanup()` -> `cancelPendingSampleCapture()` reading `captureLifecycle` after coordination returns.
+    func testStopCoordinationReleasesStateBeforeCleanupReadsLifecycle() {
+        final class LifecycleHost {
+            var captureLifecycle = CaptureLifecycleState()
+            var cleanupInvocationCount = 0
+
+            func runStop(force: Bool) {
+                if CaptureLifecycleCoordination.handleStop(state: &captureLifecycle, force: force) {
+                    performCleanup()
+                }
+            }
+
+            private func performCleanup() {
+                cleanupInvocationCount += 1
+                CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(
+                    isAwaiting: captureLifecycle.isAwaitingSampleCapture
+                ) {}
+            }
+        }
+
+        let host = LifecycleHost()
+        host.captureLifecycle.isAwaitingSampleCapture = true
+        host.runStop(force: false)
+        XCTAssertEqual(host.cleanupInvocationCount, 1)
+        XCTAssertTrue(host.captureLifecycle.isAwaitingSampleCapture)
     }
 }

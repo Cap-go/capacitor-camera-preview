@@ -51,30 +51,29 @@ enum CaptureLifecycleCoordination {
         return true
     }
     /// Handles `stop()` when a capture may be in flight. Call on the main thread only.
+    /// Returns whether the caller should run teardown cleanup after this call returns (avoids `inout` overlap).
+    @discardableResult
     static func handleStop(
         state: inout CaptureLifecycleState,
-        force: Bool,
-        cleanup: () -> Void
-    ) {
+        force: Bool
+    ) -> Bool {
         if state.isCapturingPhoto && !force {
             state.stopRequestedAfterCapture = true
-            return
+            return false
         }
         if force {
             state.stopRequestedAfterCapture = false
         }
-        cleanup()
+        return true
     }
 
     /// Ends the capture lifecycle after processing completes. Call on the main thread only.
-    static func finishCapture(
-        state: inout CaptureLifecycleState,
-        cleanup: () -> Void
-    ) {
+    /// Returns whether the caller should run teardown cleanup after this call returns (avoids `inout` overlap).
+    @discardableResult
+    static func finishCapture(state: inout CaptureLifecycleState) -> Bool {
         state.isCapturingPhoto = false
-        if state.stopRequestedAfterCapture {
-            cleanup()
-            state.stopRequestedAfterCapture = false
-        }
+        guard state.stopRequestedAfterCapture else { return false }
+        state.stopRequestedAfterCapture = false
+        return true
     }
 }
