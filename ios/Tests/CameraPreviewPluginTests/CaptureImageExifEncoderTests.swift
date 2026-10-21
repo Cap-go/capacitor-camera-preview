@@ -215,12 +215,15 @@ final class CaptureImageExifEncoderTests: XCTestCase {
         }
 
         XCTAssertEqual(gps[kCGImagePropertyGPSDateStamp as String] as? String, ExifGpsMetadata.gpsDateStamp(from: location.timestamp))
-        let expectedTimeStamp = ExifGpsMetadata.gpsTimeStamp(from: location.timestamp)
+        let writtenTimeStamp = ExifGpsMetadata.gpsTimeStamp(from: location.timestamp)
+        XCTAssertTrue(writtenTimeStamp.hasSuffix(".06"), "Round-trip test must use nonzero centiseconds in source metadata")
         guard let decodedTimeStamp = Self.decodeGpsTimeStamp(gps[kCGImagePropertyGPSTimeStamp as String]) else {
             XCTFail("Unsupported or malformed GPSTimeStamp: \(String(describing: gps[kCGImagePropertyGPSTimeStamp as String]))")
             return
         }
-        XCTAssertEqual(decodedTimeStamp, expectedTimeStamp)
+        // ImageIO JPEG encode/decode keeps GPSTimeStamp at whole-second precision only.
+        let expectedAfterRoundTrip = Self.gpsTimeStampAfterImageIORoundTrip(from: location.timestamp)
+        XCTAssertEqual(decodedTimeStamp, expectedAfterRoundTrip)
         XCTAssertEqual(gps[kCGImagePropertyGPSImgDirection as String] as? Double, 88.0)
         XCTAssertEqual(gps[kCGImagePropertyGPSImgDirectionRef as String] as? String, "T")
     }
@@ -243,6 +246,11 @@ final class CaptureImageExifEncoderTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertGreaterThanOrEqual(encodeCallCount, 1)
+    }
+
+    private static func gpsTimeStampAfterImageIORoundTrip(from date: Date) -> String {
+        let wholeSeconds = floor(date.timeIntervalSince1970)
+        return ExifGpsMetadata.gpsTimeStamp(from: Date(timeIntervalSince1970: wholeSeconds))
     }
 
     private static func decodeGpsTimeStamp(_ value: Any?) -> String? {
