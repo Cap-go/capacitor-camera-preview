@@ -38,26 +38,10 @@ enum CaptureImageExifEncoder {
         finalProperties[kCGImagePropertyOrientation as String] = 1
 
         if let location {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
-            formatter.timeZone = TimeZone(abbreviation: "UTC")
-
-            var gpsDict: [String: Any] = [
-                kCGImagePropertyGPSLatitude as String: abs(location.coordinate.latitude),
-                kCGImagePropertyGPSLatitudeRef as String: location.coordinate.latitude >= 0 ? "N" : "S",
-                kCGImagePropertyGPSLongitude as String: abs(location.coordinate.longitude),
-                kCGImagePropertyGPSLongitudeRef as String: location.coordinate.longitude >= 0 ? "E" : "W",
-                kCGImagePropertyGPSTimeStamp as String: formatter.string(from: location.timestamp),
-                kCGImagePropertyGPSAltitude as String: location.altitude,
-                kCGImagePropertyGPSAltitudeRef as String: location.altitude >= 0 ? 0 : 1
-            ]
-
-            if let direction = heading.flatMap(CaptureExifGps.imageDirection) {
-                gpsDict[kCGImagePropertyGPSImgDirection as String] = direction.degrees
-                gpsDict[kCGImagePropertyGPSImgDirectionRef as String] = direction.reference
-            }
-
-            finalProperties[kCGImagePropertyGPSDictionary as String] = gpsDict
+            finalProperties[kCGImagePropertyGPSDictionary as String] = ExifGpsMetadata.gpsDictionary(
+                for: location,
+                heading: heading
+            )
         }
 
         var tiffDict = finalProperties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] ?? [:]

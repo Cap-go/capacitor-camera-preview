@@ -4,6 +4,32 @@ import UIKit
 import XCTest
 @testable import CapgoCameraPreview
 
+private final class CaptureExifGpsEncoderTestHeading: CLHeading {
+    private let storedTrue: CLLocationDirection
+    private let storedMagnetic: CLLocationDirection
+    private let storedAccuracy: CLLocationAccuracy
+
+    init(
+        trueHeading: CLLocationDirection,
+        magneticHeading: CLLocationDirection,
+        headingAccuracy: CLLocationAccuracy
+    ) {
+        self.storedTrue = trueHeading
+        self.storedMagnetic = magneticHeading
+        self.storedAccuracy = headingAccuracy
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var trueHeading: CLLocationDirection { storedTrue }
+    override var magneticHeading: CLLocationDirection { storedMagnetic }
+    override var headingAccuracy: CLLocationAccuracy { storedAccuracy }
+}
+
 final class CaptureImageExifEncoderTests: XCTestCase {
     func testSkipsJpegEncodeWhenOriginalPhotoDataProvided() {
         let image = makeTestImage()
@@ -158,6 +184,50 @@ final class CaptureImageExifEncoderTests: XCTestCase {
         XCTAssertEqual(encodeCallCount, 1)
     }
 
+    func testEmbedsGpsDateTimeAndImageDirectionWhenLocationAndHeadingProvided() {
+        let image = makeTestImage()
+        guard let originalPhotoData = image.jpegData(compressionQuality: 0.9) else {
+            XCTFail("Failed to build fixture JPEG")
+            return
+        }
+
+        let location = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 38.72, longitude: -9.14),
+            altitude: 120.5,
+            horizontalAccuracy: 5,
+            verticalAccuracy: 5,
+            timestamp: Date(timeIntervalSince1970: 1_760_867_494.06)
+        )
+        let heading = CaptureExifGpsEncoderTestHeading(trueHeading: 88.0, magneticHeading: 90.0, headingAccuracy: 4)
+
+        guard let result = CaptureImageExifEncoder.createImageData(
+            from: image,
+            quality: 85,
+            location: location,
+            heading: heading,
+            originalPhotoData: originalPhotoData
+        ),
+        let source = CGImageSourceCreateWithData(result as CFData, nil),
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+        let gps = properties[kCGImagePropertyGPSDictionary as String] as? [String: Any] else {
+            XCTFail("Expected JPEG output with GPS metadata")
+            return
+        }
+
+        XCTAssertEqual(gps[kCGImagePropertyGPSDateStamp as String] as? String, ExifGpsMetadata.gpsDateStamp(from: location.timestamp))
+        let writtenTimeStamp = ExifGpsMetadata.gpsTimeStamp(from: location.timestamp)
+        XCTAssertTrue(writtenTimeStamp.hasSuffix(".06"), "Round-trip test must use nonzero centiseconds in source metadata")
+        guard let decodedTimeStamp = Self.decodeGpsTimeStamp(gps[kCGImagePropertyGPSTimeStamp as String]) else {
+            XCTFail("Unsupported or malformed GPSTimeStamp: \(String(describing: gps[kCGImagePropertyGPSTimeStamp as String]))")
+            return
+        }
+        // ImageIO JPEG encode/decode keeps GPSTimeStamp at whole-second precision only.
+        let expectedAfterRoundTrip = Self.gpsTimeStampAfterImageIORoundTrip(from: location.timestamp)
+        XCTAssertEqual(decodedTimeStamp, expectedAfterRoundTrip)
+        XCTAssertEqual(gps[kCGImagePropertyGPSImgDirection as String] as? Double, 88.0)
+        XCTAssertEqual(gps[kCGImagePropertyGPSImgDirectionRef as String] as? String, "T")
+    }
+
     func testEncodesWhenOriginalPhotoDataMissing() {
         let image = makeTestImage()
 
@@ -176,6 +246,57 @@ final class CaptureImageExifEncoderTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertGreaterThanOrEqual(encodeCallCount, 1)
+    }
+
+    private static func gpsTimeStampAfterImageIORoundTrip(from date: Date) -> String {
+        let wholeSeconds = floor(date.timeIntervalSince1970)
+        return ExifGpsMetadata.gpsTimeStamp(from: Date(timeIntervalSince1970: wholeSeconds))
+    }
+
+    private static func decodeGpsTimeStamp(_ value: Any?) -> String? {
+        guard let value = value else { return nil }
+        if let string = value as? String {
+            return normalizeExifGpsTimeStampString(string)
+        }
+        guard let components = value as? [Any], components.count == 3 else { return nil }
+        guard let hours = rationalValue(components[0]),
+              let minutes = rationalValue(components[1]),
+              let seconds = rationalValue(components[2]) else {
+            return nil
+        }
+        let hour = Int(hours.rounded())
+        let minute = Int(minutes.rounded())
+        let secondWhole = Int(seconds)
+        let centiseconds = Int(((seconds - Double(secondWhole)) * 100).rounded())
+        return String(format: "%02d:%02d:%02d.%02d", hour, minute, secondWhole, centiseconds)
+    }
+
+    private static func normalizeExifGpsTimeStampString(_ value: String) -> String {
+        if let dotIndex = value.firstIndex(of: ".") {
+            let base = String(value[..<dotIndex])
+            var fraction = String(value[value.index(after: dotIndex)...])
+            if fraction.count < 2 {
+                fraction += String(repeating: "0", count: 2 - fraction.count)
+            } else if fraction.count > 2 {
+                fraction = String(fraction.prefix(2))
+            }
+            return "\(base).\(fraction)"
+        }
+        return "\(value).00"
+    }
+
+    private static func rationalValue(_ component: Any) -> Double? {
+        if let number = component as? NSNumber {
+            return number.doubleValue
+        }
+        if let rational = component as? [String: Any],
+           let numerator = rational["numerator"] as? Int,
+           let denominator = rational["denominator"] as? Int {
+            if numerator == 0 && denominator == 0 { return nil }
+            guard denominator != 0 else { return nil }
+            return Double(numerator) / Double(denominator)
+        }
+        return nil
     }
 
     private func makeTestImage() -> UIImage {
