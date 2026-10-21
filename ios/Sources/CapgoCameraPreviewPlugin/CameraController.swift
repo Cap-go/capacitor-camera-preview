@@ -500,6 +500,7 @@ class CameraController: NSObject, CXCallObserverDelegate {
 
     // Capture/stop coordination (main-thread only; see CaptureLifecycleCoordination)
     var captureLifecycle = CaptureLifecycleState()
+    private(set) var captureSessionTeardownStarted = false
 
     var isCapturingPhoto: Bool {
         get { self.captureLifecycle.isCapturingPhoto }
@@ -721,6 +722,7 @@ extension CameraController {
         // Kept for backward compatibility
         guard self.captureSession == nil else { return }
 
+        self.captureSessionTeardownStarted = false
         self.captureSession = AVCaptureSession()
     }
 
@@ -880,6 +882,7 @@ extension CameraController {
             do {
                 // Create session if needed
                 if self.captureSession == nil {
+                    self.captureSessionTeardownStarted = false
                     self.captureSession = AVCaptureSession()
                 }
 
@@ -1553,6 +1556,15 @@ extension CameraController {
             return
         }
 
+        let sessionRunning = self.captureSession?.isRunning ?? false
+        if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
+            sessionTeardownStarted: self.captureSessionTeardownStarted,
+            isCaptureSessionRunning: sessionRunning
+        ) {
+            completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
+            return
+        }
+
         var orientationUsedForCapture = self.getPhysicalOrientation()
         if let connection = photoOutput.connection(with: .video) {
             let previewOrientation = self.getPreviewLayerVideoOrientation() ?? self.getVideoOrientation()
@@ -1613,12 +1625,17 @@ extension CameraController {
             }
         }
 
-        if Thread.isMainThread {
-            self.isCapturingPhoto = true
-        } else {
-            DispatchQueue.main.sync {
-                self.isCapturingPhoto = true
-            }
+        let claimSubmission: () -> Bool = {
+            CaptureSubmissionGate.tryClaimPhotoCapture(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: self.captureSession?.isRunning ?? false,
+                isCapturingPhoto: &self.captureLifecycle.isCapturingPhoto
+            )
+        }
+        let claimed = Thread.isMainThread ? claimSubmission() : DispatchQueue.main.sync(execute: claimSubmission)
+        guard claimed else {
+            completion(nil, nil, nil, CameraControllerError.captureSessionIsMissing)
+            return
         }
 
         self.photoCaptureCompletionBlock = { [weak self] (image, photoData, metadata, error) in
@@ -2130,13 +2147,63 @@ extension CameraController {
     }
 
     func captureSample(completion: @escaping (UIImage?, Error?) -> Void) {
-        guard let captureSession = captureSession,
-              captureSession.isRunning else {
-            completion(nil, CameraControllerError.captureSessionIsMissing)
-            return
+        let wrappedCompletion: (UIImage?, Error?) -> Void = { [weak self] image, error in
+            guard let self = self else { return }
+            let claimDelivery: () -> Bool = {
+                guard CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &self.captureLifecycle) else {
+                    return false
+                }
+                self.sampleBufferCaptureCompletionBlock = nil
+                return true
+            }
+            let claimed = Thread.isMainThread
+                ? claimDelivery()
+                : DispatchQueue.main.sync(execute: claimDelivery)
+            guard claimed else { return }
+            CapturePhotoProcessingQueue.async {
+                completion(image, error)
+            }
         }
 
-        self.sampleBufferCaptureCompletionBlock = completion
+        let claimAndRegister: () -> Bool = { [weak self] in
+            guard let self = self else { return false }
+            let sessionRunning = self.captureSession?.isRunning ?? false
+            if CaptureSubmissionGate.blocksPhotoCaptureSubmission(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isCaptureSessionRunning: sessionRunning
+            ) {
+                return false
+            }
+            self.captureLifecycle.isAwaitingSampleCapture = true
+            self.sampleBufferCaptureCompletionBlock = wrappedCompletion
+            return true
+        }
+
+        let registered = Thread.isMainThread ? claimAndRegister() : DispatchQueue.main.sync(execute: claimAndRegister)
+        if !registered {
+            completion(nil, CameraControllerError.captureSessionIsMissing)
+        }
+    }
+
+    func cancelPendingSampleCapture() {
+        let cancel = { [weak self] in
+            guard let self = self else { return }
+            CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(
+                isAwaiting: self.captureLifecycle.isAwaitingSampleCapture
+            ) {
+                self.deliverPendingSampleCapture(image: nil, error: CameraControllerError.captureSessionIsMissing)
+            }
+        }
+        if Thread.isMainThread {
+            cancel()
+        } else {
+            DispatchQueue.main.sync(execute: cancel)
+        }
+    }
+
+    private func deliverPendingSampleCapture(image: UIImage?, error: Error?) {
+        guard let handler = sampleBufferCaptureCompletionBlock else { return }
+        handler(image, error)
     }
 
     func startBarcodeScanner(formats: [String], detectionIntervalMs: Int, callback: @escaping ([[String: Any]]) -> Void) throws {
@@ -2973,6 +3040,8 @@ extension CameraController {
     }
 
     func cleanup() {
+        self.captureSessionTeardownStarted = true
+        self.cancelPendingSampleCapture()
         self.invalidateActivePrepare()
         self.cancelPendingFocusExposureRestore()
         self.configuredCaptureResolutionWidth = nil
@@ -3745,10 +3814,15 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
             }
         }
 
-        guard let completion = sampleBufferCaptureCompletionBlock else { return }
+        guard sampleBufferCaptureCompletionBlock != nil else { return }
+
+        if captureSessionTeardownStarted {
+            deliverPendingSampleCapture(image: nil, error: CameraControllerError.captureSessionIsMissing)
+            return
+        }
 
         guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-            completion(nil, CameraControllerError.unknown)
+            deliverPendingSampleCapture(image: nil, error: CameraControllerError.unknown)
             return
         }
 
@@ -3774,14 +3848,12 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         )
 
         guard let cgImage = context?.makeImage() else {
-            completion(nil, CameraControllerError.unknown)
+            deliverPendingSampleCapture(image: nil, error: CameraControllerError.unknown)
             return
         }
 
         let image = UIImage(cgImage: cgImage)
-        completion(image.fixedOrientation(), nil)
-
-        sampleBufferCaptureCompletionBlock = nil
+        deliverPendingSampleCapture(image: image.fixedOrientation(), error: nil)
     }
 
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

@@ -2,6 +2,68 @@ import XCTest
 @testable import CapgoCameraPreview
 
 final class CaptureLifecycleCoordinationTests: XCTestCase {
+    func testCaptureReadinessRequiresInitializedSessionAndRunningCaptureSession() {
+        XCTAssertFalse(CaptureReadiness.canPerformCapture(isInitialized: false, isCaptureSessionRunning: false))
+        XCTAssertFalse(CaptureReadiness.canPerformCapture(isInitialized: false, isCaptureSessionRunning: true))
+        XCTAssertFalse(CaptureReadiness.canPerformCapture(isInitialized: true, isCaptureSessionRunning: false))
+        XCTAssertTrue(CaptureReadiness.canPerformCapture(isInitialized: true, isCaptureSessionRunning: true))
+    }
+
+    func testPhotoCaptureSubmissionBlockedWhenTeardownStartedOrSessionStopped() {
+        XCTAssertTrue(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: true, isCaptureSessionRunning: true))
+        XCTAssertTrue(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: false, isCaptureSessionRunning: false))
+        XCTAssertTrue(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: true, isCaptureSessionRunning: false))
+        XCTAssertFalse(CaptureSubmissionGate.blocksPhotoCaptureSubmission(sessionTeardownStarted: false, isCaptureSessionRunning: true))
+    }
+
+    func testTryClaimPhotoCaptureSetsFlagOnlyWhenSubmissionAllowed() {
+        var isCapturing = false
+        XCTAssertFalse(
+            CaptureSubmissionGate.tryClaimPhotoCapture(
+                sessionTeardownStarted: true,
+                isCaptureSessionRunning: true,
+                isCapturingPhoto: &isCapturing
+            )
+        )
+        XCTAssertFalse(isCapturing)
+
+        XCTAssertTrue(
+            CaptureSubmissionGate.tryClaimPhotoCapture(
+                sessionTeardownStarted: false,
+                isCaptureSessionRunning: true,
+                isCapturingPhoto: &isCapturing
+            )
+        )
+        XCTAssertTrue(isCapturing)
+
+        XCTAssertFalse(
+            CaptureSubmissionGate.tryClaimPhotoCapture(
+                sessionTeardownStarted: false,
+                isCaptureSessionRunning: false,
+                isCapturingPhoto: &isCapturing
+            )
+        )
+        XCTAssertTrue(isCapturing)
+    }
+
+    func testClaimAwaitingSampleCaptureIsOneShot() {
+        var state = CaptureLifecycleState()
+        XCTAssertFalse(CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &state))
+        state.isAwaitingSampleCapture = true
+        XCTAssertTrue(CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &state))
+        XCTAssertFalse(state.isAwaitingSampleCapture)
+        XCTAssertFalse(CaptureLifecycleCoordination.claimAwaitingSampleCapture(state: &state))
+    }
+
+    func testCancelAwaitingSampleCaptureOnlyWhenAwaiting() {
+        var cancelCount = 0
+        CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(isAwaiting: false) { cancelCount += 1 }
+        XCTAssertEqual(cancelCount, 0)
+
+        CaptureLifecycleCoordination.cancelAwaitingSampleCaptureIfNeeded(isAwaiting: true) { cancelCount += 1 }
+        XCTAssertEqual(cancelCount, 1)
+    }
+
     func testDeferredStopRunsCleanupWhenCaptureFinishes() {
         var state = CaptureLifecycleState()
         state.isCapturingPhoto = true
