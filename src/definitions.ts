@@ -421,6 +421,14 @@ export interface CameraPreviewOptions {
    */
   frameRate?: number;
   /**
+   * Target video encoding bitrate in bits per second for recording.
+   * When omitted, the platform encoder chooses its default bitrate.
+   * @platform ios, android, web
+   * @default platform default
+   * @since 8.13.0
+   */
+  videoBitrate?: number;
+  /**
    * Preferred video stabilization mode for recording.
    * @platform ios, android
    * @default "off"
@@ -835,7 +843,7 @@ export interface CameraPreviewPlugin {
   /**
    * Starts recording a video.
    *
-   * Supports `frameRate`, `videoCodec`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, `disableAudio`, `allowHapticsAndSystemSoundsDuringRecording`, and `mirrorFrontCamera` on each call.
+   * Supports `frameRate`, `videoCodec`, `videoBitrate`, `videoStabilizationMode`, `maxDuration`, `maxFileSize`, `disableAudio`, `allowHapticsAndSystemSoundsDuringRecording`, and `mirrorFrontCamera` on each call.
    *
    * @param {CameraPreviewOptions} options - The options for video recording.
    * @returns {Promise<void>} A promise that resolves when video recording starts.

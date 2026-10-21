@@ -220,6 +220,8 @@ class CameraController: NSObject, CXCallObserverDelegate {
     var videoQuality: String = "high"
     private var configuredVideoFrameRate: Int?
     var videoCodec: String = "avc1"
+    var videoBitrate: Int?
+    private var previewVideoBitrate: Int?
     var videoStabilizationMode: String = "off"
     private var cachedSupportedVideoStabilizationModes: [String] = []
     private var isSupportedVideoStabilizationModesCacheValid = false
@@ -279,6 +281,31 @@ class CameraController: NSObject, CXCallObserverDelegate {
 
     func getVideoCodec() -> String {
         return self.videoCodec
+    }
+
+    func setPreviewVideoBitrate(_ bitrate: Int?) {
+        if let bitrate = bitrate, bitrate > 0 {
+            self.previewVideoBitrate = bitrate
+        } else {
+            self.previewVideoBitrate = nil
+        }
+        self.videoBitrate = self.previewVideoBitrate
+    }
+
+    func getPreviewVideoBitrate() -> Int? {
+        return self.previewVideoBitrate
+    }
+
+    func applyRecordingVideoBitrateOverride(_ bitrate: Int?) {
+        if let bitrate = bitrate, bitrate > 0 {
+            self.videoBitrate = bitrate
+        } else {
+            self.videoBitrate = self.previewVideoBitrate
+        }
+    }
+
+    func getVideoBitrate() -> Int? {
+        return self.videoBitrate
     }
 
     func isVideoStabilizationSupported() -> Bool {
@@ -3047,6 +3074,8 @@ extension CameraController {
         self.configuredCaptureResolutionWidth = nil
         self.configuredCaptureResolutionHeight = nil
         configuredVideoFrameRate = nil
+        self.previewVideoBitrate = nil
+        self.videoBitrate = nil
         stopBarcodeScanner()
         self.unregisterCaptureSessionObservers()
         self.onCameraInterrupted = nil
@@ -3598,7 +3627,14 @@ extension CameraController {
         if let connection = fileVideoOutput.connection(with: .video),
            let codecType = avVideoCodecType(for: self.videoCodec),
            fileVideoOutput.availableVideoCodecTypes.contains(codecType) {
-            fileVideoOutput.setOutputSettings([AVVideoCodecKey: codecType], for: connection)
+            let supportedKeys = fileVideoOutput.supportedOutputSettingsKeys(for: connection)
+            let outputSettings = VideoRecordingOptions.movieFileOutputSettings(
+                codecType: codecType,
+                videoBitrate: supportedKeys.contains(AVVideoCompressionPropertiesKey)
+                    ? self.videoBitrate
+                    : nil
+            )
+            fileVideoOutput.setOutputSettings(outputSettings, for: connection)
         }
 
         self.configureCaptureSession {

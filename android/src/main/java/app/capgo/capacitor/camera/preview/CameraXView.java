@@ -1170,6 +1170,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     if ("hvc1".equalsIgnoreCase(videoCodec)) {
                         recorderBuilder.setVideoCapabilitiesSource(Recorder.VIDEO_CAPABILITIES_SOURCE_CODEC_CAPABILITIES);
                     }
+                    Integer videoBitrate = sessionConfig.getVideoBitrate();
+                    if (videoBitrate != null && videoBitrate > 0) {
+                        recorderBuilder.setTargetVideoEncodingBitRate(videoBitrate);
+                    }
                     Recorder recorder = recorderBuilder.build();
                     VideoCapture.Builder<Recorder> videoCaptureBuilder = new VideoCapture.Builder<>(recorder);
                     videoCaptureBuilder = applyTargetFpsToVideoCaptureBuilder(videoCaptureBuilder);
@@ -2149,6 +2153,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         target.setEnablePhysicalDeviceSelection(source.isPhysicalDeviceSelectionEnabled());
         target.setBarcodeScannerEnabled(source.isBarcodeScannerEnabled());
         target.copyCaptureResolutionFrom(source);
+        target.setVideoCodec(source.getVideoCodec());
+        target.setVideoBitrate(source.getVideoBitrate());
     }
 
     private void requestEnumeratedDeviceCacheRefresh() {
@@ -5589,6 +5595,21 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             return;
         }
         sessionConfig.setVideoCodec(normalized);
+        if (sessionConfig.isVideoModeEnabled() && isRunning) {
+            mainExecutor.execute(this::bindCameraUseCases);
+        }
+    }
+
+    public void setVideoBitrateSetting(Integer videoBitrate) {
+        if (sessionConfig == null) {
+            throw new IllegalStateException("Camera session is not running");
+        }
+        Integer normalized = videoBitrate != null && videoBitrate > 0 ? videoBitrate : null;
+        Integer current = sessionConfig.getVideoBitrate();
+        if ((current == null && normalized == null) || (current != null && current.equals(normalized))) {
+            return;
+        }
+        sessionConfig.setVideoBitrate(normalized);
         if (sessionConfig.isVideoModeEnabled() && isRunning) {
             mainExecutor.execute(this::bindCameraUseCases);
         }

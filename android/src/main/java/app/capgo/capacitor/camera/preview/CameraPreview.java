@@ -126,6 +126,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     private CameraSessionConfiguration lastSessionConfig;
+    private Integer startVideoBitrate;
 
     private static final String TAG = "CameraPreview CameraXView";
     private static final int DEFAULT_WEB_VIEW_BACKGROUND = Color.WHITE;
@@ -1654,6 +1655,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
                 config.setCaptureResolution(captureResolutionWidth, captureResolutionHeight);
                 config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
+                String startVideoCodec = call.getString("videoCodec");
+                if (startVideoCodec != null) {
+                    config.setVideoCodec(startVideoCodec);
+                }
+                startVideoBitrate = VideoRecordingOptions.parseVideoBitrate(call.getData());
+                config.setVideoBitrate(startVideoBitrate);
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
                 if (barcodeScannerOptions == null) {
                     clearActiveBarcodeScanner();
@@ -2787,6 +2794,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
     }
 
+    private void applyVideoBitrateFromCall(PluginCall call) {
+        if (cameraXView == null) {
+            return;
+        }
+        cameraXView.setVideoBitrateSetting(VideoRecordingOptions.resolveRecordingVideoBitrate(startVideoBitrate, call.getData()));
+    }
+
     private void applyVideoStabilizationFromCall(PluginCall call) {
         String mode = call.getString("videoStabilizationMode");
         if (mode != null && cameraXView != null) {
@@ -2820,6 +2834,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         try {
             applyVideoCodecFromCall(call);
+            applyVideoBitrateFromCall(call);
             applyVideoStabilizationFromCall(call);
             Integer frameRate = call.getInt("frameRate");
             boolean mirrorFrontCamera = Boolean.TRUE.equals(call.getBoolean("mirrorFrontCamera", false));
