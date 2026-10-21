@@ -1182,11 +1182,12 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
             self.cameraController.cancelPendingSampleCapture()
 
-            CaptureLifecycleCoordination.handleStop(
+            if CaptureLifecycleCoordination.handleStop(
                 state: &self.cameraController.captureLifecycle,
-                force: force,
-                cleanup: { self.cameraController.cleanup() }
-            )
+                force: force
+            ) {
+                self.cameraController.cleanup()
+            }
 
             call.resolve()
         }
