@@ -9,6 +9,7 @@ import CallKit
 class CameraController: NSObject, CXCallObserverDelegate {
     override init() {
         super.init()
+        CaptureSessionMutationExecutor.register(queue: self.captureSessionQueue)
         self.callObserver.setDelegate(self, queue: nil)
     }
 
@@ -16,8 +17,8 @@ class CameraController: NSObject, CXCallObserverDelegate {
         guard call.hasEnded,
               callObserver.calls.allSatisfy({ $0.hasEnded }),
               let session = self.captureSession else { return }
-        self.sessionRecoveryQueue.async { [weak self] in
-            guard let self = self, self.captureSession === session else { return }
+        self.performCaptureSessionMutationAsync { [weak self] in
+            guard let self = self else { return }
             self.restoreAudioInputIfNeeded(for: session)
         }
     }
@@ -195,7 +196,29 @@ class CameraController: NSObject, CXCallObserverDelegate {
 
     private let callObserver = CXCallObserver()
     private weak var observedCaptureSession: AVCaptureSession?
-    private let sessionRecoveryQueue = DispatchQueue(label: "com.capgo.camera.sessionRecovery")
+    private let captureSessionQueue = DispatchQueue(label: "com.capgo.camera.captureSession")
+
+    private func performCaptureSessionMutationSync(_ block: () -> Void) {
+        CaptureSessionMutationExecutor.performSync(on: self.captureSessionQueue, block)
+    }
+
+    private func performCaptureSessionMutationAsync(_ block: @escaping () -> Void) {
+        CaptureSessionMutationExecutor.performAsync(on: self.captureSessionQueue, block)
+    }
+
+    private func performCaptureSessionMutationSyncThrowing(_ block: () throws -> Void) throws {
+        var thrown: Error?
+        self.performCaptureSessionMutationSync {
+            do {
+                try block()
+            } catch {
+                thrown = error
+            }
+        }
+        if let thrown {
+            throw thrown
+        }
+    }
     private var activePrepareToken: UInt = 0
     private var audioInputEnabledByUser = false
     var allowHapticsAndSystemSoundsDuringRecording = false
@@ -247,7 +270,9 @@ class CameraController: NSObject, CXCallObserverDelegate {
             throw CameraControllerError.invalidOperation
         }
         self.videoQuality = quality.lowercased()
-        self.configureSessionPreset(for: self.requestedAspectRatio)
+        self.configureCaptureSession {
+            self.configureSessionPreset(for: self.requestedAspectRatio)
+        }
     }
 
     func getVideoQuality() -> String {
@@ -382,14 +407,15 @@ class CameraController: NSObject, CXCallObserverDelegate {
     }
 
     private func configureCaptureSession(_ block: () -> Void) {
-        guard let captureSession = self.captureSession else {
-            block()
-            return
-        }
+        self.performCaptureSessionMutationSync {
+            guard let captureSession = self.captureSession, !self.captureSessionTeardownStarted else {
+                return
+            }
 
-        captureSession.beginConfiguration()
-        defer { captureSession.commitConfiguration() }
-        block()
+            captureSession.beginConfiguration()
+            defer { captureSession.commitConfiguration() }
+            block()
+        }
     }
 
     private func activeVideoCaptureDevice() -> AVCaptureDevice? {
@@ -909,95 +935,114 @@ extension CameraController {
             }
 
             do {
-                // Create session if needed
-                if self.captureSession == nil {
-                    self.captureSessionTeardownStarted = false
-                    self.captureSession = AVCaptureSession()
+                var prepareError: Error?
+                self.performCaptureSessionMutationSync {
+                    guard self.isPrepareTokenValid(startToken), !self.captureSessionTeardownStarted else {
+                        return
+                    }
+
+                    do {
+                        // Create session if needed
+                        if self.captureSession == nil {
+                            self.captureSessionTeardownStarted = false
+                            self.captureSession = AVCaptureSession()
+                        }
+
+                        guard let captureSession = self.captureSession else {
+                            throw CameraControllerError.captureSessionIsMissing
+                        }
+
+                        // Set quality of video
+                        self.videoQuality = videoQuality
+
+                        // Prepare outputs early
+                        self.prepareOutputs()
+
+                        // Single configuration block for all initial setup
+                        captureSession.beginConfiguration()
+
+                        // Set aspect ratio preset and remember requested ratio
+                        self.requestedAspectRatio = aspectRatio
+                        self.requestedAspectMode = aspectMode
+                        self.configureSessionPreset(for: aspectRatio)
+
+                        // Set disableFocusIndicator
+                        self.disableFocusIndicator = disableFocusIndicator
+
+                        // Configure device inputs
+                        try self.configureDeviceInputs(cameraPosition: cameraPosition, deviceId: deviceId, disableAudio: disableAudio)
+
+                        // Add ALL outputs BEFORE starting session to avoid flashes from reconfiguration
+
+                        // Get orientation in a thread-safe way
+                        let videoOrientation = self.getVideoOrientation()
+
+                        // Add data output for preview
+                        if let dataOutput = self.dataOutput, captureSession.canAddOutput(dataOutput) {
+                            captureSession.addOutput(dataOutput)
+                            // Use dedicated queue for better performance
+                            let videoQueue = DispatchQueue(label: "com.camera.videoQueue", qos: .userInteractive)
+                            dataOutput.setSampleBufferDelegate(self, queue: videoQueue)
+                            // Set orientation immediately
+                            self.setVideoOrientation(videoOrientation, on: dataOutput.connections)
+                        }
+
+                        // Add photo output immediately to avoid later reconfiguration
+                        if let photoOutput = self.photoOutput, captureSession.canAddOutput(photoOutput) {
+                            photoOutput.isHighResolutionCaptureEnabled = true
+                            captureSession.addOutput(photoOutput)
+                            self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
+                            // Set orientation immediately
+                            self.setVideoOrientation(videoOrientation, on: photoOutput.connections)
+                        }
+
+                        // Add video output if in camera mode
+                        if cameraMode, let fileVideoOutput = self.fileVideoOutput, captureSession.canAddOutput(fileVideoOutput) {
+                            captureSession.addOutput(fileVideoOutput)
+                            // Set orientation immediately
+                            self.setVideoOrientation(videoOrientation, on: fileVideoOutput.connections)
+                            try self.refreshVideoStabilizationAfterMovieOutputAttached()
+                        }
+
+                        // Set up preview layer session in the same configuration block
+                        if let layer = self.previewLayer {
+                            layer.session = captureSession
+                            // Set orientation for preview layer
+                            if let connection = layer.connection { self.setVideoOrientation(videoOrientation, on: connection) }
+                            // Start with a very subtle fade to smooth any remaining visual artifacts
+                            layer.opacity = 0.95
+                        }
+
+                        captureSession.commitConfiguration()
+
+                        guard self.isPrepareTokenValid(startToken), !self.captureSessionTeardownStarted else {
+                            return
+                        }
+
+                        // Set initial zoom
+                        self.setInitialZoom(level: initialZoomLevel)
+
+                        self.registerCaptureSessionObservers(for: captureSession)
+
+                        // Start the session - all outputs are already configured
+                        captureSession.startRunning()
+                        self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
+                    } catch {
+                        prepareError = error
+                    }
                 }
 
-                guard let captureSession = self.captureSession else {
-                    throw CameraControllerError.captureSessionIsMissing
+                if let prepareError {
+                    throw prepareError
                 }
 
-                // Set quality of video
-                self.videoQuality = videoQuality
-
-                // Prepare outputs early
-                self.prepareOutputs()
-
-                // Single configuration block for all initial setup
-                captureSession.beginConfiguration()
-
-                // Set aspect ratio preset and remember requested ratio
-                self.requestedAspectRatio = aspectRatio
-                self.requestedAspectMode = aspectMode
-                self.configureSessionPreset(for: aspectRatio)
-
-                // Set disableFocusIndicator
-                self.disableFocusIndicator = disableFocusIndicator
-
-                // Configure device inputs
-                try self.configureDeviceInputs(cameraPosition: cameraPosition, deviceId: deviceId, disableAudio: disableAudio)
-
-                // Add ALL outputs BEFORE starting session to avoid flashes from reconfiguration
-
-                // Get orientation in a thread-safe way
-                let videoOrientation = self.getVideoOrientation()
-
-                // Add data output for preview
-                if let dataOutput = self.dataOutput, captureSession.canAddOutput(dataOutput) {
-                    captureSession.addOutput(dataOutput)
-                    // Use dedicated queue for better performance
-                    let videoQueue = DispatchQueue(label: "com.camera.videoQueue", qos: .userInteractive)
-                    dataOutput.setSampleBufferDelegate(self, queue: videoQueue)
-                    // Set orientation immediately
-                    self.setVideoOrientation(videoOrientation, on: dataOutput.connections)
+                guard self.isPrepareTokenValid(startToken), !self.captureSessionTeardownStarted else {
+                    return
                 }
-
-                // Add photo output immediately to avoid later reconfiguration
-                if let photoOutput = self.photoOutput, captureSession.canAddOutput(photoOutput) {
-                    photoOutput.isHighResolutionCaptureEnabled = true
-                    captureSession.addOutput(photoOutput)
-                    self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
-                    // Set orientation immediately
-                    self.setVideoOrientation(videoOrientation, on: photoOutput.connections)
-                }
-
-                // Add video output if in camera mode
-                if cameraMode, let fileVideoOutput = self.fileVideoOutput, captureSession.canAddOutput(fileVideoOutput) {
-                    captureSession.addOutput(fileVideoOutput)
-                    // Set orientation immediately
-                    self.setVideoOrientation(videoOrientation, on: fileVideoOutput.connections)
-                    try self.refreshVideoStabilizationAfterMovieOutputAttached()
-                }
-
-                // Set up preview layer session in the same configuration block
-                if let layer = self.previewLayer {
-                    layer.session = captureSession
-                    // Set orientation for preview layer
-                    if let connection = layer.connection { self.setVideoOrientation(videoOrientation, on: connection) }
-                    // Start with a very subtle fade to smooth any remaining visual artifacts
-                    layer.opacity = 0.95
-                }
-
-                captureSession.commitConfiguration()
-
-                // Set initial zoom
-                self.setInitialZoom(level: initialZoomLevel)
 
                 // Set up listener for change in subject area of camera feed
                 NotificationCenter.default.removeObserver(self, name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
                 NotificationCenter.default.addObserver(self, selector: #selector(self.subjectAreaDidChange), name: .AVCaptureDeviceSubjectAreaDidChange, object: nil)
-
-                self.registerCaptureSessionObservers(for: captureSession)
-
-                guard self.isPrepareTokenValid(startToken) else {
-                    return
-                }
-
-                // Start the session - all outputs are already configured
-                captureSession.startRunning()
-                self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
 
                 // Bring to full opacity after a tiny moment to smooth any visual artifacts
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
@@ -1115,10 +1160,8 @@ extension CameraController {
         }
 
         // Reconfigure session preset to match the new ratio for optimal capture resolution
-        if let captureSession = self.captureSession {
-            captureSession.beginConfiguration()
+        self.configureCaptureSession {
             self.configureSessionPreset(for: aspectRatio)
-            captureSession.commitConfiguration()
         }
 
         // Restore zoom level after session reconfiguration
@@ -1459,6 +1502,15 @@ extension CameraController {
     }
 
     func switchCameras() throws {
+        try self.performCaptureSessionMutationSyncThrowing {
+            guard !self.captureSessionTeardownStarted else {
+                throw CameraControllerError.captureSessionIsMissing
+            }
+            try self.switchCamerasOnCaptureSessionQueue()
+        }
+    }
+
+    private func switchCamerasOnCaptureSessionQueue() throws {
         self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         guard let currentCameraPosition = currentCameraPosition,
@@ -2252,18 +2304,25 @@ extension CameraController {
         self.barcodeDetectionInterval = TimeInterval(max(100, detectionIntervalMs)) / 1000.0
         self.lastBarcodeDetectionAt = 0
 
-        captureSession.beginConfiguration()
-        captureSession.addOutput(output)
-        captureSession.commitConfiguration()
+        try self.performCaptureSessionMutationSyncThrowing {
+            guard !self.captureSessionTeardownStarted else {
+                throw CameraControllerError.captureSessionIsMissing
+            }
+            captureSession.beginConfiguration()
+            captureSession.addOutput(output)
+            captureSession.commitConfiguration()
+        }
 
         let requestedTypes = metadataObjectTypes(for: formats)
         let availableTypes = output.availableMetadataObjectTypes
         let enabledTypes = requestedTypes.isEmpty ? availableTypes : requestedTypes.filter { availableTypes.contains($0) }
 
         guard !enabledTypes.isEmpty else {
-            captureSession.beginConfiguration()
-            captureSession.removeOutput(output)
-            captureSession.commitConfiguration()
+            try self.performCaptureSessionMutationSyncThrowing {
+                captureSession.beginConfiguration()
+                captureSession.removeOutput(output)
+                captureSession.commitConfiguration()
+            }
             self.barcodeScannerCallback = nil
             throw CameraControllerError.invalidOperation
         }
@@ -2278,9 +2337,12 @@ extension CameraController {
         if let output = metadataOutput,
            let captureSession = captureSession,
            captureSession.outputs.contains(output) {
-            captureSession.beginConfiguration()
-            captureSession.removeOutput(output)
-            captureSession.commitConfiguration()
+            self.performCaptureSessionMutationSync {
+                guard !self.captureSessionTeardownStarted, self.captureSession === captureSession else { return }
+                captureSession.beginConfiguration()
+                captureSession.removeOutput(output)
+                captureSession.commitConfiguration()
+            }
         }
         metadataOutput = nil
         barcodeScannerCallback = nil
@@ -2808,6 +2870,15 @@ extension CameraController {
     }
 
     func swapToDevice(deviceId: String) throws {
+        try self.performCaptureSessionMutationSyncThrowing {
+            guard !self.captureSessionTeardownStarted else {
+                throw CameraControllerError.captureSessionIsMissing
+            }
+            try self.swapToDeviceOnCaptureSessionQueue(deviceId: deviceId)
+        }
+    }
+
+    private func swapToDeviceOnCaptureSessionQueue(deviceId: String) throws {
         self.cancelPendingFocusExposureRestore()
         guard let captureSession = self.captureSession else {
             throw CameraControllerError.captureSessionIsMissing
@@ -2966,8 +3037,13 @@ extension CameraController {
     }
 
     private func restoreAudioInputIfNeeded(for session: AVCaptureSession) {
+        if CaptureSessionRecoveryGate.shouldSkipRecovery(
+            sessionTeardownStarted: self.captureSessionTeardownStarted,
+            isObservedSession: self.captureSession === session
+        ) {
+            return
+        }
         guard self.audioInputEnabledByUser, self.audioInput == nil, !self.isPhoneCallActive() else { return }
-        guard self.captureSession === session else { return }
 
         do {
             session.beginConfiguration()
@@ -2991,7 +3067,12 @@ extension CameraController {
     }
 
     private func dropAudioInputAndRestartSession(for session: AVCaptureSession) {
-        guard self.captureSession === session else { return }
+        if CaptureSessionRecoveryGate.shouldSkipRecovery(
+            sessionTeardownStarted: self.captureSessionTeardownStarted,
+            isObservedSession: self.captureSession === session
+        ) {
+            return
+        }
 
         session.beginConfiguration()
         for input in session.inputs {
@@ -3002,6 +3083,13 @@ extension CameraController {
         }
         self.audioInput = nil
         session.commitConfiguration()
+
+        if CaptureSessionRecoveryGate.shouldSkipRecovery(
+            sessionTeardownStarted: self.captureSessionTeardownStarted,
+            isObservedSession: self.captureSession === session
+        ) {
+            return
+        }
 
         if session.isRunning {
             session.stopRunning()
@@ -3016,7 +3104,7 @@ extension CameraController {
         let audioConflict = self.isAudioPriorityError(error)
         guard let session = notification.object as? AVCaptureSession else { return }
         if audioConflict {
-            self.sessionRecoveryQueue.async { [weak self] in
+            self.performCaptureSessionMutationAsync { [weak self] in
                 self?.dropAudioInputAndRestartSession(for: session)
             }
         }
@@ -3025,8 +3113,14 @@ extension CameraController {
             guard let self = self else { return }
             self.onCameraInterrupted?("runtimeError", audioConflict)
             if !audioConflict && !self.hasReceivedFirstFrame {
-                self.sessionRecoveryQueue.async { [weak self] in
-                    guard let self = self, self.captureSession === session else { return }
+                self.performCaptureSessionMutationAsync { [weak self] in
+                    guard let self = self else { return }
+                    if CaptureSessionRecoveryGate.shouldSkipRecovery(
+                        sessionTeardownStarted: self.captureSessionTeardownStarted,
+                        isObservedSession: self.captureSession === session
+                    ) {
+                        return
+                    }
                     session.stopRunning()
                     DispatchQueue.main.async {
                         self.onStartFailure?(error)
@@ -3043,7 +3137,7 @@ extension CameraController {
            let reason = AVCaptureSession.InterruptionReason(rawValue: reasonValue),
            reason == .audioDeviceInUseByAnotherClient {
             audioRelated = true
-            self.sessionRecoveryQueue.async { [weak self] in
+            self.performCaptureSessionMutationAsync { [weak self] in
                 self?.dropAudioInputAndRestartSession(for: session)
             }
         }
@@ -3055,8 +3149,14 @@ extension CameraController {
 
     @objc private func handleCaptureSessionInterruptionEnded(_ notification: Notification) {
         guard let session = notification.object as? AVCaptureSession else { return }
-        self.sessionRecoveryQueue.async { [weak self] in
-            guard let self = self, self.captureSession === session else { return }
+        self.performCaptureSessionMutationAsync { [weak self] in
+            guard let self = self else { return }
+            if CaptureSessionRecoveryGate.shouldSkipRecovery(
+                sessionTeardownStarted: self.captureSessionTeardownStarted,
+                isObservedSession: self.captureSession === session
+            ) {
+                return
+            }
             self.restoreAudioInputIfNeeded(for: session)
             if !session.isRunning {
                 session.startRunning()
@@ -3066,6 +3166,12 @@ extension CameraController {
                 self.onCameraInterruptionEnded?()
             }
         }
+    }
+
+    private func tearDownCaptureSession(_ captureSession: AVCaptureSession) {
+        captureSession.stopRunning()
+        captureSession.inputs.forEach { captureSession.removeInput($0) }
+        captureSession.outputs.forEach { captureSession.removeOutput($0) }
     }
 
     func cleanup() {
@@ -3091,10 +3197,12 @@ extension CameraController {
             isRecording: isFileOutputRecording,
             pendingRecordingIds: pendingRecordingIds
         )
-        if let captureSession = self.captureSession {
-            captureSession.stopRunning()
-            captureSession.inputs.forEach { captureSession.removeInput($0) }
-            captureSession.outputs.forEach { captureSession.removeOutput($0) }
+        let sessionToTeardown = self.captureSession
+        if let sessionToTeardown {
+            self.performCaptureSessionMutationSync {
+                guard self.captureSession === sessionToTeardown else { return }
+                self.tearDownCaptureSession(sessionToTeardown)
+            }
         }
         if shouldRestoreAfterTeardown {
             self.applicationAudioSessionRestoreCoordinator.restoreAfterCaptureSessionTeardown()
