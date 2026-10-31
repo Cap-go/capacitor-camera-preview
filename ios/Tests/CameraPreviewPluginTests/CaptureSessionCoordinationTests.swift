@@ -59,7 +59,7 @@ final class CaptureSessionCoordinationTests: XCTestCase {
     func testControllerPrepareBeginGateBlocksWhileLiveSessionIsTearingDown() {
         let controller = CameraController()
         controller.captureSession = AVCaptureSession()
-        controller.captureSessionTeardownStarted = true
+        controller.markCaptureSessionTeardownInProgressForTesting()
 
         XCTAssertFalse(controller.runPrepareBeginGateForTesting(startToken: 1))
         XCTAssertTrue(controller.captureSessionTeardownStarted)
@@ -69,7 +69,7 @@ final class CaptureSessionCoordinationTests: XCTestCase {
     func testControllerCleanupThenPrepareBeginGateDoesNotReuseTornDownSession() {
         let controller = CameraController()
         controller.captureSession = AVCaptureSession()
-        controller.captureSessionTeardownStarted = true
+        controller.markCaptureSessionTeardownInProgressForTesting()
 
         XCTAssertFalse(controller.runPrepareBeginGateForTesting(startToken: 1))
 

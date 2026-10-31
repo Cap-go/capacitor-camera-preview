@@ -921,6 +921,11 @@ extension CameraController {
         return allowed
     }
 
+    /// Marks teardown in progress without running full `cleanup()`. For unit tests.
+    internal func markCaptureSessionTeardownInProgressForTesting() {
+        self.captureSessionTeardownStarted = true
+    }
+
     func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", allowHapticsAndSystemSoundsDuringRecording: Bool = false, startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1), allowHapticsAndSystemSoundsDuringRecording: \(allowHapticsAndSystemSoundsDuringRecording)")
 
