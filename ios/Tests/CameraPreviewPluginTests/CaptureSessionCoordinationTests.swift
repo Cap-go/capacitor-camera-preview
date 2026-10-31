@@ -81,6 +81,33 @@ final class CaptureSessionCoordinationTests: XCTestCase {
         XCTAssertFalse(controller.captureSessionTeardownStarted)
     }
 
+    func testControllerCleanupWhilePrepareMutationHeldOnCaptureQueueClearsSession() {
+        let controller = CameraController()
+        let passedGate = DispatchSemaphore(value: 0)
+        let releaseHold = DispatchSemaphore(value: 0)
+        let cleanupFinished = expectation(description: "cleanup finished")
+
+        controller.holdCaptureSessionQueueAfterPrepareBeginForTesting(
+            startToken: 1,
+            passedGate: passedGate,
+            releaseHold: releaseHold
+        )
+
+        XCTAssertEqual(passedGate.wait(timeout: .now() + 5), .success)
+        XCTAssertNotNil(controller.captureSession)
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            controller.cleanup()
+            cleanupFinished.fulfill()
+        }
+
+        releaseHold.signal()
+
+        wait(for: [cleanupFinished], timeout: 5)
+        XCTAssertNil(controller.captureSession)
+        XCTAssertTrue(controller.runPrepareBeginGateForTesting(startToken: 2))
+    }
+
     func testMutationExecutorSyncDoesNotDeadlockWhenReentrant() {
         let queue = DispatchQueue(label: "com.capgo.camera.test.captureSession")
         let queueKey = DispatchSpecificKey<Bool>()

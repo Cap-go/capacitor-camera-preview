@@ -905,18 +905,21 @@ extension CameraController {
         return token != 0 && token == self.activePrepareToken
     }
 
+    /// Must run on the capture session queue.
+    private func beginPrepareOnCaptureQueue(startToken: UInt) -> Bool {
+        guard self.isPrepareTokenValid(startToken) else { return false }
+        return CaptureSessionPrepareGate.applyBeginIfAllowed(
+            sessionTeardownStarted: &self.captureSessionTeardownStarted,
+            hasLiveCaptureSession: self.captureSession != nil
+        )
+    }
+
     /// Runs the capture-queue prepare begin gate used by `prepare(startToken:)`. For unit tests.
     internal func runPrepareBeginGateForTesting(startToken: UInt) -> Bool {
         self.activePrepareToken = startToken
         var allowed = false
         self.performCaptureSessionMutationSync {
-            guard self.isPrepareTokenValid(startToken) else {
-                return
-            }
-            allowed = CaptureSessionPrepareGate.applyBeginIfAllowed(
-                sessionTeardownStarted: &self.captureSessionTeardownStarted,
-                hasLiveCaptureSession: self.captureSession != nil
-            )
+            allowed = self.beginPrepareOnCaptureQueue(startToken: startToken)
         }
         return allowed
     }
@@ -924,6 +927,26 @@ extension CameraController {
     /// Marks teardown in progress without running full `cleanup()`. For unit tests.
     internal func markCaptureSessionTeardownInProgressForTesting() {
         self.captureSessionTeardownStarted = true
+    }
+
+    /// Holds the capture queue after passing the prepare begin gate. For unit tests.
+    internal func holdCaptureSessionQueueAfterPrepareBeginForTesting(
+        startToken: UInt,
+        passedGate: DispatchSemaphore,
+        releaseHold: DispatchSemaphore
+    ) {
+        self.activePrepareToken = startToken
+        self.performCaptureSessionMutationAsync {
+            guard self.beginPrepareOnCaptureQueue(startToken: startToken) else {
+                passedGate.signal()
+                return
+            }
+            if self.captureSession == nil {
+                self.captureSession = AVCaptureSession()
+            }
+            passedGate.signal()
+            _ = releaseHold.wait(timeout: .now() + 5)
+        }
     }
 
     func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", allowHapticsAndSystemSoundsDuringRecording: Bool = false, startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
@@ -957,14 +980,9 @@ extension CameraController {
 
             do {
                 var prepareError: Error?
+                let videoOrientation = self.getVideoOrientation()
                 self.performCaptureSessionMutationSync {
-                    guard self.isPrepareTokenValid(startToken) else {
-                        return
-                    }
-                    guard CaptureSessionPrepareGate.applyBeginIfAllowed(
-                        sessionTeardownStarted: &self.captureSessionTeardownStarted,
-                        hasLiveCaptureSession: self.captureSession != nil
-                    ) else {
+                    guard self.beginPrepareOnCaptureQueue(startToken: startToken) else {
                         return
                     }
 
@@ -999,9 +1017,6 @@ extension CameraController {
                         try self.configureDeviceInputs(cameraPosition: cameraPosition, deviceId: deviceId, disableAudio: disableAudio)
 
                         // Add ALL outputs BEFORE starting session to avoid flashes from reconfiguration
-
-                        // Get orientation in a thread-safe way
-                        let videoOrientation = self.getVideoOrientation()
 
                         // Add data output for preview
                         if let dataOutput = self.dataOutput, captureSession.canAddOutput(dataOutput) {
@@ -3220,10 +3235,9 @@ extension CameraController {
             isRecording: isFileOutputRecording,
             pendingRecordingIds: pendingRecordingIds
         )
-        let sessionToTeardown = self.captureSession
-        if let sessionToTeardown {
+        if self.captureSession != nil {
             self.performCaptureSessionMutationSync {
-                guard self.captureSession === sessionToTeardown else { return }
+                guard let sessionToTeardown = self.captureSession else { return }
                 self.tearDownCaptureSession(sessionToTeardown)
             }
         }

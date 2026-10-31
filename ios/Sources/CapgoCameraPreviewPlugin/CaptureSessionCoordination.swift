@@ -37,14 +37,14 @@ enum CaptureSessionRecoveryGate {
 
 /// Serializes mutation work onto the capture session queue without deadlocking when already on that queue.
 enum CaptureSessionMutationExecutor {
-    private static let queueKey = DispatchSpecificKey<UInt8>()
+    private static let queueKey = DispatchSpecificKey<ObjectIdentifier>()
 
     static func register(queue: DispatchQueue) {
-        queue.setSpecific(key: queueKey, value: 1)
+        queue.setSpecific(key: queueKey, value: ObjectIdentifier(queue))
     }
 
     static func performSync(on queue: DispatchQueue, _ block: () -> Void) {
-        if DispatchQueue.getSpecific(key: queueKey) != nil {
+        if DispatchQueue.getSpecific(key: queueKey) == ObjectIdentifier(queue) {
             block()
         } else {
             queue.sync(execute: block)
