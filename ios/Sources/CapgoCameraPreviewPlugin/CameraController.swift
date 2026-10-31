@@ -905,6 +905,22 @@ extension CameraController {
         return token != 0 && token == self.activePrepareToken
     }
 
+    /// Runs the capture-queue prepare begin gate used by `prepare(startToken:)`. For unit tests.
+    internal func runPrepareBeginGateForTesting(startToken: UInt) -> Bool {
+        self.activePrepareToken = startToken
+        var allowed = false
+        self.performCaptureSessionMutationSync {
+            guard self.isPrepareTokenValid(startToken) else {
+                return
+            }
+            allowed = CaptureSessionPrepareGate.applyBeginIfAllowed(
+                sessionTeardownStarted: &self.captureSessionTeardownStarted,
+                hasLiveCaptureSession: self.captureSession != nil
+            )
+        }
+        return allowed
+    }
+
     func prepare(cameraPosition: String, deviceId: String? = nil, disableAudio: Bool, cameraMode: Bool, aspectRatio: String? = nil, aspectMode: String = "contain", initialZoomLevel: Float?, disableFocusIndicator: Bool = false, videoQuality: String = "high", allowHapticsAndSystemSoundsDuringRecording: Bool = false, startToken: UInt, completionHandler: @escaping (Error?) -> Void) {
         print("[CameraPreview] 🎬 Starting prepare - position: \(cameraPosition), deviceId: \(deviceId ?? "nil"), disableAudio: \(disableAudio), cameraMode: \(cameraMode), aspectRatio: \(aspectRatio ?? "nil"), aspectMode: \(aspectMode), zoom: \(initialZoomLevel ?? 1), allowHapticsAndSystemSoundsDuringRecording: \(allowHapticsAndSystemSoundsDuringRecording)")
 
@@ -940,18 +956,11 @@ extension CameraController {
                     guard self.isPrepareTokenValid(startToken) else {
                         return
                     }
-                    let hasLiveCaptureSession = self.captureSession != nil
-                    guard CaptureSessionPrepareGate.mayBeginPrepareOnQueue(
-                        sessionTeardownStarted: self.captureSessionTeardownStarted,
-                        hasLiveCaptureSession: hasLiveCaptureSession
+                    guard CaptureSessionPrepareGate.applyBeginIfAllowed(
+                        sessionTeardownStarted: &self.captureSessionTeardownStarted,
+                        hasLiveCaptureSession: self.captureSession != nil
                     ) else {
                         return
-                    }
-                    if CaptureSessionPrepareGate.shouldClearTeardownStartedBeforePrepare(
-                        sessionTeardownStarted: self.captureSessionTeardownStarted,
-                        hasLiveCaptureSession: hasLiveCaptureSession
-                    ) {
-                        self.captureSessionTeardownStarted = false
                     }
 
                     do {

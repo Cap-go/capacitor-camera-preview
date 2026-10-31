@@ -9,6 +9,23 @@ enum CaptureSessionPrepareGate {
     static func shouldClearTeardownStartedBeforePrepare(sessionTeardownStarted: Bool, hasLiveCaptureSession: Bool) -> Bool {
         sessionTeardownStarted && !hasLiveCaptureSession
     }
+
+    /// Applies prepare begin gating on the capture queue (see `CameraController.prepare`).
+    static func applyBeginIfAllowed(sessionTeardownStarted: inout Bool, hasLiveCaptureSession: Bool) -> Bool {
+        guard mayBeginPrepareOnQueue(
+            sessionTeardownStarted: sessionTeardownStarted,
+            hasLiveCaptureSession: hasLiveCaptureSession
+        ) else {
+            return false
+        }
+        if shouldClearTeardownStartedBeforePrepare(
+            sessionTeardownStarted: sessionTeardownStarted,
+            hasLiveCaptureSession: hasLiveCaptureSession
+        ) {
+            sessionTeardownStarted = false
+        }
+        return true
+    }
 }
 
 /// Guards interruption / runtime-error recovery against overlapping teardown.
