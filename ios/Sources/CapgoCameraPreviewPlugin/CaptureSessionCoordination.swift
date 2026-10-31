@@ -1,5 +1,16 @@
 import Foundation
 
+/// Guards prepare against reusing a session that cleanup is still tearing down on the capture queue.
+enum CaptureSessionPrepareGate {
+    static func mayBeginPrepareOnQueue(sessionTeardownStarted: Bool, hasLiveCaptureSession: Bool) -> Bool {
+        !(sessionTeardownStarted && hasLiveCaptureSession)
+    }
+
+    static func shouldClearTeardownStartedBeforePrepare(sessionTeardownStarted: Bool, hasLiveCaptureSession: Bool) -> Bool {
+        sessionTeardownStarted && !hasLiveCaptureSession
+    }
+}
+
 /// Guards interruption / runtime-error recovery against overlapping teardown.
 enum CaptureSessionRecoveryGate {
     static func shouldSkipRecovery(sessionTeardownStarted: Bool, isObservedSession: Bool) -> Bool {

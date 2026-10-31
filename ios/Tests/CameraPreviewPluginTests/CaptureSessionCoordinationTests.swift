@@ -20,6 +20,24 @@ final class CaptureSessionCoordinationTests: XCTestCase {
         )
     }
 
+    func testPrepareAbortsWhenTeardownInProgressOnLiveSession() {
+        XCTAssertFalse(
+            CaptureSessionPrepareGate.mayBeginPrepareOnQueue(sessionTeardownStarted: true, hasLiveCaptureSession: true)
+        )
+    }
+
+    func testPrepareClearsTeardownFlagAfterCleanupWhenSessionNil() {
+        XCTAssertTrue(
+            CaptureSessionPrepareGate.shouldClearTeardownStartedBeforePrepare(
+                sessionTeardownStarted: true,
+                hasLiveCaptureSession: false
+            )
+        )
+        XCTAssertTrue(
+            CaptureSessionPrepareGate.mayBeginPrepareOnQueue(sessionTeardownStarted: true, hasLiveCaptureSession: false)
+        )
+    }
+
     func testMutationExecutorSyncDoesNotDeadlockWhenReentrant() {
         let queue = DispatchQueue(label: "com.capgo.camera.test.captureSession")
         CaptureSessionMutationExecutor.register(queue: queue)

@@ -911,7 +911,6 @@ extension CameraController {
         self.allowHapticsAndSystemSoundsDuringRecording = allowHapticsAndSystemSoundsDuringRecording
         self.applicationAudioSessionRestoreCoordinator.beginPreviewSession()
         self.activePrepareToken = startToken
-        self.captureSessionTeardownStarted = false
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else {
@@ -938,14 +937,26 @@ extension CameraController {
             do {
                 var prepareError: Error?
                 self.performCaptureSessionMutationSync {
-                    guard self.isPrepareTokenValid(startToken), !self.captureSessionTeardownStarted else {
+                    guard self.isPrepareTokenValid(startToken) else {
                         return
+                    }
+                    let hasLiveCaptureSession = self.captureSession != nil
+                    guard CaptureSessionPrepareGate.mayBeginPrepareOnQueue(
+                        sessionTeardownStarted: self.captureSessionTeardownStarted,
+                        hasLiveCaptureSession: hasLiveCaptureSession
+                    ) else {
+                        return
+                    }
+                    if CaptureSessionPrepareGate.shouldClearTeardownStartedBeforePrepare(
+                        sessionTeardownStarted: self.captureSessionTeardownStarted,
+                        hasLiveCaptureSession: hasLiveCaptureSession
+                    ) {
+                        self.captureSessionTeardownStarted = false
                     }
 
                     do {
                         // Create session if needed
                         if self.captureSession == nil {
-                            self.captureSessionTeardownStarted = false
                             self.captureSession = AVCaptureSession()
                         }
 
@@ -1411,13 +1422,10 @@ extension CameraController {
         gridOverlayView = nil
     }
 
-    func updateVideoOrientation(precomputedOrientation: AVCaptureVideoOrientation? = nil) {
-        // Get orientation in a thread-safe way
-        let videoOrientation = precomputedOrientation ?? self.getVideoOrientation()
-
-        // Apply orientation asynchronously on main thread
+    func updateVideoOrientation() {
         let updateBlock = { [weak self] in
             guard let self = self else { return }
+            let videoOrientation = self.getVideoOrientation()
             if let connection = self.previewLayer?.connection { self.setVideoOrientation(videoOrientation, on: connection) }
             if let connections = self.dataOutput?.connections { self.setVideoOrientation(videoOrientation, on: connections) }
             if let connections = self.photoOutput?.connections { self.setVideoOrientation(videoOrientation, on: connections) }
@@ -1503,16 +1511,15 @@ extension CameraController {
     }
 
     func switchCameras() throws {
-        let videoOrientation = self.getVideoOrientation()
         try self.performCaptureSessionMutationSyncThrowing {
             guard !self.captureSessionTeardownStarted else {
                 throw CameraControllerError.captureSessionIsMissing
             }
-            try self.switchCamerasOnCaptureSessionQueue(videoOrientation: videoOrientation)
+            try self.switchCamerasOnCaptureSessionQueue()
         }
     }
 
-    private func switchCamerasOnCaptureSessionQueue(videoOrientation: AVCaptureVideoOrientation) throws {
+    private func switchCamerasOnCaptureSessionQueue() throws {
         self.cancelPendingFocusExposureRestore()
         configuredVideoFrameRate = nil
         guard let currentCameraPosition = currentCameraPosition,
@@ -1630,7 +1637,7 @@ extension CameraController {
         self.applyConfiguredCaptureResolutionToPhotoOutputIfNeeded()
 
         // Keep orientation correct
-        self.updateVideoOrientation(precomputedOrientation: videoOrientation)
+        self.updateVideoOrientation()
     }
 
     func captureImage(width: Int?, height: Int?, quality: Float, gpsLocation: CLLocation?, embedTimestamp: Bool, embedLocation: Bool, photoQualityPrioritization: String, captureOrientationMode: String?, completion: @escaping (UIImage?, Data?, [AnyHashable: Any]?, Error?) -> Void) {
@@ -2872,16 +2879,15 @@ extension CameraController {
     }
 
     func swapToDevice(deviceId: String) throws {
-        let videoOrientation = self.getVideoOrientation()
         try self.performCaptureSessionMutationSyncThrowing {
             guard !self.captureSessionTeardownStarted else {
                 throw CameraControllerError.captureSessionIsMissing
             }
-            try self.swapToDeviceOnCaptureSessionQueue(deviceId: deviceId, videoOrientation: videoOrientation)
+            try self.swapToDeviceOnCaptureSessionQueue(deviceId: deviceId)
         }
     }
 
-    private func swapToDeviceOnCaptureSessionQueue(deviceId: String, videoOrientation: AVCaptureVideoOrientation) throws {
+    private func swapToDeviceOnCaptureSessionQueue(deviceId: String) throws {
         self.cancelPendingFocusExposureRestore()
         guard let captureSession = self.captureSession else {
             throw CameraControllerError.captureSessionIsMissing
