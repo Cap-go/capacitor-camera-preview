@@ -84,7 +84,7 @@
     "swiftlint": "^2.0.0",
     "typescript": "^6.0.3",
     "prettier-pretty-check": "^0.2.0",
-    "happy-dom": "^20.0.0"
+    "happy-dom": "^21.0.0"
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"
