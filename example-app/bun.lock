@@ -52,7 +52,7 @@
         "eslint-plugin-import": "^2.31.0",
         "eslint-plugin-jsdoc": "^65.0.0",
         "eslint-plugin-prefer-arrow": "1.2.3",
-        "jasmine-core": "~5.13.0",
+        "jasmine-core": "~7.0.0",
         "jasmine-spec-reporter": "~7.0.0",
         "karma": "~6.4.4",
         "karma-chrome-launcher": "~3.2.0",
@@ -323,7 +323,7 @@
 
     "@capacitor/status-bar": ["@capacitor/status-bar@8.0.4", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-ZMzBUyHBzwDUxcHadEhvOvmoPmMQGMZgaMRJu8ohELeI6IaxoVH9ZhdF/OHnY3/yykv3Glev8Tnbh4aZY/0B0w=="],
 
-    "@capgo/camera-preview": ["@capgo/camera-preview@file:..", { "devDependencies": { "@capacitor/android": "^8.0.0", "@capacitor/cli": "^8.0.0", "@capacitor/core": "^8.0.0", "@capacitor/docgen": "^0.3.1", "@capacitor/ios": "^8.0.0", "@ionic/eslint-config": "^0.5.0", "@ionic/prettier-config": "^4.0.0", "@ionic/swiftlint-config": "^2.0.0", "@types/node": "^24.10.1", "@typescript-eslint/eslint-plugin": "^8.70.0", "@typescript-eslint/parser": "^8.70.0", "eslint": "^10.0.0", "happy-dom": "^20.0.0", "husky": "^9.1.7", "prettier": "^3.6.2", "prettier-plugin-java": "^2.7.7", "prettier-pretty-check": "^0.2.0", "rimraf": "^6.1.0", "rollup": "^4.53.2", "swiftlint": "^2.0.0", "typescript": "^6.0.3" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }],
+    "@capgo/camera-preview": ["@capgo/camera-preview@file:..", { "devDependencies": { "@capacitor/android": "^8.0.0", "@capacitor/cli": "^8.0.0", "@capacitor/core": "^8.0.0", "@capacitor/docgen": "^0.3.1", "@capacitor/ios": "^8.0.0", "@ionic/eslint-config": "^0.5.0", "@ionic/prettier-config": "^4.0.0", "@ionic/swiftlint-config": "^2.0.0", "@types/node": "^24.10.1", "@typescript-eslint/eslint-plugin": "^8.70.0", "@typescript-eslint/parser": "^8.70.0", "eslint": "^10.0.0", "happy-dom": "^21.0.0", "husky": "^9.1.7", "prettier": "^3.6.2", "prettier-plugin-java": "^2.7.7", "prettier-pretty-check": "^0.2.0", "rimraf": "^6.1.0", "rollup": "^4.53.2", "swiftlint": "^2.0.0", "typescript": "^6.0.3" }, "peerDependencies": { "@capacitor/core": ">=8.0.0" } }],
 
     "@capgo/capacitor-updater": ["@capgo/capacitor-updater@8.52.1", "", { "peerDependencies": { "@capacitor/core": "^8.0.0" } }, "sha512-bvI6kUms5QJXtWznv7JoTdmKlmjobPYIW1santxgn5AZAciXpiDXXcwdaK2sjgK1NyuzREwZw68vzUCWGhrbAA=="],
 
@@ -1377,7 +1377,7 @@
 
     "handle-thing": ["handle-thing@2.0.1", "", {}, "sha512-9Qn4yBxelxoh2Ow62nP+Ka/kMnOXRi8BXnRaUwezLNhqelnN49xKz4F/dPP8OYLxLxq6JDtZb2i9XznUQbNPTg=="],
 
-    "happy-dom": ["happy-dom@20.14.6", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-5DDsf4QmEIlRL6NkCv/fxSjYHHkZceL/IaYQdJc2h3G7DRTEai++VTjbfL0LB9geW2VrA3+vrjF3Efx+OTtX0Q=="],
+    "happy-dom": ["happy-dom@21.0.4", "", { "dependencies": { "@types/node": ">=20.0.0", "@types/whatwg-mimetype": "^3.0.2", "@types/ws": "^8.18.1", "buffer-image-size": "^0.6.4", "entities": "^7.0.1", "whatwg-mimetype": "^3.0.0", "ws": "^8.21.0" } }, "sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw=="],
 
     "has-bigints": ["has-bigints@1.1.0", "", {}, "sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg=="],
 
@@ -1555,7 +1555,7 @@
 
     "jackspeak": ["jackspeak@3.4.3", "", { "dependencies": { "@isaacs/cliui": "^8.0.2" }, "optionalDependencies": { "@pkgjs/parseargs": "^0.11.0" } }, "sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw=="],
 
-    "jasmine-core": ["jasmine-core@5.13.0", "", {}, "sha512-vsYjfh7lyqvZX5QgqKc4YH8phs7g96Z8bsdIFNEU3VqXhlHaq+vov/Fgn/sr6MiUczdZkyXRC3TX369Ll4Nzbw=="],
+    "jasmine-core": ["jasmine-core@7.0.2", "", {}, "sha512-YMVijt84KPQQFm1db1AQAxTXfq0k3wU06OkepLViljURFqiRQ7EYYX2eUAshhUv9fA9t1E2N65GrdqvupA9VPQ=="],
 
     "jasmine-spec-reporter": ["jasmine-spec-reporter@7.0.0", "", { "dependencies": { "colors": "1.4.0" } }, "sha512-OtC7JRasiTcjsaCBPtMO0Tl8glCejM4J4/dNuOJdA8lBjz4PmWjYQ6pzb0uzpBNAWJMDudYuj9OdXJWqM2QTJg=="],
 
