@@ -252,9 +252,15 @@ npx cap sync
 
 ## Optional iOS CallKit support
 
-CallKit phone-call observation is disabled by default, including for direct SPM and CocoaPods
-consumers. To opt in to proactive phone-call detection and call-ended microphone recovery,
-configure the consuming app:
+CallKit phone-call observation is disabled by default (`iosCallKit: false`), including for direct
+SPM and CocoaPods consumers. Apple App Review requires CallKit functionality to be deactivated
+for apps available on the China mainland App Store. This plugin's phone-call observer uses CallKit
+even though it does not provide calling features, so including it can trigger a review rejection
+for camera-only apps and QR scanners. Keeping it disabled avoids adding that dependency to every
+app by default; camera preview and barcode scanning do not require CallKit.
+
+Only opt in if you need proactive phone-call detection and call-ended microphone recovery and
+your app's distribution permits CallKit. Configure the consuming app:
 
 ```ts
 import type { CapacitorConfig } from '@capacitor/cli';
