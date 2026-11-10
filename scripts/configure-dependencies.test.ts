@@ -32,39 +32,43 @@ beforeEach(() => {
   for (const file of [...manifests, 'scripts/configure-dependencies.cjs']) {
     copyFileSync(join(root, file), join(fixture, file));
   }
-  expect(sync({}).status).toBe(0);
   originals = contents();
 });
 
 afterEach(() => rmSync(fixture, { recursive: true, force: true }));
 
 describe('CallKit sync configuration', () => {
-  test('defaults to existing behavior', () => {
+  test('ships with CallKit disabled and keeps it disabled when the option is omitted', () => {
+    expect(originals.every((content) => content.includes(flag))).toBe(true);
+    expect(sync({}).status).toBe(0);
+    expect(contents()).toEqual(originals);
     expect(sync({ plugins: { CameraPreview: {} } }).status).toBe(0);
     expect(contents()).toEqual(originals);
-    expect(contents().every((content) => !content.includes(flag))).toBe(true);
+    expect(contents().every((content) => content.includes(flag))).toBe(true);
   });
 
-  test('disables both package managers, is idempotent, and restores defaults', () => {
-    const config = { plugins: { CameraPreview: { iosCallKit: false } } };
+  test('enables both package managers only on opt-in, is idempotent, and restores defaults', () => {
+    const config = { plugins: { CameraPreview: { iosCallKit: true } } };
     expect(sync(config).status).toBe(0);
-    const disabled = contents();
-    expect(disabled[0]).toContain(`.define("${flag}")`);
-    expect(disabled[1]).toContain(`$(inherited) ${flag}`);
+    const enabled = contents();
+    expect(enabled.every((content) => !content.includes(flag))).toBe(true);
     expect(sync(config).status).toBe(0);
-    expect(contents()).toEqual(disabled);
-    expect(sync({ plugins: { CameraPreview: { iosCallKit: true } } }).status).toBe(0);
+    expect(contents()).toEqual(enabled);
+    expect(sync({ plugins: { CameraPreview: { iosCallKit: false } } }).status).toBe(0);
     expect(contents()).toEqual(originals);
     expect(sync(config).status).toBe(0);
     expect(sync({}).status).toBe(0);
     expect(contents()).toEqual(originals);
+    expect(sync(config).status).toBe(0);
+    expect(sync({ plugins: { CameraPreview: {} } }).status).toBe(0);
+    expect(contents()).toEqual(originals);
   });
 
   test.each(['android', 'web'])('leaves iOS configuration unchanged for %s', (platform) => {
-    expect(sync({ plugins: { CameraPreview: { iosCallKit: false } } }).status).toBe(0);
-    const disabled = contents();
+    expect(sync({ plugins: { CameraPreview: { iosCallKit: true } } }).status).toBe(0);
+    const enabled = contents();
     expect(sync({}, platform).status).toBe(0);
-    expect(contents()).toEqual(disabled);
+    expect(contents()).toEqual(enabled);
   });
 
   test.each([undefined, '{invalid', { plugins: { CameraPreview: { iosCallKit: 'false' } } }])(

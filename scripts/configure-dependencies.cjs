@@ -16,7 +16,7 @@ function main() {
   if (option !== undefined && typeof option !== 'boolean') {
     throw new Error('CameraPreview.iosCallKit must be a boolean.');
   }
-  const disabled = option === false;
+  const disabled = option !== true;
   const flag = 'CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT';
   const root = path.resolve(__dirname, '..');
   const replacements = [
