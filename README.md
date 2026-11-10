@@ -250,6 +250,44 @@ Then run
 npx cap sync
 ```
 
+## Optional iOS CallKit support
+
+CallKit phone-call observation is enabled by default for backward compatibility. To exclude
+this plugin's CallKit dependency from an iOS build (for example, for China mainland distribution),
+configure the consuming app:
+
+```ts
+import type { CapacitorConfig } from '@capacitor/cli';
+import type { CameraPreviewConfig } from '@capgo/camera-preview';
+
+const config: CapacitorConfig = {
+  plugins: {
+    CameraPreview: {
+      iosCallKit: false,
+    } satisfies CameraPreviewConfig,
+  },
+};
+
+export default config;
+```
+
+Then run `bunx cap sync ios` and create a new native build. Like Social Login's provider selection,
+the `capacitor:sync:before` hook reads `CAPACITOR_CONFIG` and configures both `Package.swift` and
+the CocoaPods podspec. With `iosCallKit: false`, the CallKit import, observer, and delegate are
+compiled out. Setting it to `true` or removing the option restores the default on the next sync.
+Android and Web are unaffected.
+
+AVFoundation capture-session interruption notifications and audio-priority error recovery remain
+active in both modes. Without CallKit, the plugin cannot proactively detect an ongoing phone call
+or use a call-ended callback to restore microphone input; recovery relies on capture-session events.
+For camera-only scanning, continue to pass `disableAudio: true` to `start()`/`startBarcodeScanner()`.
+That runtime option alone does **not** remove CallKit.
+
+This setting applies to this plugin only; other native dependencies may still link CallKit.
+It requires a native rebuild, not an OTA update. Direct SwiftPM consumers that do not run Capacitor
+sync must add `.define("CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT")` to this package target's
+`swiftSettings` themselves.
+
 ## Optional Configuration
 
 To use certain features of this plugin, you will need to add the following permissions/keys to your native project configurations.

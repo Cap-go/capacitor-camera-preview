@@ -4,23 +4,17 @@ import UIKit
 import CoreLocation
 import UniformTypeIdentifiers
 import CoreMotion
+#if !CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT
 import CallKit
+#endif
 
-class CameraController: NSObject, CXCallObserverDelegate {
+class CameraController: NSObject {
     override init() {
         super.init()
         CaptureSessionMutationExecutor.register(queue: self.captureSessionQueue)
+        #if !CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT
         self.callObserver.setDelegate(self, queue: nil)
-    }
-
-    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
-        guard call.hasEnded,
-              callObserver.calls.allSatisfy({ $0.hasEnded }),
-              let session = self.captureSession else { return }
-        self.performCaptureSessionMutationAsync { [weak self] in
-            guard let self = self else { return }
-            self.restoreAudioInputIfNeeded(for: session)
-        }
+        #endif
     }
 
     private func getVideoOrientation() -> AVCaptureVideoOrientation {
@@ -194,7 +188,9 @@ class CameraController: NSObject, CXCallObserverDelegate {
     var onCameraInterruptionEnded: (() -> Void)?
     var onStartFailure: ((Error) -> Void)?
 
+    #if !CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT
     private let callObserver = CXCallObserver()
+    #endif
     private weak var observedCaptureSession: AVCaptureSession?
     private let captureSessionQueue = DispatchQueue(label: "com.capgo.camera.captureSession")
 
@@ -3009,7 +3005,12 @@ extension CameraController {
     }
 
     private func isPhoneCallActive() -> Bool {
-        self.callObserver.calls.contains { !$0.hasEnded }
+        #if !CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT
+        return self.callObserver.calls.contains { !$0.hasEnded }
+        #else
+        // AVFoundation interruption notifications and audio-priority errors still handle conflicts.
+        return false
+        #endif
     }
 
     private func shouldAttachAudioInput(disableAudio: Bool) -> Bool {
@@ -4234,3 +4235,17 @@ extension CameraController: AVCaptureFileOutputRecordingDelegate {
         }
     }
 }
+
+#if !CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT
+extension CameraController: CXCallObserverDelegate {
+    func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
+        guard call.hasEnded,
+              callObserver.calls.allSatisfy({ $0.hasEnded }),
+              let session = self.captureSession else { return }
+        self.performCaptureSessionMutationAsync { [weak self] in
+            guard let self = self else { return }
+            self.restoreAudioInputIfNeeded(for: session)
+        }
+    }
+}
+#endif

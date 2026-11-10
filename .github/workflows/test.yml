@@ -54,6 +54,9 @@ jobs:
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh android
   build_ios:
+    strategy:
+      matrix:
+        callkit: [true, false]
     runs-on: macOS-latest
     # Keep this job capped at 10 minutes; never raise it unless explicitly asked.
     timeout-minutes: 10
@@ -72,10 +75,16 @@ jobs:
         run: bun run check:wiring
       - name: Check Cap 9 deprecated APIs
         run: bun run check:cap9-deprecated
+      - name: Configure CallKit compilation
+        env:
+          CAPACITOR_PLATFORM_NAME: ios
+          CAPACITOR_CONFIG: '{"plugins":{"CameraPreview":{"iosCallKit":${{ matrix.callkit }}}}}'
+        run: bun scripts/configure-dependencies.cjs
       - name: Build
         id: build_code
         run: bun run verify:ios
       - name: Verify packed package in example app (iOS)
+        if: matrix.callkit
         shell: bash
         run: bash ./.github/scripts/verify-packed-example.sh ios
   web:
