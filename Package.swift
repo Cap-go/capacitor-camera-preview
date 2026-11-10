@@ -19,7 +19,9 @@ let package = Package(
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm")
             ],
-            path: "ios/Sources/CapgoCameraPreviewPlugin"),
+            path: "ios/Sources/CapgoCameraPreviewPlugin",
+            swiftSettings: [.define("CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT")] // CameraPreview CallKit (configured by sync hook)
+        ),
         .testTarget(
             name: "CapgoCameraPreviewTests",
             dependencies: ["CapgoCameraPreview"],

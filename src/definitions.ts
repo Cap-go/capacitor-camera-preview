@@ -1,5 +1,19 @@
 import type { PermissionState, PluginListenerHandle } from '@capacitor/core';
 
+/** Build-time settings under `plugins.CameraPreview` in capacitor.config.ts. */
+export interface CameraPreviewConfig {
+  /**
+   * Include iOS CallKit phone-call observation in the native build.
+   * Disabled by default. Set true to opt in to CallKit phone-call observation.
+   * Run `bunx cap sync ios` and rebuild the native app after changing this option;
+   * runtime configuration and OTA updates cannot change linked frameworks.
+   * AVFoundation interruption handling remains active when false, but proactive
+   * phone-call detection and call-ended audio recovery are unavailable.
+   * @default false
+   */
+  iosCallKit?: boolean;
+}
+
 export type CameraPosition = 'rear' | 'front';
 
 export type FlashMode = CameraPreviewFlashMode;
