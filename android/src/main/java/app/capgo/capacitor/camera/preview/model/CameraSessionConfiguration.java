@@ -31,6 +31,7 @@ public class CameraSessionConfiguration {
     private String videoStabilizationMode = "off";
     private boolean enablePhysicalDeviceSelection = false;
     private boolean barcodeScannerEnabled = false;
+    private boolean faceDetectionEnabled = false;
     private boolean mirrorFrontCamera = false;
     private Integer captureResolutionWidth;
     private Integer captureResolutionHeight;
@@ -207,6 +208,14 @@ public class CameraSessionConfiguration {
 
     public void setBarcodeScannerEnabled(boolean barcodeScannerEnabled) {
         this.barcodeScannerEnabled = barcodeScannerEnabled;
+    }
+
+    public boolean isFaceDetectionEnabled() {
+        return faceDetectionEnabled;
+    }
+
+    public void setFaceDetectionEnabled(boolean faceDetectionEnabled) {
+        this.faceDetectionEnabled = faceDetectionEnabled;
     }
 
     public boolean hasCaptureResolution() {

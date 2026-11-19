@@ -85,6 +85,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             // Store the current configuration before stopping
             lastSessionConfig = cameraXView.getSessionConfig();
             requestBarcodeScannerRestartAfterCameraResume();
+            requestFaceDetectionRestartAfterCameraResume();
             cameraXView.stopSession();
         }
     }
@@ -106,6 +107,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 toBackVisualStateActive = false;
             }
             requestBarcodeScannerRestartAfterCameraResume();
+            requestFaceDetectionRestartAfterCameraResume();
             cameraRestartAfterResumeInProgress = true;
             cameraXView.startSession(lastSessionConfig);
         }
@@ -120,6 +122,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         lastSessionConfig = null;
         clearActiveBarcodeScanner();
+        clearActiveFaceDetection();
         toBackVisualStateActive = false;
         restoreWebViewVisualState();
         unregisterScreenLockReceiver();
@@ -167,6 +170,12 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private List<String> activeBarcodeFormats = new ArrayList<>();
     private int activeBarcodeDetectionInterval = 500;
     private boolean restartBarcodeScannerAfterCameraResume = false;
+    private boolean pendingStartFaceDetection = false;
+    private int pendingStartFaceDetectionInterval = 100;
+    private final Object activeFaceDetectionLock = new Object();
+    private boolean activeFaceDetection = false;
+    private int activeFaceDetectionInterval = 100;
+    private boolean restartFaceDetectionAfterCameraResume = false;
     private boolean screenLocked = false;
     private boolean activityPaused = false;
     private boolean cameraRestartAfterResumeInProgress = false;
@@ -586,6 +595,40 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         call.resolve();
     }
 
+    @PluginMethod
+    public void startFaceDetection(PluginCall call) {
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            call.reject("Camera is not running");
+            return;
+        }
+
+        Integer detectionInterval = call.getInt("detectionInterval", 100);
+        cameraXView.startFaceDetection(
+            detectionInterval != null ? detectionInterval : 100,
+            new CameraXView.FaceDetectionStartCallback() {
+                @Override
+                public void onStarted() {
+                    markActiveFaceDetection(detectionInterval != null ? detectionInterval : 100);
+                    call.resolve();
+                }
+
+                @Override
+                public void onError(String message) {
+                    call.reject(message);
+                }
+            }
+        );
+    }
+
+    @PluginMethod
+    public void stopFaceDetection(PluginCall call) {
+        clearActiveFaceDetection();
+        if (cameraXView != null) {
+            cameraXView.stopFaceDetection();
+        }
+        call.resolve();
+    }
+
     private List<String> getStringArray(PluginCall call, String key) {
         List<String> result = new ArrayList<>();
         JSArray array = call.getArray(key);
@@ -629,6 +672,17 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         return null;
     }
 
+    private JSONObject getStartFaceDetectionOptions(PluginCall call) {
+        Object faceDetection = call.getData().opt("faceDetection");
+        if (Boolean.TRUE.equals(faceDetection)) {
+            return new JSONObject();
+        }
+        if (faceDetection instanceof JSONObject) {
+            return (JSONObject) faceDetection;
+        }
+        return null;
+    }
+
     private void setPendingStartBarcodeScanner(JSONObject options) {
         pendingStartBarcodeScanner = options != null;
         pendingStartBarcodeFormats = options != null ? getStringArray(options, "formats") : new ArrayList<>();
@@ -639,6 +693,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         pendingStartBarcodeScanner = false;
         pendingStartBarcodeFormats = new ArrayList<>();
         pendingStartBarcodeDetectionInterval = 500;
+    }
+
+    private void setPendingStartFaceDetection(JSONObject options) {
+        pendingStartFaceDetection = options != null;
+        pendingStartFaceDetectionInterval = options != null ? options.optInt("detectionInterval", 100) : 100;
+    }
+
+    private void resetPendingStartFaceDetection() {
+        pendingStartFaceDetection = false;
+        pendingStartFaceDetectionInterval = 100;
     }
 
     private void markActiveBarcodeScanner(List<String> formats, int detectionInterval) {
@@ -655,6 +719,21 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             activeBarcodeFormats = new ArrayList<>();
             activeBarcodeDetectionInterval = 500;
             restartBarcodeScannerAfterCameraResume = false;
+        }
+    }
+
+    private void markActiveFaceDetection(int detectionInterval) {
+        synchronized (activeFaceDetectionLock) {
+            activeFaceDetection = true;
+            activeFaceDetectionInterval = detectionInterval;
+        }
+    }
+
+    private void clearActiveFaceDetection() {
+        synchronized (activeFaceDetectionLock) {
+            activeFaceDetection = false;
+            activeFaceDetectionInterval = 100;
+            restartFaceDetectionAfterCameraResume = false;
         }
     }
 
@@ -714,6 +793,63 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 public void onError(String message) {
                     restoreBarcodeScannerRestartRequest(request);
                     onBarcodeScanError("Failed to restart barcode scanner after unlock: " + message);
+                }
+            }
+        );
+    }
+
+    private void requestFaceDetectionRestartAfterCameraResume() {
+        synchronized (activeFaceDetectionLock) {
+            if (activeFaceDetection) {
+                restartFaceDetectionAfterCameraResume = true;
+            }
+        }
+    }
+
+    private Integer consumeFaceDetectionRestartRequest() {
+        synchronized (activeFaceDetectionLock) {
+            if (!activeFaceDetection || !restartFaceDetectionAfterCameraResume) {
+                return null;
+            }
+            restartFaceDetectionAfterCameraResume = false;
+            return activeFaceDetectionInterval;
+        }
+    }
+
+    private void restoreFaceDetectionRestartRequest() {
+        synchronized (activeFaceDetectionLock) {
+            if (activeFaceDetection) {
+                restartFaceDetectionAfterCameraResume = true;
+            }
+        }
+    }
+
+    private void restartFaceDetectionAfterCameraResumeIfNeeded() {
+        if (screenLocked || isDeviceLocked()) {
+            return;
+        }
+
+        if (cameraXView == null || !cameraXView.isRunning()) {
+            return;
+        }
+
+        Integer detectionInterval = consumeFaceDetectionRestartRequest();
+        if (detectionInterval == null) {
+            return;
+        }
+
+        cameraXView.startFaceDetection(
+            detectionInterval,
+            new CameraXView.FaceDetectionStartCallback() {
+                @Override
+                public void onStarted() {
+                    markActiveFaceDetection(detectionInterval);
+                }
+
+                @Override
+                public void onError(String message) {
+                    restoreFaceDetectionRestartRequest();
+                    onFaceDetectionError("Failed to restart face detection after unlock: " + message);
                 }
             }
         );
@@ -780,6 +916,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     private void handleScreenOff() {
         screenLocked = true;
         requestBarcodeScannerRestartAfterCameraResume();
+        requestFaceDetectionRestartAfterCameraResume();
         if (cameraXView != null && cameraXView.isRunning() && !cameraXView.isStopping()) {
             lastSessionConfig = cameraXView.getSessionConfig();
             cameraXView.stopSession();
@@ -790,6 +927,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         screenLocked = isDeviceLocked();
         if (!screenLocked) {
             restartBarcodeScannerAfterCameraResumeIfNeeded();
+            restartFaceDetectionAfterCameraResumeIfNeeded();
         }
     }
 
@@ -845,6 +983,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             // Manual stops should not trigger automatic resume with stale config
             lastSessionConfig = null;
             clearActiveBarcodeScanner();
+            clearActiveFaceDetection();
             toBackVisualStateActive = false;
             restoreWebViewVisualState();
             call.resolve();
@@ -1326,6 +1465,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean enablePhysicalDeviceSelection = Boolean.TRUE.equals(call.getBoolean("enablePhysicalDeviceSelection", false));
         final String videoQuality = call.getString("videoQuality", "high");
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
+        final JSONObject faceDetectionOptions = getStartFaceDetectionOptions(call);
 
         final Integer captureResolutionWidth;
         final Integer captureResolutionHeight;
@@ -1655,6 +1795,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 config.setEnablePhysicalDeviceSelection(enablePhysicalDeviceSelection);
                 config.setCaptureResolution(captureResolutionWidth, captureResolutionHeight);
                 config.setBarcodeScannerEnabled(barcodeScannerOptions != null);
+                config.setFaceDetectionEnabled(faceDetectionOptions != null);
                 String startVideoCodec = call.getString("videoCodec");
                 if (startVideoCodec != null) {
                     config.setVideoCodec(startVideoCodec);
@@ -1664,6 +1805,10 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 setPendingStartBarcodeScanner(barcodeScannerOptions);
                 if (barcodeScannerOptions == null) {
                     clearActiveBarcodeScanner();
+                }
+                setPendingStartFaceDetection(faceDetectionOptions);
+                if (faceDetectionOptions == null) {
+                    clearActiveFaceDetection();
                 }
 
                 bridge.saveCall(call);
@@ -2264,31 +2409,65 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     ")"
             );
 
-            if (pendingStartBarcodeScanner && cameraXView != null) {
-                List<String> formats = new ArrayList<>(pendingStartBarcodeFormats);
-                int detectionInterval = pendingStartBarcodeDetectionInterval;
-                cameraXView.startBarcodeScanner(
-                    formats,
-                    detectionInterval,
-                    new CameraXView.BarcodeScannerStartCallback() {
-                        @Override
-                        public void onStarted() {
-                            markActiveBarcodeScanner(formats, detectionInterval);
-                            resolveCameraStartCall(call, result);
-                        }
-
-                        @Override
-                        public void onError(String message) {
-                            rejectCameraStartCall(call, message);
-                        }
-                    }
-                );
-                return;
-            }
-
-            resolveCameraStartCall(call, result);
+            startPendingRealtimeAnalyzersOnCameraStart(call, result);
         }
         restartBarcodeScannerAfterCameraResumeIfNeeded();
+        restartFaceDetectionAfterCameraResumeIfNeeded();
+    }
+
+    private void startPendingRealtimeAnalyzersOnCameraStart(PluginCall call, JSObject result) {
+        if (cameraXView == null) {
+            resolveCameraStartCall(call, result);
+            return;
+        }
+
+        if (pendingStartBarcodeScanner) {
+            List<String> formats = new ArrayList<>(pendingStartBarcodeFormats);
+            int detectionInterval = pendingStartBarcodeDetectionInterval;
+            cameraXView.startBarcodeScanner(
+                formats,
+                detectionInterval,
+                new CameraXView.BarcodeScannerStartCallback() {
+                    @Override
+                    public void onStarted() {
+                        markActiveBarcodeScanner(formats, detectionInterval);
+                        startPendingFaceDetectionAfterCameraStart(call, result);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        rejectCameraStartCall(call, message);
+                    }
+                }
+            );
+            return;
+        }
+
+        startPendingFaceDetectionAfterCameraStart(call, result);
+    }
+
+    private void startPendingFaceDetectionAfterCameraStart(PluginCall call, JSObject result) {
+        if (!pendingStartFaceDetection || cameraXView == null) {
+            resolveCameraStartCall(call, result);
+            return;
+        }
+
+        int detectionInterval = pendingStartFaceDetectionInterval;
+        cameraXView.startFaceDetection(
+            detectionInterval,
+            new CameraXView.FaceDetectionStartCallback() {
+                @Override
+                public void onStarted() {
+                    markActiveFaceDetection(detectionInterval);
+                    resolveCameraStartCall(call, result);
+                }
+
+                @Override
+                public void onError(String message) {
+                    rejectCameraStartCall(call, message);
+                }
+            }
+        );
     }
 
     private void resolveCameraStartCall(PluginCall call, JSObject result) {
@@ -2296,6 +2475,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         bridge.releaseCall(call);
         cameraStartCallbackId = null; // Prevent re-use
         resetPendingStartBarcodeScanner();
+        resetPendingStartFaceDetection();
     }
 
     private void rejectCameraStartCall(PluginCall call, String message) {
@@ -2303,6 +2483,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         bridge.releaseCall(call);
         cameraStartCallbackId = null;
         resetPendingStartBarcodeScanner();
+        resetPendingStartFaceDetection();
     }
 
     @Override
@@ -2343,6 +2524,20 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         JSObject data = new JSObject();
         data.put("message", message);
         notifyListeners("barcodeScanError", data);
+    }
+
+    @Override
+    public void onFacesDetected(org.json.JSONArray faces) {
+        JSObject data = new JSObject();
+        data.put("faces", faces);
+        notifyListeners("faceDetected", data);
+    }
+
+    @Override
+    public void onFaceDetectionError(String message) {
+        JSObject data = new JSObject();
+        data.put("message", message);
+        notifyListeners("faceDetectionError", data);
     }
 
     @Override

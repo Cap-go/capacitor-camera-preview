@@ -6,6 +6,8 @@ import type {
   BarcodeScanResult,
   BarcodeScannerOptions,
   BarcodeScannerFormat,
+  DetectedFace,
+  FaceDetectionOptions,
   CameraDevice,
   CameraPreviewAspectRatio,
   CameraOpacityOptions,
@@ -54,6 +56,9 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private barcodeDetector: any = null;
   private barcodeScannerTimer: number | null = null;
   private barcodeScannerBusy = false;
+  private faceDetector: any = null;
+  private faceDetectionTimer: number | null = null;
+  private faceDetectionBusy = false;
 
   constructor() {
     super();
@@ -634,6 +639,16 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       }
     }
 
+    const faceDetectionOptions = this.getStartFaceDetectionOptions(options);
+    if (faceDetectionOptions) {
+      try {
+        await this.startFaceDetection(faceDetectionOptions);
+      } catch (error) {
+        await this.stop({ force: true });
+        throw error;
+      }
+    }
+
     return result;
   }
 
@@ -664,6 +679,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     // Force option doesn't change behavior on web - we always stop immediately
     void _options; // Mark as intentionally unused
     await this.stopBarcodeScanner();
+    await this.stopFaceDetection();
 
     const video = this.videoElement;
     if (video) {
@@ -833,12 +849,92 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     this.barcodeScannerBusy = false;
   }
 
+  async startFaceDetection(options?: FaceDetectionOptions): Promise<void> {
+    if (!this.isStarted || !this.videoElement?.srcObject) {
+      throw new Error('camera is not running');
+    }
+
+    const Detector = (window as any).FaceDetector;
+    if (!Detector) {
+      throw new Error('FaceDetector API is not available in this browser');
+    }
+
+    await this.stopFaceDetection();
+    this.faceDetector = new Detector({ fastMode: true });
+
+    const detectionInterval = Math.max(100, options?.detectionInterval ?? 100);
+    const detect = async () => {
+      if (this.faceDetectionBusy || !this.faceDetector || !this.videoElement?.srcObject) {
+        return;
+      }
+
+      this.faceDetectionBusy = true;
+      try {
+        const results = (await this.faceDetector.detect(this.videoElement)) as {
+          boundingBox: DOMRectReadOnly;
+        }[];
+        const videoWidth = this.videoElement.videoWidth;
+        const videoHeight = this.videoElement.videoHeight;
+        const faces: DetectedFace[] = results
+          .map((result) => this.toDetectedFace(result.boundingBox, videoWidth, videoHeight))
+          .filter((face): face is DetectedFace => !!face);
+
+        this.notifyListeners('faceDetected', { faces });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Face detection failed:', error);
+        this.notifyListeners('faceDetectionError', { message });
+      } finally {
+        this.faceDetectionBusy = false;
+      }
+    };
+
+    this.faceDetectionTimer = window.setInterval(() => {
+      void detect();
+    }, detectionInterval);
+    void detect();
+  }
+
+  async stopFaceDetection(): Promise<void> {
+    if (this.faceDetectionTimer !== null) {
+      window.clearInterval(this.faceDetectionTimer);
+      this.faceDetectionTimer = null;
+    }
+    this.faceDetector = null;
+    this.faceDetectionBusy = false;
+  }
+
+  private toDetectedFace(box: DOMRectReadOnly, videoWidth: number, videoHeight: number): DetectedFace | null {
+    if (!videoWidth || !videoHeight || !box) {
+      return null;
+    }
+
+    return {
+      bounds: {
+        x: box.x / videoWidth,
+        y: box.y / videoHeight,
+        width: box.width / videoWidth,
+        height: box.height / videoHeight,
+      },
+    };
+  }
+
   private getStartBarcodeScannerOptions(options: CameraPreviewOptions): BarcodeScannerOptions | null {
     if (options.barcodeScanner === true) {
       return {};
     }
     if (options.barcodeScanner && typeof options.barcodeScanner === 'object') {
       return options.barcodeScanner;
+    }
+    return null;
+  }
+
+  private getStartFaceDetectionOptions(options: CameraPreviewOptions): FaceDetectionOptions | null {
+    if (options.faceDetection === true) {
+      return {};
+    }
+    if (options.faceDetection && typeof options.faceDetection === 'object') {
+      return options.faceDetection;
     }
     return null;
   }

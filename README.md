@@ -451,6 +451,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`captureSample(...)`](#capturesample)
 * [`startBarcodeScanner(...)`](#startbarcodescanner)
 * [`stopBarcodeScanner()`](#stopbarcodescanner)
+* [`startFaceDetection(...)`](#startfacedetection)
+* [`stopFaceDetection()`](#stopfacedetection)
 * [`getSupportedFlashModes()`](#getsupportedflashmodes)
 * [`setAspectRatio(...)`](#setaspectratio)
 * [`getAspectRatio()`](#getaspectratio)
@@ -491,6 +493,8 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`addListener('orientationChange', ...)`](#addlistenerorientationchange-)
 * [`addListener('barcodeScanned', ...)`](#addlistenerbarcodescanned-)
 * [`addListener('barcodeScanError', ...)`](#addlistenerbarcodescanerror-)
+* [`addListener('faceDetected', ...)`](#addlistenerfacedetected-)
+* [`addListener('faceDetectionError', ...)`](#addlistenerfacedetectionerror-)
 * [`addListener('recordingFinished', ...)`](#addlistenerrecordingfinished-)
 * [`addListener('cameraInterrupted', ...)`](#addlistenercamerainterrupted-)
 * [`addListener('cameraInterruptionEnded', ...)`](#addlistenercamerainterruptionended-)
@@ -630,6 +634,38 @@ stopBarcodeScanner() => Promise<void>
 Stops barcode scanning while keeping the camera preview running.
 
 **Since:** 8.8.0
+
+--------------------
+
+
+### startFaceDetection(...)
+
+```typescript
+startFaceDetection(options?: FaceDetectionOptions | undefined) => Promise<void>
+```
+
+Starts realtime face detection on the active camera preview.
+
+Emits `faceDetected` with normalized bounds suitable for filter overlays.
+
+| Param         | Type                                                                  |
+| ------------- | --------------------------------------------------------------------- |
+| **`options`** | <code><a href="#facedetectionoptions">FaceDetectionOptions</a></code> |
+
+**Since:** 8.16.0
+
+--------------------
+
+
+### stopFaceDetection()
+
+```typescript
+stopFaceDetection() => Promise<void>
+```
+
+Stops face detection while keeping the camera preview running.
+
+**Since:** 8.16.0
 
 --------------------
 
@@ -1303,6 +1339,46 @@ Adds a listener for non-fatal barcode scanner errors.
 --------------------
 
 
+### addListener('faceDetected', ...)
+
+```typescript
+addListener(eventName: 'faceDetected', listenerFunc: (data: FaceDetectedEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for realtime face detection results.
+
+| Param              | Type                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'faceDetected'</code>                                                        |
+| **`listenerFunc`** | <code>(data: <a href="#facedetectedevent">FaceDetectedEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.16.0
+
+--------------------
+
+
+### addListener('faceDetectionError', ...)
+
+```typescript
+addListener(eventName: 'faceDetectionError', listenerFunc: (data: FaceDetectionErrorEvent) => void) => Promise<PluginListenerHandle>
+```
+
+Adds a listener for non-fatal face detection errors.
+
+| Param              | Type                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'faceDetectionError'</code>                                                              |
+| **`listenerFunc`** | <code>(data: <a href="#facedetectionerrorevent">FaceDetectionErrorEvent</a>) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+**Since:** 8.16.0
+
+--------------------
+
+
 ### addListener('recordingFinished', ...)
 
 ```typescript
@@ -1659,6 +1735,7 @@ Defines the configuration options for starting the camera preview.
 | **`allowHapticsAndSystemSoundsDuringRecording`** | <code>boolean</code>                                                               | When `true`, allows haptic feedback and system sounds while recording video with audio. iOS suppresses haptics during audio input recording unless this is enabled. Requires `disableAudio: false`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | <code>false</code>            | 8.8.0  |
 | **`mirrorFrontCamera`**                          | <code>boolean</code>                                                               | When `true` and the front camera is active, mirrors the recorded video file so it matches the selfie-style preview (text and gestures are not reversed). Does not affect the live preview. Defaults to `false` to preserve existing behavior.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | <code>false</code>            | 8.10.0 |
 | **`barcodeScanner`**                             | <code>boolean \| <a href="#barcodescanneroptions">BarcodeScannerOptions</a></code> | Starts barcode scanning together with the camera preview. Set to `true` or pass options to scan all supported formats. Omit this option to keep barcode scanning disabled at startup.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |                               | 8.8.0  |
+| **`faceDetection`**                              | <code>boolean \| <a href="#facedetectionoptions">FaceDetectionOptions</a></code>   | Starts realtime face detection together with the camera preview. Set to `true` or pass options to emit `faceDetected` events with normalized bounds. Omit this option to keep face detection disabled at startup.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |                               | 8.16.0 |
 
 
 #### CameraCaptureResolution
@@ -1680,6 +1757,13 @@ supported capture sizes whose long edge exceeds `max(width, height)`.
 | ----------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | **`formats`**           | <code>BarcodeScannerFormat[]</code> | Restricts detection to the given formats. Leaving this empty scans all supported formats. Restricting formats can improve scanning speed. |                  |
 | **`detectionInterval`** | <code>number</code>                 | Minimum delay between native scan attempts in milliseconds. Lower values scan more often but use more CPU.                                | <code>500</code> |
+
+
+#### FaceDetectionOptions
+
+| Prop                    | Type                | Description                                                                                                            | Default          |
+| ----------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| **`detectionInterval`** | <code>number</code> | Minimum delay between native detection attempts in milliseconds. Lower values update overlays faster but use more CPU. | <code>100</code> |
 
 
 #### ExifData
@@ -1843,6 +1927,41 @@ Represents the detailed information of the currently active lens.
 | Prop          | Type                | Description                   |
 | ------------- | ------------------- | ----------------------------- |
 | **`message`** | <code>string</code> | Native scanner error message. |
+
+
+#### FaceDetectedEvent
+
+| Prop        | Type                        | Description                                  |
+| ----------- | --------------------------- | -------------------------------------------- |
+| **`faces`** | <code>DetectedFace[]</code> | Faces detected in the latest analyzed frame. |
+
+
+#### DetectedFace
+
+| Prop             | Type                                                        | Description                                        |
+| ---------------- | ----------------------------------------------------------- | -------------------------------------------------- |
+| **`bounds`**     | <code><a href="#faceboundingbox">FaceBoundingBox</a></code> | Normalized bounding box for overlay placement.     |
+| **`trackingId`** | <code>number</code>                                         | Stable tracking id when the platform provides one. |
+
+
+#### FaceBoundingBox
+
+Normalized face bounds in preview space. Origin is the top-left corner.
+`x`, `y`, `width`, and `height` are fractions of the analyzed frame (0 to 1).
+
+| Prop         | Type                |
+| ------------ | ------------------- |
+| **`x`**      | <code>number</code> |
+| **`y`**      | <code>number</code> |
+| **`width`**  | <code>number</code> |
+| **`height`** | <code>number</code> |
+
+
+#### FaceDetectionErrorEvent
+
+| Prop          | Type                | Description                          |
+| ------------- | ------------------- | ------------------------------------ |
+| **`message`** | <code>string</code> | Native face detection error message. |
 
 
 #### CameraInterruptedEvent

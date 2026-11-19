@@ -46,6 +46,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         CAPPluginMethod(name: "captureSample", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startBarcodeScanner", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopBarcodeScanner", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startFaceDetection", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopFaceDetection", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getSupportedFlashModes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getHorizontalFov", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFlashMode", returnType: CAPPluginReturnPromise),
@@ -131,6 +133,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var waitingForLocation: Bool = false
     private var isPresentingPermissionAlert: Bool = false
     private var pendingStartBarcodeScannerOptions: (formats: [String], detectionInterval: Int)?
+    private var pendingStartFaceDetectionInterval: Int?
     private var hasResolvedStartCall: Bool = false
     private var startGeneration: UInt = 0
     private var firstFrameTimeoutWorkItem: DispatchWorkItem?
@@ -818,6 +821,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         )
         let videoStabilizationMode = call.getString("videoStabilizationMode")
         self.pendingStartBarcodeScannerOptions = self.barcodeScannerStartOptions(from: call)
+        self.pendingStartFaceDetectionInterval = self.faceDetectionStartInterval(from: call)
 
         let initialZoomLevel = call.getFloat("initialZoomLevel")
         let allowHapticsAndSystemSoundsDuringRecording = call.getBool("allowHapticsAndSystemSoundsDuringRecording") ?? false
@@ -1039,6 +1043,18 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
     }
 
+    private func faceDetectionStartInterval(from call: CAPPluginCall) -> Int? {
+        if call.getBool("faceDetection") == true {
+            return 100
+        }
+
+        guard let options = call.getObject("faceDetection") else {
+            return nil
+        }
+
+        return (options["detectionInterval"] as? Int) ?? (options["detectionInterval"] as? NSNumber)?.intValue ?? 100
+    }
+
     private func barcodeScannerStartOptions(from call: CAPPluginCall) -> (formats: [String], detectionInterval: Int)? {
         if call.getBool("barcodeScanner") == true {
             return (formats: [], detectionInterval: 500)
@@ -1072,6 +1088,19 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
             self.pendingStartBarcodeScannerOptions = nil
+        }
+
+        if let detectionInterval = pendingStartFaceDetectionInterval {
+            do {
+                try self.cameraController.startFaceDetection(detectionIntervalMs: detectionInterval) { [weak self] faces in
+                    self?.notifyListeners("faceDetected", data: ["faces": faces])
+                }
+            } catch {
+                self.pendingStartFaceDetectionInterval = nil
+                call.reject("Failed to start face detection: \(error.localizedDescription)")
+                return
+            }
+            self.pendingStartFaceDetectionInterval = nil
         }
 
         call.resolve(returnedObject)
@@ -1685,6 +1714,29 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     @objc func stopBarcodeScanner(_ call: CAPPluginCall) {
         self.cameraController.stopBarcodeScanner()
+        call.resolve()
+    }
+
+    @objc func startFaceDetection(_ call: CAPPluginCall) {
+        guard self.isInitialized else {
+            call.reject("Camera is not running")
+            return
+        }
+
+        let detectionInterval = call.getInt("detectionInterval") ?? 100
+
+        do {
+            try self.cameraController.startFaceDetection(detectionIntervalMs: detectionInterval) { [weak self] faces in
+                self?.notifyListeners("faceDetected", data: ["faces": faces])
+            }
+            call.resolve()
+        } catch {
+            call.reject("Failed to start face detection: \(error.localizedDescription)")
+        }
+    }
+
+    @objc func stopFaceDetection(_ call: CAPPluginCall) {
+        self.cameraController.stopFaceDetection()
         call.resolve()
     }
 
