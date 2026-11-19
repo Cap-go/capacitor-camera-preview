@@ -11,11 +11,21 @@ public class FaceDetectionJsonMapperTest {
 
     @Test
     public void normalizeBoundingBox_mapsPixelRectToFractions() {
-        RectF normalized = FaceDetectionJsonMapper.normalizeBoundingBox(new Rect(100, 50, 300, 250), 1000, 500);
+        RectF normalized = FaceDetectionJsonMapper.normalizeBoundingBox(new Rect(100, 50, 300, 250), 1000, 500, 0);
 
         assertEquals(0.1f, normalized.left, 0.0001f);
         assertEquals(0.1f, normalized.top, 0.0001f);
         assertEquals(0.3f, normalized.right, 0.0001f);
+        assertEquals(0.5f, normalized.bottom, 0.0001f);
+    }
+
+    @Test
+    public void normalizeBoundingBox_swapsDimensionsForQuarterTurnRotation() {
+        RectF normalized = FaceDetectionJsonMapper.normalizeBoundingBox(new Rect(100, 50, 300, 250), 1000, 500, 90);
+
+        assertEquals(0.2f, normalized.left, 0.0001f);
+        assertEquals(0.1f, normalized.top, 0.0001f);
+        assertEquals(0.6f, normalized.right, 0.0001f);
         assertEquals(0.5f, normalized.bottom, 0.0001f);
     }
 

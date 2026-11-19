@@ -9,13 +9,18 @@ public final class FaceDetectionJsonMapper {
 
     private FaceDetectionJsonMapper() {}
 
-    public static RectF normalizeBoundingBox(Rect bounds, int imageWidth, int imageHeight) {
+    public static RectF normalizeBoundingBox(Rect bounds, int imageWidth, int imageHeight, int rotationDegrees) {
         if (bounds == null || imageWidth <= 0 || imageHeight <= 0) {
             return new RectF(0f, 0f, 0f, 0f);
         }
 
+        int normalizedRotation = ((rotationDegrees % 360) + 360) % 360;
         float width = imageWidth;
         float height = imageHeight;
+        if (normalizedRotation == 90 || normalizedRotation == 270) {
+            width = imageHeight;
+            height = imageWidth;
+        }
         return new RectF(bounds.left / width, bounds.top / height, bounds.right / width, bounds.bottom / height);
     }
 

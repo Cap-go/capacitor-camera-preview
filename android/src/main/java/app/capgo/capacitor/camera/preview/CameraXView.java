@@ -2220,7 +2220,8 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
 
         final int imageWidth = mediaImage.getWidth();
         final int imageHeight = mediaImage.getHeight();
-        InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+        final int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
+        InputImage image = InputImage.fromMediaImage(mediaImage, rotationDegrees);
         detector
             .process(image)
             .addOnSuccessListener((faces) -> {
@@ -2231,7 +2232,12 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 JSONArray result = new JSONArray();
                 for (Face face : faces) {
                     try {
-                        RectF normalized = FaceDetectionJsonMapper.normalizeBoundingBox(face.getBoundingBox(), imageWidth, imageHeight);
+                        RectF normalized = FaceDetectionJsonMapper.normalizeBoundingBox(
+                            face.getBoundingBox(),
+                            imageWidth,
+                            imageHeight,
+                            rotationDegrees
+                        );
                         Integer trackingId = face.getTrackingId();
                         JSONObject faceJson = FaceDetectionJsonMapper.toFaceJson(
                             normalized,

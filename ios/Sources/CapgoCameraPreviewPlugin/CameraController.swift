@@ -4014,7 +4014,7 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureMetadataOutputObjectsDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         if output === dataOutput, let faceCallback = faceDetectionCallback {
-            processFaceDetection(sampleBuffer: sampleBuffer, connection: connection, callback: faceCallback)
+            processFaceDetection(sampleBuffer: sampleBuffer, callback: faceCallback)
         }
 
         // Check if we're waiting for the first frame
@@ -4099,7 +4099,6 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
 
     private func processFaceDetection(
         sampleBuffer: CMSampleBuffer,
-        connection: AVCaptureConnection,
         callback: @escaping ([[String: Any]]) -> Void
     ) {
         let now = Date().timeIntervalSince1970
@@ -4109,11 +4108,10 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         isFaceFrameProcessing = true
         lastFaceDetectionAt = now
 
-        let orientation = cgImageOrientation(from: connection)
         faceDetectionQueue.async { [weak self] in
             guard let self = self else { return }
             let request = VNDetectFaceRectanglesRequest()
-            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: orientation, options: [:])
+            let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up, options: [:])
 
             do {
                 try handler.perform([request])
@@ -4134,20 +4132,6 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         }
     }
 
-    private func cgImageOrientation(from connection: AVCaptureConnection) -> CGImagePropertyOrientation {
-        switch connection.videoOrientation {
-        case .portrait:
-            return .right
-        case .portraitUpsideDown:
-            return .left
-        case .landscapeRight:
-            return .up
-        case .landscapeLeft:
-            return .down
-        default:
-            return .right
-        }
-    }
 }
 
 enum CameraControllerError: Swift.Error {
