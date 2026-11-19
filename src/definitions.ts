@@ -90,8 +90,10 @@ export interface BarcodeScanErrorEvent {
 }
 
 /**
- * Normalized face bounds in preview space. Origin is the top-left corner.
+ * Normalized face bounds in analyzed frame space. Origin is the top-left corner.
  * `x`, `y`, `width`, and `height` are fractions of the analyzed frame (0 to 1).
+ * These coordinates are not guaranteed to match on-screen preview placement.
+ * Apply preview mirroring and aspect/cover crop conversion before drawing overlays.
  */
 export interface FaceBoundingBox {
   x: number;

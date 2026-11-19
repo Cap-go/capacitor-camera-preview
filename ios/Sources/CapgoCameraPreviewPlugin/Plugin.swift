@@ -957,6 +957,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.isInitializing = false
             self.isInitialized = false
             self.pendingStartBarcodeScannerOptions = nil
+            self.pendingStartFaceDetectionInterval = nil
             if let errorCode = errorCode {
                 call.reject(message, errorCode)
             } else {
@@ -1071,11 +1072,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     private func resolveStartCall(_ call: CAPPluginCall, returnedObject: JSObject) {
         guard !hasResolvedStartCall else { return }
-        hasResolvedStartCall = true
-        pendingStartCall = nil
-        cancelFirstFrameTimeout()
-        cameraController.firstFrameReadyCallback = nil
-        cameraController.onStartFailure = nil
 
         if let options = pendingStartBarcodeScannerOptions {
             do {
@@ -1084,7 +1080,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 }
             } catch {
                 self.pendingStartBarcodeScannerOptions = nil
-                call.reject("Failed to start barcode scanner: \(error.localizedDescription)")
+                self.pendingStartFaceDetectionInterval = nil
+                failPendingStart(call, message: "Failed to start barcode scanner: \(error.localizedDescription)")
                 return
             }
             self.pendingStartBarcodeScannerOptions = nil
@@ -1092,17 +1089,28 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
         if let detectionInterval = pendingStartFaceDetectionInterval {
             do {
-                try self.cameraController.startFaceDetection(detectionIntervalMs: detectionInterval) { [weak self] faces in
-                    self?.notifyListeners("faceDetected", data: ["faces": faces])
-                }
+                try self.cameraController.startFaceDetection(
+                    detectionIntervalMs: detectionInterval,
+                    onFaces: { [weak self] faces in
+                        self?.notifyListeners("faceDetected", data: ["faces": faces])
+                    },
+                    onError: { [weak self] message in
+                        self?.notifyListeners("faceDetectionError", data: ["message": message])
+                    }
+                )
             } catch {
                 self.pendingStartFaceDetectionInterval = nil
-                call.reject("Failed to start face detection: \(error.localizedDescription)")
+                failPendingStart(call, message: "Failed to start face detection: \(error.localizedDescription)")
                 return
             }
             self.pendingStartFaceDetectionInterval = nil
         }
 
+        hasResolvedStartCall = true
+        pendingStartCall = nil
+        cancelFirstFrameTimeout()
+        cameraController.firstFrameReadyCallback = nil
+        cameraController.onStartFailure = nil
         call.resolve(returnedObject)
     }
 
@@ -1726,9 +1734,15 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         let detectionInterval = call.getInt("detectionInterval") ?? 100
 
         do {
-            try self.cameraController.startFaceDetection(detectionIntervalMs: detectionInterval) { [weak self] faces in
-                self?.notifyListeners("faceDetected", data: ["faces": faces])
-            }
+            try self.cameraController.startFaceDetection(
+                detectionIntervalMs: detectionInterval,
+                onFaces: { [weak self] faces in
+                    self?.notifyListeners("faceDetected", data: ["faces": faces])
+                },
+                onError: { [weak self] message in
+                    self?.notifyListeners("faceDetectionError", data: ["message": message])
+                }
+            )
             call.resolve()
         } catch {
             call.reject("Failed to start face detection: \(error.localizedDescription)")

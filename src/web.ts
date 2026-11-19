@@ -59,6 +59,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private faceDetector: any = null;
   private faceDetectionTimer: number | null = null;
   private faceDetectionBusy = false;
+  private faceDetectionSessionId = 0;
 
   constructor() {
     super();
@@ -860,42 +861,62 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     }
 
     await this.stopFaceDetection();
-    this.faceDetector = new Detector({ fastMode: true });
+    const sessionId = ++this.faceDetectionSessionId;
+    const detector = new Detector({ fastMode: true });
+    this.faceDetector = detector;
 
     const detectionInterval = Math.max(100, options?.detectionInterval ?? 100);
     const detect = async () => {
-      if (this.faceDetectionBusy || !this.faceDetector || !this.videoElement?.srcObject) {
+      if (sessionId !== this.faceDetectionSessionId) {
+        return;
+      }
+      if (this.faceDetectionBusy || this.faceDetector !== detector || !this.videoElement?.srcObject) {
         return;
       }
 
+      const video = this.videoElement;
+      const stream = video.srcObject;
+      const videoWidth = video.videoWidth;
+      const videoHeight = video.videoHeight;
+
       this.faceDetectionBusy = true;
       try {
-        const results = (await this.faceDetector.detect(this.videoElement)) as {
+        const results = (await detector.detect(video)) as {
           boundingBox: DOMRectReadOnly;
         }[];
-        const videoWidth = this.videoElement.videoWidth;
-        const videoHeight = this.videoElement.videoHeight;
+
+        if (sessionId !== this.faceDetectionSessionId || this.faceDetector !== detector || video.srcObject !== stream) {
+          return;
+        }
+
         const faces: DetectedFace[] = results
           .map((result) => this.toDetectedFace(result.boundingBox, videoWidth, videoHeight))
           .filter((face): face is DetectedFace => !!face);
 
         this.notifyListeners('faceDetected', { faces });
       } catch (error) {
+        if (sessionId !== this.faceDetectionSessionId) {
+          return;
+        }
         const message = error instanceof Error ? error.message : String(error);
         console.error('Face detection failed:', error);
         this.notifyListeners('faceDetectionError', { message });
       } finally {
-        this.faceDetectionBusy = false;
+        if (sessionId === this.faceDetectionSessionId) {
+          this.faceDetectionBusy = false;
+        }
       }
     };
 
-    this.faceDetectionTimer = window.setInterval(() => {
+    const timer = window.setInterval(() => {
       void detect();
     }, detectionInterval);
+    this.faceDetectionTimer = timer;
     void detect();
   }
 
   async stopFaceDetection(): Promise<void> {
+    this.faceDetectionSessionId += 1;
     if (this.faceDetectionTimer !== null) {
       window.clearInterval(this.faceDetectionTimer);
       this.faceDetectionTimer = null;

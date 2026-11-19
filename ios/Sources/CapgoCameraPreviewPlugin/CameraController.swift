@@ -180,11 +180,14 @@ class CameraController: NSObject {
     private let barcodeMetadataQueue = DispatchQueue(label: "com.camera.barcodeMetadataQueue", qos: .userInitiated)
     private var barcodeDetectionInterval: TimeInterval = 0.5
     private var lastBarcodeDetectionAt: TimeInterval = 0
-    var faceDetectionCallback: (([[String: Any]]) -> Void)?
+    private var faceDetectionFacesCallback: (([[String: Any]]) -> Void)?
+    private var faceDetectionErrorCallback: ((String) -> Void)?
     private let faceDetectionQueue = DispatchQueue(label: "com.camera.faceDetectionQueue", qos: .userInitiated)
+    private let faceDetectionStateQueue = DispatchQueue(label: "com.camera.faceDetectionState")
     private var faceDetectionInterval: TimeInterval = 0.1
     private var lastFaceDetectionAt: TimeInterval = 0
     private var isFaceFrameProcessing = false
+    private var faceDetectionGeneration: UInt = 0
 
     // Add callback for detecting when first frame is ready
     var firstFrameReadyCallback: (() -> Void)?
@@ -2372,23 +2375,35 @@ extension CameraController {
         self.metadataOutput = output
     }
 
-    func startFaceDetection(detectionIntervalMs: Int, callback: @escaping ([[String: Any]]) -> Void) throws {
+    func startFaceDetection(
+        detectionIntervalMs: Int,
+        onFaces: @escaping ([[String: Any]]) -> Void,
+        onError: @escaping (String) -> Void
+    ) throws {
         guard let captureSession = captureSession,
               captureSession.isRunning else {
             throw CameraControllerError.captureSessionIsMissing
         }
 
         stopFaceDetection()
-        faceDetectionCallback = callback
-        faceDetectionInterval = TimeInterval(max(100, detectionIntervalMs)) / 1000.0
-        lastFaceDetectionAt = 0
-        isFaceFrameProcessing = false
+        faceDetectionStateQueue.sync {
+            faceDetectionGeneration &+= 1
+            faceDetectionFacesCallback = onFaces
+            faceDetectionErrorCallback = onError
+            faceDetectionInterval = TimeInterval(max(100, detectionIntervalMs)) / 1000.0
+            lastFaceDetectionAt = 0
+            isFaceFrameProcessing = false
+        }
     }
 
     func stopFaceDetection() {
-        faceDetectionCallback = nil
-        lastFaceDetectionAt = 0
-        isFaceFrameProcessing = false
+        faceDetectionStateQueue.sync {
+            faceDetectionGeneration &+= 1
+            faceDetectionFacesCallback = nil
+            faceDetectionErrorCallback = nil
+            lastFaceDetectionAt = 0
+            isFaceFrameProcessing = false
+        }
     }
 
     func stopBarcodeScanner() {
@@ -4013,8 +4028,8 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
 
 extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureMetadataOutputObjectsDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        if output === dataOutput, let faceCallback = faceDetectionCallback {
-            processFaceDetection(sampleBuffer: sampleBuffer, callback: faceCallback)
+        if output === dataOutput {
+            processFaceDetectionIfNeeded(sampleBuffer: sampleBuffer)
         }
 
         // Check if we're waiting for the first frame
@@ -4097,17 +4112,23 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
         }
     }
 
-    private func processFaceDetection(
-        sampleBuffer: CMSampleBuffer,
-        callback: @escaping ([[String: Any]]) -> Void
-    ) {
-        let now = Date().timeIntervalSince1970
-        guard !isFaceFrameProcessing, now - lastFaceDetectionAt >= faceDetectionInterval else { return }
+    private func processFaceDetectionIfNeeded(sampleBuffer: CMSampleBuffer) {
+        let detectionContext = faceDetectionStateQueue.sync { () -> (UInt, (([[String: Any]]) -> Void)?, ((String) -> Void)?, Bool) in
+            let now = Date().timeIntervalSince1970
+            let canProcess = faceDetectionFacesCallback != nil &&
+                !isFaceFrameProcessing &&
+                now - lastFaceDetectionAt >= faceDetectionInterval
+            if canProcess {
+                isFaceFrameProcessing = true
+                lastFaceDetectionAt = now
+            }
+            return (faceDetectionGeneration, faceDetectionFacesCallback, faceDetectionErrorCallback, canProcess)
+        }
+
+        guard detectionContext.3 else { return }
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
-        isFaceFrameProcessing = true
-        lastFaceDetectionAt = now
-
+        let generation = detectionContext.0
         faceDetectionQueue.async { [weak self] in
             guard let self = self else { return }
             let request = VNDetectFaceRectanglesRequest()
@@ -4120,13 +4141,27 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate, AVCapt
                     FaceDetectionObservationMapper.facePayload(from: observation.boundingBox, trackingIdentifier: nil)
                 }
                 DispatchQueue.main.async {
-                    self.isFaceFrameProcessing = false
+                    let deliver = self.faceDetectionStateQueue.sync { () -> ((([[String: Any]]) -> Void)?, Bool) in
+                        let isCurrent = generation == self.faceDetectionGeneration
+                        if isCurrent {
+                            self.isFaceFrameProcessing = false
+                        }
+                        return (isCurrent ? self.faceDetectionFacesCallback : nil, isCurrent)
+                    }
+                    guard deliver.1, let callback = deliver.0 else { return }
                     callback(faces)
                 }
             } catch {
                 DispatchQueue.main.async {
-                    self.isFaceFrameProcessing = false
-                    callback([])
+                    let deliver = self.faceDetectionStateQueue.sync { () -> (((String) -> Void)?, Bool) in
+                        let isCurrent = generation == self.faceDetectionGeneration
+                        if isCurrent {
+                            self.isFaceFrameProcessing = false
+                        }
+                        return (isCurrent ? self.faceDetectionErrorCallback : nil, isCurrent)
+                    }
+                    guard deliver.1, let callback = deliver.0 else { return }
+                    callback(error.localizedDescription)
                 }
             }
         }

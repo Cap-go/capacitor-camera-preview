@@ -15,13 +15,24 @@ public final class FaceDetectionJsonMapper {
         }
 
         int normalizedRotation = ((rotationDegrees % 360) + 360) % 360;
-        float width = imageWidth;
-        float height = imageHeight;
+        int frameWidth = imageWidth;
+        int frameHeight = imageHeight;
         if (normalizedRotation == 90 || normalizedRotation == 270) {
-            width = imageHeight;
-            height = imageWidth;
+            frameWidth = imageHeight;
+            frameHeight = imageWidth;
         }
-        return new RectF(bounds.left / width, bounds.top / height, bounds.right / width, bounds.bottom / height);
+
+        int clippedLeft = Math.max(0, Math.min(bounds.left, frameWidth));
+        int clippedTop = Math.max(0, Math.min(bounds.top, frameHeight));
+        int clippedRight = Math.max(clippedLeft, Math.min(bounds.right, frameWidth));
+        int clippedBottom = Math.max(clippedTop, Math.min(bounds.bottom, frameHeight));
+
+        return new RectF(
+            clippedLeft / (float) frameWidth,
+            clippedTop / (float) frameHeight,
+            clippedRight / (float) frameWidth,
+            clippedBottom / (float) frameHeight
+        );
     }
 
     public static JSONObject toFaceJson(RectF normalizedBounds, Integer trackingId) throws JSONException {

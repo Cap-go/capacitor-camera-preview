@@ -950,6 +950,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
         restartBarcodeScannerAfterCameraResumeIfNeeded();
+        restartFaceDetectionAfterCameraResumeIfNeeded();
     }
 
     @PluginMethod
@@ -2479,6 +2480,13 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     private void rejectCameraStartCall(PluginCall call, String message) {
+        if (cameraXView != null) {
+            cameraXView.stopSession();
+            cameraXView = null;
+        }
+        lastSessionConfig = null;
+        clearActiveBarcodeScanner();
+        clearActiveFaceDetection();
         call.reject(message);
         bridge.releaseCall(call);
         cameraStartCallbackId = null;

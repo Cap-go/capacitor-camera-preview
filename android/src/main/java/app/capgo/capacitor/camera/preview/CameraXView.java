@@ -125,6 +125,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -169,7 +170,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     private ImageCapture sampleImageCapture;
     private ImageAnalysis barcodeAnalysis;
     private BarcodeScanner barcodeScanner;
-    private ImageAnalysis faceAnalysis;
     private FaceDetector faceDetector;
     private VideoCapture<Recorder> videoCapture;
     private Recording currentRecording;
@@ -676,7 +676,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     cameraProvider.unbindAll();
                 }
                 barcodeAnalysis = null;
-                faceAnalysis = null;
                 if (cameraExecutor != null) {
                     cameraExecutor.shutdown();
                 }
@@ -1133,19 +1132,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     .build();
                 sampleImageCapture = imageCapture;
                 barcodeAnalysis = null;
-                faceAnalysis = null;
 
-                if (!sessionConfig.isVideoModeEnabled() && sessionConfig.isBarcodeScannerEnabled()) {
+                if (shouldUseStreamAnalysis()) {
                     barcodeAnalysis = createBarcodeAnalysisUseCase();
-                    if (isBarcodeScannerActive && barcodeScanner != null && cameraExecutor != null) {
-                        barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
-                    }
-                }
-
-                if (!sessionConfig.isVideoModeEnabled() && sessionConfig.isFaceDetectionEnabled()) {
-                    faceAnalysis = createFaceAnalysisUseCase();
-                    if (isFaceDetectionActive && faceDetector != null && cameraExecutor != null) {
-                        faceAnalysis.setAnalyzer(cameraExecutor, this::analyzeFaceImage);
+                    if (cameraExecutor != null) {
+                        barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeStreamImage);
                     }
                 }
 
@@ -1897,10 +1888,6 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             cameraProvider.bindToLifecycle(this, bindingPlan.selector, barcodeAnalysis);
         }
 
-        if (faceAnalysis != null) {
-            cameraProvider.bindToLifecycle(this, bindingPlan.selector, faceAnalysis);
-        }
-
         CameraInfo cameraInfo = camera.getCameraInfo();
         currentLogicalDeviceId = Camera2CameraInfo.from(cameraInfo).getCameraId();
         currentPhysicalDeviceId = bindingPlan.physicalCameraId;
@@ -1932,13 +1919,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 isBarcodeFrameProcessing = false;
                 isBarcodeScannerActive = true;
 
-                if (barcodeAnalysis == null) {
-                    barcodeAnalysis = createBarcodeAnalysisUseCase();
-                    barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
-                    cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
-                } else {
-                    barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeBarcodeImage);
-                }
+                bindOrUpdateStreamAnalysis();
                 callback.onStarted();
             } catch (Exception e) {
                 stopBarcodeScannerInternal(true);
@@ -1965,14 +1946,11 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                 lastFaceFrameAtMs = 0L;
                 isFaceFrameProcessing = false;
                 isFaceDetectionActive = true;
-
-                if (faceAnalysis == null) {
-                    faceAnalysis = createFaceAnalysisUseCase();
-                    faceAnalysis.setAnalyzer(cameraExecutor, this::analyzeFaceImage);
-                    cameraProvider.bindToLifecycle(this, currentCameraSelector, faceAnalysis);
-                } else {
-                    faceAnalysis.setAnalyzer(cameraExecutor, this::analyzeFaceImage);
+                if (sessionConfig != null) {
+                    sessionConfig.setFaceDetectionEnabled(true);
                 }
+
+                bindOrUpdateStreamAnalysis();
                 callback.onStarted();
             } catch (Exception e) {
                 stopFaceDetectionInternal(true);
@@ -1996,15 +1974,41 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             .build();
     }
 
-    private ImageAnalysis createFaceAnalysisUseCase() {
-        ResolutionSelector faceResolutionSelector = new ResolutionSelector.Builder()
-            .setResolutionStrategy(new ResolutionStrategy(new Size(1280, 720), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
-            .build();
+    private boolean shouldUseStreamAnalysis() {
+        if (sessionConfig == null || sessionConfig.isVideoModeEnabled()) {
+            return false;
+        }
+        return (
+            isBarcodeScannerActive ||
+            isFaceDetectionActive ||
+            sessionConfig.isBarcodeScannerEnabled() ||
+            sessionConfig.isFaceDetectionEnabled()
+        );
+    }
 
-        return new ImageAnalysis.Builder()
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setResolutionSelector(faceResolutionSelector)
-            .build();
+    private void bindOrUpdateStreamAnalysis() {
+        if (!shouldUseStreamAnalysis()) {
+            return;
+        }
+        if (barcodeAnalysis == null) {
+            barcodeAnalysis = createBarcodeAnalysisUseCase();
+            cameraProvider.bindToLifecycle(this, currentCameraSelector, barcodeAnalysis);
+        }
+        barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeStreamImage);
+    }
+
+    private void maybeUnbindStreamAnalysis() {
+        if (barcodeAnalysis == null || isBarcodeScannerActive || isFaceDetectionActive) {
+            return;
+        }
+        barcodeAnalysis.clearAnalyzer();
+        try {
+            cameraProvider.unbind(barcodeAnalysis);
+        } catch (Exception e) {
+            Log.w(TAG, "maybeUnbindStreamAnalysis: failed to unbind stream analysis", e);
+        } finally {
+            barcodeAnalysis = null;
+        }
     }
 
     private FaceDetector createFaceDetector() {
@@ -2020,17 +2024,10 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         isBarcodeFrameProcessing = false;
         lastBarcodeFrameAtMs = 0L;
 
-        if (barcodeAnalysis != null) {
-            barcodeAnalysis.clearAnalyzer();
-            if (unbindAnalysis && cameraProvider != null) {
-                try {
-                    cameraProvider.unbind(barcodeAnalysis);
-                } catch (Exception e) {
-                    Log.w(TAG, "stopBarcodeScannerInternal: failed to unbind barcode analysis", e);
-                } finally {
-                    barcodeAnalysis = null;
-                }
-            }
+        if (unbindAnalysis && cameraProvider != null) {
+            maybeUnbindStreamAnalysis();
+        } else if (barcodeAnalysis != null) {
+            barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeStreamImage);
         }
 
         if (barcodeScanner != null) {
@@ -2048,17 +2045,14 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
         isFaceFrameProcessing = false;
         lastFaceFrameAtMs = 0L;
 
-        if (faceAnalysis != null) {
-            faceAnalysis.clearAnalyzer();
-            if (unbindAnalysis && cameraProvider != null) {
-                try {
-                    cameraProvider.unbind(faceAnalysis);
-                } catch (Exception e) {
-                    Log.w(TAG, "stopFaceDetectionInternal: failed to unbind face analysis", e);
-                } finally {
-                    faceAnalysis = null;
-                }
-            }
+        if (sessionConfig != null) {
+            sessionConfig.setFaceDetectionEnabled(false);
+        }
+
+        if (unbindAnalysis && cameraProvider != null) {
+            maybeUnbindStreamAnalysis();
+        } else if (barcodeAnalysis != null) {
+            barcodeAnalysis.setAnalyzer(cameraExecutor, this::analyzeStreamImage);
         }
 
         if (faceDetector != null) {
@@ -2145,28 +2139,69 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
     }
 
     @OptIn(markerClass = ExperimentalGetImage.class)
-    private void analyzeBarcodeImage(@NonNull ImageProxy imageProxy) {
-        BarcodeScanner scanner = barcodeScanner;
-        long now = SystemClock.elapsedRealtime();
-
-        if (
-            !isBarcodeScannerActive ||
-            scanner == null ||
-            isBarcodeFrameProcessing ||
-            now - lastBarcodeFrameAtMs < barcodeDetectionIntervalMs
-        ) {
+    private void analyzeStreamImage(@NonNull ImageProxy imageProxy) {
+        boolean analyzeBarcode = shouldAnalyzeBarcodeFrame();
+        boolean analyzeFace = shouldAnalyzeFaceFrame();
+        int taskCount = (analyzeBarcode ? 1 : 0) + (analyzeFace ? 1 : 0);
+        if (taskCount == 0) {
             imageProxy.close();
+            return;
+        }
+
+        if (analyzeBarcode && analyzeFace) {
+            AtomicInteger remainingTasks = new AtomicInteger(2);
+            Runnable releaseImage = () -> {
+                if (remainingTasks.decrementAndGet() == 0) {
+                    imageProxy.close();
+                }
+            };
+            analyzeBarcodeImage(imageProxy, releaseImage);
+            analyzeFaceImage(imageProxy, releaseImage);
+            return;
+        }
+
+        if (analyzeBarcode) {
+            analyzeBarcodeImage(imageProxy, imageProxy::close);
+            return;
+        }
+
+        analyzeFaceImage(imageProxy, imageProxy::close);
+    }
+
+    private boolean shouldAnalyzeBarcodeFrame() {
+        long now = SystemClock.elapsedRealtime();
+        return (
+            isBarcodeScannerActive &&
+            barcodeScanner != null &&
+            !isBarcodeFrameProcessing &&
+            now - lastBarcodeFrameAtMs >= barcodeDetectionIntervalMs
+        );
+    }
+
+    private boolean shouldAnalyzeFaceFrame() {
+        long now = SystemClock.elapsedRealtime();
+        return (
+            isFaceDetectionActive && faceDetector != null && !isFaceFrameProcessing && now - lastFaceFrameAtMs >= faceDetectionIntervalMs
+        );
+    }
+
+    @OptIn(markerClass = ExperimentalGetImage.class)
+    private void analyzeBarcodeImage(@NonNull ImageProxy imageProxy, @NonNull Runnable releaseImage) {
+        BarcodeScanner scanner = barcodeScanner;
+
+        if (!shouldAnalyzeBarcodeFrame() || scanner == null) {
+            releaseImage.run();
             return;
         }
 
         Image mediaImage = imageProxy.getImage();
         if (mediaImage == null) {
-            imageProxy.close();
+            releaseImage.run();
             return;
         }
 
         isBarcodeFrameProcessing = true;
-        lastBarcodeFrameAtMs = now;
+        lastBarcodeFrameAtMs = SystemClock.elapsedRealtime();
 
         InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
         scanner
@@ -2195,28 +2230,27 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             })
             .addOnCompleteListener((task) -> {
                 isBarcodeFrameProcessing = false;
-                imageProxy.close();
+                releaseImage.run();
             });
     }
 
     @OptIn(markerClass = ExperimentalGetImage.class)
-    private void analyzeFaceImage(@NonNull ImageProxy imageProxy) {
+    private void analyzeFaceImage(@NonNull ImageProxy imageProxy, @NonNull Runnable releaseImage) {
         FaceDetector detector = faceDetector;
-        long now = SystemClock.elapsedRealtime();
 
-        if (!isFaceDetectionActive || detector == null || isFaceFrameProcessing || now - lastFaceFrameAtMs < faceDetectionIntervalMs) {
-            imageProxy.close();
+        if (!shouldAnalyzeFaceFrame() || detector == null) {
+            releaseImage.run();
             return;
         }
 
         Image mediaImage = imageProxy.getImage();
         if (mediaImage == null) {
-            imageProxy.close();
+            releaseImage.run();
             return;
         }
 
         isFaceFrameProcessing = true;
-        lastFaceFrameAtMs = now;
+        lastFaceFrameAtMs = SystemClock.elapsedRealtime();
 
         final int imageWidth = mediaImage.getWidth();
         final int imageHeight = mediaImage.getHeight();
@@ -2249,11 +2283,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
                     }
                 }
 
-                if (result.length() > 0) {
-                    listener.onFacesDetected(result);
-                } else {
-                    listener.onFacesDetected(new JSONArray());
-                }
+                listener.onFacesDetected(result);
             })
             .addOnFailureListener((e) -> {
                 if (isFaceDetectionActive && listener != null) {
@@ -2262,7 +2292,7 @@ public class CameraXView implements LifecycleOwner, LifecycleObserver {
             })
             .addOnCompleteListener((task) -> {
                 isFaceFrameProcessing = false;
-                imageProxy.close();
+                releaseImage.run();
             });
     }
 
