@@ -35,7 +35,8 @@ We build, improve and fix our plugins with heavy use of AI, so issues usually ge
 - **Video**: `startRecordVideo()` and `stopRecordVideo()` with quality, codec, frame rate and stabilization settings.
 - **Camera controls**: flash, zoom, focus, exposure, white balance, `flip()` and `setDeviceId()` to pick a lens.
 - **Barcode scanning**: `startBarcodeScanner()` with `barcodeScanned` events while the preview keeps running.
-- **Platforms**: iOS, Android and Web. iOS uses AVFoundation, Android uses CameraX. Web supports a subset (preview, capture and basic controls).
+- **Realtime face detection**: `startFaceDetection()` with `faceDetected` events and normalized bounds for filter overlays (iOS, Android; Web when `FaceDetector` is available).
+- **Platforms**: iOS, Android and Web. iOS uses AVFoundation, Android uses CameraX. Web supports a subset (preview, capture, barcode scanning, and face detection where the browser exposes `FaceDetector`).
 
 ![NPM Version](https://img.shields.io/npm/v/%40capgo%2Fcamera-preview)
 ![NPM Downloads](https://img.shields.io/npm/dy/%40capgo%2Fcamera-preview)
@@ -226,6 +227,34 @@ await CameraPreview.start({
 ```
 
 Use `barcodeScanner: true` to scan all supported formats. You can also call `startBarcodeScanner()` and `stopBarcodeScanner()` after the preview is running to scan only during a specific flow.
+
+
+## Realtime face detection
+
+Realtime face detection runs on the same camera stream as the preview, so your HTML overlay can place filters or masks using normalized coordinates while the native preview stays behind the WebView.
+
+```ts
+import { CameraPreview } from '@capgo/camera-preview';
+
+await CameraPreview.addListener('faceDetected', ({ faces }) => {
+  for (const face of faces) {
+    const { x, y, width, height } = face.bounds;
+    console.log('Face box (normalized 0 to 1):', { x, y, width, height });
+  }
+});
+
+await CameraPreview.start({
+  position: 'front',
+  toBack: true,
+  faceDetection: {
+    detectionInterval: 100,
+  },
+});
+```
+
+- **Options**: `faceDetection: true` or `{ detectionInterval?: number }` on `start()`, or call `startFaceDetection()` / `stopFaceDetection()` after the preview is running. Default `detectionInterval` is 100 ms.
+- **Events**: `faceDetected` with `faces[].bounds` (`x`, `y`, `width`, `height` in analyzed frame space, origin top-left). Use `faceDetectionError` for non-fatal scanner errors. Map bounds through your preview mirroring and aspect/cover crop before drawing on screen.
+- **Platform support**: iOS (Vision) and Android (ML Kit) on the live preview. Web uses the experimental `FaceDetector` API when the browser provides it; not available on all browsers or devices.
 
 
 ## Documentation
