@@ -89,6 +89,45 @@ export interface BarcodeScanErrorEvent {
   message: string;
 }
 
+/**
+ * Normalized face bounds in analyzed frame space. Origin is the top-left corner.
+ * `x`, `y`, `width`, and `height` are fractions of the analyzed frame (0 to 1).
+ * These coordinates are not guaranteed to match on-screen preview placement.
+ * Apply preview mirroring and aspect/cover crop conversion before drawing overlays.
+ */
+export interface FaceBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface DetectedFace {
+  /** Normalized bounding box for overlay placement. */
+  bounds: FaceBoundingBox;
+  /** Stable tracking id when the platform provides one. */
+  trackingId?: number;
+}
+
+export interface FaceDetectionOptions {
+  /**
+   * Minimum delay between native detection attempts in milliseconds.
+   * Lower values update overlays faster but use more CPU.
+   * @default 100
+   */
+  detectionInterval?: number;
+}
+
+export interface FaceDetectedEvent {
+  /** Faces detected in the latest analyzed frame. */
+  faces: DetectedFace[];
+}
+
+export interface FaceDetectionErrorEvent {
+  /** Native face detection error message. */
+  message: string;
+}
+
 export interface CameraPermissionStatus {
   camera: PermissionState;
   microphone?: PermissionState;
@@ -474,6 +513,14 @@ export interface CameraPreviewOptions {
    * @since 8.8.0
    */
   barcodeScanner?: boolean | BarcodeScannerOptions;
+  /**
+   * Starts realtime face detection together with the camera preview.
+   * Set to `true` or pass options to emit `faceDetected` events with normalized bounds.
+   * Omit this option to keep face detection disabled at startup.
+   * @platform android, ios, web
+   * @since 8.16.0
+   */
+  faceDetection?: boolean | FaceDetectionOptions;
 }
 
 /**
@@ -724,6 +771,24 @@ export interface CameraPreviewPlugin {
    * @platform android, ios, web
    */
   stopBarcodeScanner(): Promise<void>;
+
+  /**
+   * Starts realtime face detection on the active camera preview.
+   *
+   * Emits `faceDetected` with normalized bounds suitable for filter overlays.
+   *
+   * @since 8.16.0
+   * @platform android, ios, web
+   */
+  startFaceDetection(options?: FaceDetectionOptions): Promise<void>;
+
+  /**
+   * Stops face detection while keeping the camera preview running.
+   *
+   * @since 8.16.0
+   * @platform android, ios, web
+   */
+  stopFaceDetection(): Promise<void>;
 
   /**
    * Gets the flash modes supported by the active camera.
@@ -1140,6 +1205,28 @@ export interface CameraPreviewPlugin {
   addListener(
     eventName: 'barcodeScanError',
     listenerFunc: (data: BarcodeScanErrorEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for realtime face detection results.
+   *
+   * @since 8.16.0
+   * @platform android, ios, web
+   */
+  addListener(
+    eventName: 'faceDetected',
+    listenerFunc: (data: FaceDetectedEvent) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
+   * Adds a listener for non-fatal face detection errors.
+   *
+   * @since 8.16.0
+   * @platform android, ios, web
+   */
+  addListener(
+    eventName: 'faceDetectionError',
+    listenerFunc: (data: FaceDetectionErrorEvent) => void,
   ): Promise<PluginListenerHandle>;
 
   /**
