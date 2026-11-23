@@ -6,6 +6,8 @@ import type {
   BarcodeScanResult,
   BarcodeScannerOptions,
   BarcodeScannerFormat,
+  DetectedFace,
+  FaceDetectionOptions,
   CameraDevice,
   CameraPreviewAspectRatio,
   CameraOpacityOptions,
@@ -54,6 +56,11 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   private barcodeDetector: any = null;
   private barcodeScannerTimer: number | null = null;
   private barcodeScannerBusy = false;
+  private faceDetector: any = null;
+  private faceDetectionTimer: number | null = null;
+  private faceDetectionBusy = false;
+  private faceDetectionSessionId = 0;
+  private faceDetectionOperation: Promise<void> = Promise.resolve();
 
   constructor() {
     super();
@@ -634,6 +641,16 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
       }
     }
 
+    const faceDetectionOptions = this.getStartFaceDetectionOptions(options);
+    if (faceDetectionOptions) {
+      try {
+        await this.startFaceDetection(faceDetectionOptions);
+      } catch (error) {
+        await this.stop({ force: true });
+        throw error;
+      }
+    }
+
     return result;
   }
 
@@ -664,6 +681,7 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     // Force option doesn't change behavior on web - we always stop immediately
     void _options; // Mark as intentionally unused
     await this.stopBarcodeScanner();
+    await this.stopFaceDetectionInternal();
 
     const video = this.videoElement;
     if (video) {
@@ -833,12 +851,139 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
     this.barcodeScannerBusy = false;
   }
 
+  private async withFaceDetectionLock<T>(work: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const previous = this.faceDetectionOperation;
+    this.faceDetectionOperation = previous.then(() => gate);
+    await previous;
+    try {
+      return await work();
+    } finally {
+      release();
+    }
+  }
+
+  async startFaceDetection(options?: FaceDetectionOptions): Promise<void> {
+    await this.withFaceDetectionLock(async () => {
+      if (!this.isStarted || !this.videoElement?.srcObject) {
+        throw new Error('camera is not running');
+      }
+
+      const Detector = (window as any).FaceDetector;
+      if (!Detector) {
+        throw new Error('FaceDetector API is not available in this browser');
+      }
+
+      await this.stopFaceDetectionInternal();
+      const sessionId = ++this.faceDetectionSessionId;
+      const detector = new Detector({ fastMode: true });
+      this.faceDetector = detector;
+
+      const detectionInterval = Math.max(100, options?.detectionInterval ?? 100);
+      const detect = async () => {
+        if (sessionId !== this.faceDetectionSessionId) {
+          return;
+        }
+        if (this.faceDetectionBusy || this.faceDetector !== detector || !this.videoElement?.srcObject) {
+          return;
+        }
+
+        const video = this.videoElement;
+        const stream = video.srcObject;
+        const videoWidth = video.videoWidth;
+        const videoHeight = video.videoHeight;
+
+        this.faceDetectionBusy = true;
+        try {
+          const results = (await detector.detect(video)) as {
+            boundingBox: DOMRectReadOnly;
+          }[];
+
+          if (
+            sessionId !== this.faceDetectionSessionId ||
+            this.faceDetector !== detector ||
+            video.srcObject !== stream
+          ) {
+            return;
+          }
+
+          const faces: DetectedFace[] = results
+            .map((result) => this.toDetectedFace(result.boundingBox, videoWidth, videoHeight))
+            .filter((face): face is DetectedFace => !!face);
+
+          this.notifyListeners('faceDetected', { faces });
+        } catch (error) {
+          if (sessionId !== this.faceDetectionSessionId) {
+            return;
+          }
+          const message = error instanceof Error ? error.message : String(error);
+          console.error('Face detection failed:', error);
+          this.notifyListeners('faceDetectionError', { message });
+        } finally {
+          if (sessionId === this.faceDetectionSessionId) {
+            this.faceDetectionBusy = false;
+          }
+        }
+      };
+
+      const timer = window.setInterval(() => {
+        void detect();
+      }, detectionInterval);
+      this.faceDetectionTimer = timer;
+      void detect();
+    });
+  }
+
+  async stopFaceDetection(): Promise<void> {
+    await this.withFaceDetectionLock(async () => {
+      await this.stopFaceDetectionInternal();
+    });
+  }
+
+  private async stopFaceDetectionInternal(): Promise<void> {
+    this.faceDetectionSessionId += 1;
+    if (this.faceDetectionTimer !== null) {
+      window.clearInterval(this.faceDetectionTimer);
+      this.faceDetectionTimer = null;
+    }
+    this.faceDetector = null;
+    this.faceDetectionBusy = false;
+  }
+
+  private toDetectedFace(box: DOMRectReadOnly, videoWidth: number, videoHeight: number): DetectedFace | null {
+    if (!videoWidth || !videoHeight || !box) {
+      return null;
+    }
+
+    return {
+      bounds: {
+        x: box.x / videoWidth,
+        y: box.y / videoHeight,
+        width: box.width / videoWidth,
+        height: box.height / videoHeight,
+      },
+    };
+  }
+
   private getStartBarcodeScannerOptions(options: CameraPreviewOptions): BarcodeScannerOptions | null {
     if (options.barcodeScanner === true) {
       return {};
     }
     if (options.barcodeScanner && typeof options.barcodeScanner === 'object') {
       return options.barcodeScanner;
+    }
+    return null;
+  }
+
+  private getStartFaceDetectionOptions(options: CameraPreviewOptions): FaceDetectionOptions | null {
+    if (options.faceDetection === true) {
+      return {};
+    }
+    if (options.faceDetection && typeof options.faceDetection === 'object') {
+      return options.faceDetection;
     }
     return null;
   }
