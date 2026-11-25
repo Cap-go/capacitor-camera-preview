@@ -126,6 +126,7 @@ export class CameraViewPage implements OnInit {
   protected showBoundary = model<boolean>(true);
 
   protected toBack = model<boolean>(false);
+  protected nativeUIProjection = model<boolean>(false);
 
   ngOnInit() {
     setTimeout(() => {
@@ -360,6 +361,7 @@ export class CameraViewPage implements OnInit {
         withExifLocation: this.withExifLocation(),
         gridMode: this.gridMode(),
         showBoundary: this.showBoundary(),
+        nativeUIProjection: this.nativeUIProjection(),
       },
     });
 

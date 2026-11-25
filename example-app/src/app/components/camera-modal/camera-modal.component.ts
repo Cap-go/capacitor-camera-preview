@@ -23,6 +23,7 @@ import {
   IonFabButton,
   IonIcon,
   IonSpinner,
+  AlertController,
   ModalController,
 } from '@ionic/angular/standalone';
 import {
@@ -67,6 +68,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   readonly #cameraViewService = inject(CapacitorCameraViewService);
   readonly #elementRef = inject(ElementRef);
   readonly #modalController = inject(ModalController);
+  readonly #alertController = inject(AlertController);
   readonly #galleryService = inject(GalleryService);
 
   // Basic camera inputs
@@ -97,6 +99,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly withExifLocation = input<boolean>(false);
   public readonly gridMode = input<'none' | '3x3' | '4x4'>('none');
   public readonly showBoundary = input<boolean>(false);
+  public readonly nativeUIProjection = input<boolean>(false);
 
   protected readonly cameraStarted = toSignal(
     this.#cameraViewService.cameraStarted,
@@ -298,6 +301,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       enableVideoMode: true,
       enablePhysicalDeviceSelection: this.enablePhysicalDeviceSelection(),
     };
+
+    if (this.nativeUIProjection()) {
+      startOptions.nativeUIProjection = true;
+      startOptions.nativeUIProjectionSelector = '#camera-preview-projection';
+    }
 
     // Only add x and y if they are not null
     const x = this.x();
@@ -717,6 +725,17 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     ]);
   }
 
+  protected async openWebOverlayTest(): Promise<void> {
+    const alert = await this.#alertController.create({
+      header: 'Web overlay projection test',
+      message:
+        'With native UI projection enabled, the preview should appear as a snapshot under this alert.',
+      buttons: ['OK'],
+    });
+    await alert.present();
+    await alert.onDidDismiss();
+  }
+
   protected async testAllFeatures(): Promise<void> {
     if (this.showTestResults()) {
       // Hide test results
@@ -736,6 +755,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       const currentId = await this.#cameraViewService.getDeviceId();
       results += `\n✓ Current device: ${currentId}`;
       results += `\n✓ Physical selection enabled: ${this.enablePhysicalDeviceSelection()}`;
+      results += `\n✓ Native UI projection enabled: ${this.nativeUIProjection()}`;
 
       // Test zoom capabilities and lens info
       const zoomData = await this.#cameraViewService.getZoom();

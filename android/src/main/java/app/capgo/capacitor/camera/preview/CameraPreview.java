@@ -71,10 +71,21 @@ import org.json.JSONObject;
 public class CameraPreview extends Plugin implements CameraXView.CameraXViewListener {
 
     private final String pluginVersion = "";
+    private final NativeUIProjectionBridge nativeUIProjectionBridge = new NativeUIProjectionBridge();
+    private boolean nativeUIProjectionEnabled = false;
+    private String nativeUIProjectionSelector;
 
     @Override
     public void load() {
         registerScreenLockReceiver();
+    }
+
+    @Override
+    protected void notifyListeners(String eventName, JSObject data, boolean retainUntilConsumed) {
+        if (nativeUIProjectionBridge.isActive()) {
+            nativeUIProjectionBridge.receive(eventName, data);
+        }
+        super.notifyListeners(eventName, data, retainUntilConsumed);
     }
 
     @Override
@@ -122,6 +133,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         clearActiveBarcodeScanner();
         toBackVisualStateActive = false;
         restoreWebViewVisualState();
+        tearDownNativeUIProjection();
         unregisterScreenLockReceiver();
     }
 
@@ -441,6 +453,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             return;
         }
         cameraXView.flipCamera();
+        emitPreviewAppearanceChangedIfNeeded();
         call.resolve();
     }
 
@@ -847,6 +860,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             clearActiveBarcodeScanner();
             toBackVisualStateActive = false;
             restoreWebViewVisualState();
+            tearDownNativeUIProjection();
             call.resolve();
         });
     }
@@ -1326,6 +1340,19 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean enablePhysicalDeviceSelection = Boolean.TRUE.equals(call.getBoolean("enablePhysicalDeviceSelection", false));
         final String videoQuality = call.getString("videoQuality", "high");
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
+        final boolean nativeUIProjection = Boolean.TRUE.equals(call.getBoolean("nativeUIProjection", false));
+        final String nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector");
+        if (nativeUIProjection) {
+            if (nativeUIProjectionSelector == null || nativeUIProjectionSelector.isEmpty()) {
+                call.reject("nativeUIProjectionSelector is required when nativeUIProjection is true");
+                return;
+            }
+            this.nativeUIProjectionEnabled = true;
+            this.nativeUIProjectionSelector = nativeUIProjectionSelector;
+        } else {
+            this.nativeUIProjectionEnabled = false;
+            this.nativeUIProjectionSelector = null;
+        }
 
         final Integer captureResolutionWidth;
         final Integer captureResolutionHeight;
@@ -2292,10 +2319,48 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     }
 
     private void resolveCameraStartCall(PluginCall call, JSObject result) {
+        maybeActivateNativeUIProjection();
         call.resolve(result);
         bridge.releaseCall(call);
         cameraStartCallbackId = null; // Prevent re-use
         resetPendingStartBarcodeScanner();
+    }
+
+    private void maybeActivateNativeUIProjection() {
+        if (!nativeUIProjectionEnabled || nativeUIProjectionSelector == null || cameraXView == null) {
+            return;
+        }
+        getBridge()
+            .getActivity()
+            .runOnUiThread(
+                () -> {
+                    if (!nativeUIProjectionEnabled || nativeUIProjectionSelector == null || cameraXView == null) {
+                        return;
+                    }
+                    nativeUIProjectionBridge.activate(
+                        getActivity().getWindow(),
+                        getBridge().getWebView(),
+                        nativeUIProjectionSelector,
+                        () -> cameraXView != null ? cameraXView.getPreviewContainer() : null
+                    );
+                    notifyListeners("previewShown", new JSObject());
+                }
+            );
+    }
+
+    private void tearDownNativeUIProjection() {
+        if (nativeUIProjectionBridge.isActive()) {
+            notifyListeners("previewHidden", new JSObject());
+            nativeUIProjectionBridge.deactivate();
+        }
+        nativeUIProjectionEnabled = false;
+        nativeUIProjectionSelector = null;
+    }
+
+    private void emitPreviewAppearanceChangedIfNeeded() {
+        if (nativeUIProjectionBridge.isActive()) {
+            notifyListeners("previewAppearanceChanged", new JSObject());
+        }
     }
 
     private void rejectCameraStartCall(PluginCall call, String message) {
@@ -2421,6 +2486,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 ret.put("y", bounds[1]);
                 ret.put("width", bounds[2]);
                 ret.put("height", bounds[3]);
+                emitPreviewAppearanceChangedIfNeeded();
                 call.resolve(ret);
             });
         });
@@ -2447,6 +2513,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String gridMode = call.getString("gridMode", "none");
         getActivity().runOnUiThread(() -> {
             cameraXView.setGridMode(gridMode);
+            emitPreviewAppearanceChangedIfNeeded();
             call.resolve();
         });
     }
@@ -2559,6 +2626,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             ret.put("y", bounds[1]);
             ret.put("width", bounds[2]);
             ret.put("height", bounds[3]);
+            emitPreviewAppearanceChangedIfNeeded();
             call.resolve(ret);
         });
     }

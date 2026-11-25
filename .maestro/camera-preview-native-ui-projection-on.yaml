@@ -1,0 +1,23 @@
+appId: app.capgo.camera.preview
+---
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+      microphone: allow
+- assertVisible: "Camera Preview"
+- tapOn: "Enable Native UI projection (engine)"
+- tapOn:
+    text: "Start Camera with Current Settings"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Status:"
+    timeout: 15000
+- tapOn: "Test Web overlay"
+- assertVisible: "Web overlay projection test"
+- tapOn: "OK"
+- tapOn: "Run feature diagnostics"
+- assertVisible: "=== Camera Modal Test Results ==="
+- assertVisible: "Native UI projection enabled: true"
+- tapOn: "Close camera modal"
+- assertVisible: "Camera Preview"
