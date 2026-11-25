@@ -26,6 +26,12 @@ describe('nativeUIProjection start validation', () => {
         nativeUIProjectionSelector: '  ',
       }),
     ).toBe(NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE);
+    expect(
+      nativeUIProjectionMissingSelectorMessage({
+        nativeUIProjection: true,
+        nativeUIProjectionSelector: '\t\n\f\r',
+      }),
+    ).toBe(NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE);
   });
 
   it('accepts enabled projection with a non-empty selector', () => {

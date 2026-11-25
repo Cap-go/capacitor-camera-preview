@@ -17,6 +17,6 @@ appId: app.capgo.camera.preview
     timeout: 15000
 - tapOn: "Run feature diagnostics"
 - assertVisible: "=== Camera Modal Test Results ==="
-- assertVisible: "Native UI projection bridge active (previewShown): false"
+- assertVisible: 'Native UI projection bridge active \(previewShown\): false'
 - tapOn: "Close camera modal"
 - assertVisible: "Camera Preview"

@@ -18,6 +18,7 @@ final class NativeUIProjectionBridgeTests: XCTestCase {
         XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: nil))
         XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: ""))
         XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: "   "))
+        XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: "\t\n\f\r"))
         XCTAssertFalse(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: "#slot"))
         XCTAssertEqual(
             "nativeUIProjectionSelector is required when nativeUIProjection is true",

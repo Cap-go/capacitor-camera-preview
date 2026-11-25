@@ -8,8 +8,8 @@ appId: app.capgo.camera.preview
 - assertVisible: "Camera Preview"
 - scrollUntilVisible:
     element:
-      text: "Enable Native UI projection (engine)"
-- tapOn: "Enable Native UI projection (engine)"
+      text: 'Enable Native UI projection \(engine\)'
+- tapOn: 'Enable Native UI projection (engine)'
 - scrollUntilVisible:
     element:
       text: "Start camera with current settings"
@@ -27,6 +27,6 @@ appId: app.capgo.camera.preview
 - tapOn: "OK"
 - tapOn: "Run feature diagnostics"
 - assertVisible: "=== Camera Modal Test Results ==="
-- assertVisible: "Native UI projection bridge active (previewShown): true"
+- assertVisible: 'Native UI projection bridge active \(previewShown\): true'
 - tapOn: "Close camera modal"
 - assertVisible: "Camera Preview"

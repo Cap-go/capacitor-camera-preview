@@ -408,7 +408,21 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
 
         // If force is true, kill everything and restart no matter what
         if (force) {
-            tearDownNativeUIProjection();
+            try {
+                java.util.concurrent.CountDownLatch projectionTeardownLatch = new java.util.concurrent.CountDownLatch(1);
+                getBridge()
+                    .getActivity()
+                    .runOnUiThread(() -> {
+                        try {
+                            tearDownNativeUIProjection();
+                        } finally {
+                            projectionTeardownLatch.countDown();
+                        }
+                    });
+                projectionTeardownLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
             if (cameraXView != null) {
                 try {
                     Log.d(TAG, "start: force=true, force stopping camera regardless of state");
@@ -468,6 +482,10 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         getBridge()
             .getActivity()
             .runOnUiThread(() -> {
+                if (cameraXView == null || !cameraXView.isRunning()) {
+                    call.reject("Camera is not running");
+                    return;
+                }
                 cameraXView.flipCamera();
                 WebView webView = getBridge().getWebView();
                 if (webView != null) {

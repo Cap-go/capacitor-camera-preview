@@ -187,6 +187,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   // Listener handle for screen resize events
   #screenResizeListener?: PluginListenerHandle;
   #nativeUIProjectionListenerHandles: PluginListenerHandle[] = [];
+  #nativeUIProjectionTelemetryGeneration = 0;
+  #destroyed = false;
 
   // Status bar and home indicator state tracking
   #previousStatusBarVisible = true;
@@ -285,6 +287,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.#destroyed = true;
+    this.#nativeUIProjectionTelemetryGeneration += 1;
     void this.#clearNativeUIProjectionTelemetry();
     this.stop();
     this.removeScreenResizeListener();
@@ -298,14 +302,33 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     if (!this.nativeUIProjection() || this.isWeb) {
       return;
     }
-    this.#nativeUIProjectionListenerHandles.push(
-      await CameraPreview.addListener('previewShown', () => {
-        this.nativeUIProjectionBridgeActive.set(true);
-      }),
-      await CameraPreview.addListener('previewHidden', () => {
-        this.nativeUIProjectionBridgeActive.set(false);
-      }),
-    );
+    const generation = this.#nativeUIProjectionTelemetryGeneration + 1;
+    this.#nativeUIProjectionTelemetryGeneration = generation;
+    if (this.#destroyed) {
+      return;
+    }
+    const previewShown = await CameraPreview.addListener('previewShown', () => {
+      if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+        return;
+      }
+      this.nativeUIProjectionBridgeActive.set(true);
+    });
+    if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+      await previewShown.remove();
+      return;
+    }
+    const previewHidden = await CameraPreview.addListener('previewHidden', () => {
+      if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+        return;
+      }
+      this.nativeUIProjectionBridgeActive.set(false);
+    });
+    if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+      await previewShown.remove();
+      await previewHidden.remove();
+      return;
+    }
+    this.#nativeUIProjectionListenerHandles.push(previewShown, previewHidden);
   }
 
   async #clearNativeUIProjectionTelemetry(): Promise<void> {

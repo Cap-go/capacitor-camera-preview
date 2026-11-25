@@ -13,5 +13,5 @@ appId: app.capgo.camera.preview
     text: "Test native UI projection missing selector"
 - scrollUntilVisible:
     element:
-      text: "nativeUIProjectionSelector is required when nativeUIProjection is true"
-- assertVisible: "nativeUIProjectionSelector is required when nativeUIProjection is true"
+      text: ".*✓ nativeUIProjectionSelector is required when nativeUIProjection is true.*"
+- assertVisible: ".*✓ nativeUIProjectionSelector is required when nativeUIProjection is true.*"
