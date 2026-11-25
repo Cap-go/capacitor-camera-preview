@@ -535,6 +535,9 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`addListener('recordingFinished', ...)`](#addlistenerrecordingfinished-)
 * [`addListener('cameraInterrupted', ...)`](#addlistenercamerainterrupted-)
 * [`addListener('cameraInterruptionEnded', ...)`](#addlistenercamerainterruptionended-)
+* [`addListener('previewShown', ...)`](#addlistenerpreviewshown-)
+* [`addListener('previewHidden', ...)`](#addlistenerpreviewhidden-)
+* [`addListener('previewAppearanceChanged', ...)`](#addlistenerpreviewappearancechanged-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -1405,6 +1408,60 @@ Native recovery may still be restarting the session; wait for preview frames bef
 --------------------
 
 
+### addListener('previewShown', ...)
+
+```typescript
+addListener(eventName: 'previewShown', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Fired when native UI projection exposes the live preview in the Web layer.
+
+| Param              | Type                        |
+| ------------------ | --------------------------- |
+| **`eventName`**    | <code>'previewShown'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>  |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('previewHidden', ...)
+
+```typescript
+addListener(eventName: 'previewHidden', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Fired when native UI projection hides the live preview in the Web layer.
+
+| Param              | Type                         |
+| ------------------ | ---------------------------- |
+| **`eventName`**    | <code>'previewHidden'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>   |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('previewAppearanceChanged', ...)
+
+```typescript
+addListener(eventName: 'previewAppearanceChanged', listenerFunc: (data: Record<string, unknown>) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when preview size, position, or related layout changes while native UI projection is active.
+
+| Param              | Type                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'previewAppearanceChanged'</code>                                             |
+| **`listenerFunc`** | <code>(data: <a href="#record">Record</a>&lt;string, unknown&gt;) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -2007,6 +2064,13 @@ Canonical device orientation values across platforms.
 #### BarcodeFormat
 
 <code><a href="#barcodescannerformat">BarcodeScannerFormat</a> | 'unknown'</code>
+
+
+#### Record
+
+Construct a type with a set of properties K of type T
+
+<code>{ [P in K]: T; }</code>
 
 
 #### ExposureMode

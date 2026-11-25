@@ -1191,6 +1191,30 @@ export interface CameraPreviewPlugin {
   addListener(eventName: 'cameraInterruptionEnded', listenerFunc: () => void): Promise<PluginListenerHandle>;
 
   /**
+   * Fired when native UI projection exposes the live preview in the Web layer.
+   *
+   * @platform android, ios
+   */
+  addListener(eventName: 'previewShown', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when native UI projection hides the live preview in the Web layer.
+   *
+   * @platform android, ios
+   */
+  addListener(eventName: 'previewHidden', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when preview size, position, or related layout changes while native UI projection is active.
+   *
+   * @platform android, ios
+   */
+  addListener(
+    eventName: 'previewAppearanceChanged',
+    listenerFunc: (data: Record<string, unknown>) => void,
+  ): Promise<PluginListenerHandle>;
+
+  /**
    * Deletes a file at the given absolute path on the device.
    * Use this to quickly clean up temporary images created with `storeToFile`.
    * On web, this is not supported and will throw.
