@@ -105,6 +105,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             // Store the current configuration before stopping
             lastSessionConfig = cameraXView.getSessionConfig();
             requestBarcodeScannerRestartAfterCameraResume();
+            deactivateNativeUIProjectionBridgeOnly();
             cameraXView.stopSession();
         }
     }
@@ -1890,6 +1891,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     data.put("width", bounds[2]);
                     data.put("height", bounds[3]);
                     notifyListeners("screenResize", data);
+                    emitPreviewAppearanceChangedIfNeeded();
 
                     // Also emit orientationChange with a unified string value matching iOS
                     String o = getDeviceOrientationString();
@@ -2338,6 +2340,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             }
 
             resolveCameraStartCall(call, result);
+        } else {
+            maybeActivateNativeUIProjection();
         }
         restartBarcodeScannerAfterCameraResumeIfNeeded();
     }
@@ -2369,11 +2373,15 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             });
     }
 
-    private void tearDownNativeUIProjection() {
+    private void deactivateNativeUIProjectionBridgeOnly() {
         if (nativeUIProjectionBridge.isActive()) {
             notifyListeners("previewHidden", new JSObject());
             nativeUIProjectionBridge.deactivate();
         }
+    }
+
+    private void tearDownNativeUIProjection() {
+        deactivateNativeUIProjectionBridgeOnly();
         nativeUIProjectionEnabled = false;
         nativeUIProjectionSelector = null;
     }

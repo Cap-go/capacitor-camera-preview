@@ -17,6 +17,7 @@ final class NativeUIProjectionBridgeTests: XCTestCase {
     func testMissingSelectorValidationMessageMatchesPlugin() {
         XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: nil))
         XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: ""))
+        XCTAssertTrue(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: "   "))
         XCTAssertFalse(NativeUIProjectionStartValidation.isMissingSelector(enabled: true, selector: "#slot"))
         XCTAssertEqual(
             "nativeUIProjectionSelector is required when nativeUIProjection is true",

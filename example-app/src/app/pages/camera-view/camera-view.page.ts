@@ -38,10 +38,12 @@ import {
   CameraPermissionStatus,
   CameraPreview,
   NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE,
+  nativeUIProjectionMissingSelectorMessage,
   ExifData,
   FlashMode,
   PictureFormat,
 } from '@capgo/camera-preview';
+import { Capacitor } from '@capacitor/core';
 import { CameraModalComponent } from '../../components/camera-modal/camera-modal.component';
 import { CapacitorCameraViewService } from '../../core/capacitor-camera-preview.service';
 import { GalleryService } from '../../services/gallery.service';
@@ -500,15 +502,25 @@ export class CameraViewPage implements OnInit {
 
   protected async testNativeUIProjectionMissingSelector(): Promise<void> {
     let results = `${this.testResults()}\n=== Native UI projection validation ===`;
-    try {
-      await CameraPreview.start({ nativeUIProjection: true, parent: 'cameraView' });
-      results += `\n✗ Expected rejection: ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
-    } catch (error) {
-      const text = error instanceof Error ? error.message : String(error);
-      if (text.includes(NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE)) {
-        results += `\n✓ ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
-      } else {
-        results += `\n✗ Unexpected error: ${text}`;
+    if (Capacitor.getPlatform() === 'web') {
+      const message = nativeUIProjectionMissingSelectorMessage({
+        nativeUIProjection: true,
+      });
+      results +=
+        message === NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE
+          ? `\n✓ ${message}`
+          : `\n✗ Expected rejection: ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
+    } else {
+      try {
+        await CameraPreview.start({ nativeUIProjection: true, parent: 'cameraView' });
+        results += `\n✗ Expected rejection: ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        if (text.includes(NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE)) {
+          results += `\n✓ ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
+        } else {
+          results += `\n✗ Unexpected error: ${text}`;
+        }
       }
     }
     this.testResults.set(results);

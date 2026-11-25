@@ -8,6 +8,6 @@ public final class NativeUIProjectionStartValidation {
     private NativeUIProjectionStartValidation() {}
 
     public static boolean isMissingSelector(boolean nativeUIProjection, String nativeUIProjectionSelector) {
-        return nativeUIProjection && (nativeUIProjectionSelector == null || nativeUIProjectionSelector.isEmpty());
+        return nativeUIProjection && (nativeUIProjectionSelector == null || nativeUIProjectionSelector.trim().isEmpty());
     }
 }

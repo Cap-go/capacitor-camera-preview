@@ -36,6 +36,7 @@ public class NativeUIProjectionBridgeTest {
     public void missingSelectorValidationMessageMatchesPlugin() {
         assertTrue(NativeUIProjectionStartValidation.isMissingSelector(true, null));
         assertTrue(NativeUIProjectionStartValidation.isMissingSelector(true, ""));
+        assertTrue(NativeUIProjectionStartValidation.isMissingSelector(true, "   "));
         assertFalse(NativeUIProjectionStartValidation.isMissingSelector(true, "#slot"));
         assertEquals(
             "nativeUIProjectionSelector is required when nativeUIProjection is true",
