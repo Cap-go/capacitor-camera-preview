@@ -1,5 +1,7 @@
 # Cap-go/website patch: camera-preview native UI projection
 
+Hand-off for a follow-up PR on [Cap-go/website](https://github.com/Cap-go/website/): copy the section below into the live docs (this plugin repo does not ship the website source).
+
 Target page: `docs/plugins/camera-preview/` (or equivalent MDX source).
 
 ## Section to add after preview placement / overlay guidance

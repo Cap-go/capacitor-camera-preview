@@ -195,7 +195,7 @@
       <ion-icon name="bug-outline"></ion-icon>
     </ion-fab-button>
 
-    @if (nativeUIProjection() && cameraStarted()) {
+    @if (!isWeb && nativeUIProjection() && cameraStarted()) {
       <ion-fab-button
         (click)="openWebOverlayTest()"
         size="small"

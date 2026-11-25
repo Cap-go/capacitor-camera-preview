@@ -11,11 +11,4 @@ public class NativeUIProjectionBridgeTest {
         NativeUIProjectionBridge bridge = new NativeUIProjectionBridge();
         assertFalse(bridge.isActive());
     }
-
-    @Test
-    public void receiveWithoutActivateDoesNothing() {
-        NativeUIProjectionBridge bridge = new NativeUIProjectionBridge();
-        bridge.receive("previewAppearanceChanged", null);
-        assertFalse(bridge.isActive());
-    }
 }

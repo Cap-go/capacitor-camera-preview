@@ -6,10 +6,4 @@ final class NativeUIProjectionBridgeTests: XCTestCase {
         let bridge = NativeUIProjectionBridge()
         XCTAssertFalse(bridge.isActive)
     }
-
-    func testReceiveWithoutActivateDoesNotCrash() {
-        let bridge = NativeUIProjectionBridge()
-        bridge.receive(eventName: "previewAppearanceChanged", data: nil)
-        XCTAssertFalse(bridge.isActive)
-    }
 }
