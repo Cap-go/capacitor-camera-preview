@@ -27,7 +27,6 @@ import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
-import io.github.webview_native_ui.engine.NativeUIProjection;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.graphics.Insets;
@@ -49,6 +48,7 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import io.github.webview_native_ui.engine.NativeUIProjection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -466,18 +466,16 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         getBridge()
             .getActivity()
-            .runOnUiThread(
-                () -> {
-                    cameraXView.flipCamera();
-                    WebView webView = getBridge().getWebView();
-                    if (webView != null) {
-                        webView.postDelayed(() -> emitPreviewAppearanceChangedIfNeeded(), 400);
-                    } else {
-                        emitPreviewAppearanceChangedIfNeeded();
-                    }
-                    call.resolve();
+            .runOnUiThread(() -> {
+                cameraXView.flipCamera();
+                WebView webView = getBridge().getWebView();
+                if (webView != null) {
+                    webView.postDelayed(() -> emitPreviewAppearanceChangedIfNeeded(), 400);
+                } else {
+                    emitPreviewAppearanceChangedIfNeeded();
                 }
-            );
+                call.resolve();
+            });
     }
 
     @SuppressLint("MissingPermission")
@@ -2358,22 +2356,17 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         }
         getBridge()
             .getActivity()
-            .runOnUiThread(
-                () -> {
-                    if (!nativeUIProjectionEnabled || nativeUIProjectionSelector == null || cameraXView == null) {
-                        return;
-                    }
-                    nativeUIProjectionBridge.activate(
-                        getActivity().getWindow(),
-                        getBridge().getWebView(),
-                        nativeUIProjectionSelector,
-                        () -> cameraXView != null ? cameraXView.getPreviewContainer() : null
-                    );
-                    if (nativeUIProjectionBridge.isActive()) {
-                        notifyListeners("previewShown", new JSObject());
-                    }
+            .runOnUiThread(() -> {
+                if (!nativeUIProjectionEnabled || nativeUIProjectionSelector == null || cameraXView == null) {
+                    return;
                 }
-            );
+                nativeUIProjectionBridge.activate(getActivity().getWindow(), getBridge().getWebView(), nativeUIProjectionSelector, () ->
+                    cameraXView != null ? cameraXView.getPreviewContainer() : null
+                );
+                if (nativeUIProjectionBridge.isActive()) {
+                    notifyListeners("previewShown", new JSObject());
+                }
+            });
     }
 
     private void tearDownNativeUIProjection() {

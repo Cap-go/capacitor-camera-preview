@@ -11,6 +11,7 @@ import java.util.function.Supplier;
 
 /** Optional WebView Native UI Engine registration for the camera preview surface. */
 public final class NativeUIProjectionBridge {
+
     private static final String TAG = "CameraPreviewNUI";
     private NativeUIProjection projection;
 
@@ -23,27 +24,19 @@ public final class NativeUIProjectionBridge {
             deactivate();
         }
         try {
-            NativeUIProjection.ReceiveListeners.Projection projectionListeners =
-                new NativeUIProjection.ReceiveListeners.Projection(
-                    Collections.singletonList("previewShown"),
-                    Collections.emptyList(),
-                    Collections.singletonList("previewHidden")
-                );
-            NativeUIProjection.ReceiveListeners receiveListeners =
-                new NativeUIProjection.ReceiveListeners(
-                    Collections.singletonList("previewAppearanceChanged"),
-                    projectionListeners,
-                    Collections.emptyMap()
-                );
-            projection =
-                new NativeUIProjection(
-                    window,
-                    webView,
-                    "CameraPreview",
-                    projectionSelector,
-                    receiveListeners,
-                    () -> viewProvider.get()
-                );
+            NativeUIProjection.ReceiveListeners.Projection projectionListeners = new NativeUIProjection.ReceiveListeners.Projection(
+                Collections.singletonList("previewShown"),
+                Collections.emptyList(),
+                Collections.singletonList("previewHidden")
+            );
+            NativeUIProjection.ReceiveListeners receiveListeners = new NativeUIProjection.ReceiveListeners(
+                Collections.singletonList("previewAppearanceChanged"),
+                projectionListeners,
+                Collections.emptyMap()
+            );
+            projection = new NativeUIProjection(window, webView, "CameraPreview", projectionSelector, receiveListeners, () ->
+                viewProvider.get()
+            );
         } catch (Exception error) {
             Log.e(TAG, "Native UI projection unavailable", error);
             projection = null;
