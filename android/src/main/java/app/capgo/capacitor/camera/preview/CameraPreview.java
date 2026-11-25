@@ -1382,19 +1382,11 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
         final boolean nativeUIProjection = Boolean.TRUE.equals(call.getBoolean("nativeUIProjection", false));
         final String nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector");
-        if (!nativeUIProjection) {
-            tearDownNativeUIProjection();
-        }
         if (nativeUIProjection) {
             if (NativeUIProjectionStartValidation.isMissingSelector(nativeUIProjection, nativeUIProjectionSelector)) {
                 call.reject(NativeUIProjectionStartValidation.MISSING_SELECTOR_MESSAGE);
                 return;
             }
-            this.nativeUIProjectionEnabled = true;
-            this.nativeUIProjectionSelector = nativeUIProjectionSelector;
-        } else {
-            this.nativeUIProjectionEnabled = false;
-            this.nativeUIProjectionSelector = null;
         }
 
         final Integer captureResolutionWidth;
@@ -1413,6 +1405,15 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.");
             return;
+        }
+
+        if (nativeUIProjection) {
+            this.nativeUIProjectionEnabled = true;
+            this.nativeUIProjectionSelector = nativeUIProjectionSelector;
+        } else {
+            tearDownNativeUIProjection();
+            this.nativeUIProjectionEnabled = false;
+            this.nativeUIProjectionSelector = null;
         }
 
         float targetZoom = initialZoomLevel;
