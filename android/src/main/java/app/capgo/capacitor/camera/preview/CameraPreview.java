@@ -27,6 +27,7 @@ import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
+import io.github.webview_native_ui.engine.NativeUIProjection;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.graphics.Insets;
@@ -78,6 +79,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
     @Override
     public void load() {
         registerScreenLockReceiver();
+        WebView webView = getBridge().getWebView();
+        if (webView != null) {
+            try {
+                NativeUIProjection.install(webView);
+            } catch (Exception error) {
+                Log.w(TAG, "Native UI engine channel install skipped", error);
+            }
+        }
     }
 
     @Override
@@ -453,9 +462,20 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("Camera is not running");
             return;
         }
-        cameraXView.flipCamera();
-        emitPreviewAppearanceChangedIfNeeded();
-        call.resolve();
+        getBridge()
+            .getActivity()
+            .runOnUiThread(
+                () -> {
+                    cameraXView.flipCamera();
+                    WebView webView = getBridge().getWebView();
+                    if (webView != null) {
+                        webView.postDelayed(() -> emitPreviewAppearanceChangedIfNeeded(), 400);
+                    } else {
+                        emitPreviewAppearanceChangedIfNeeded();
+                    }
+                    call.resolve();
+                }
+            );
     }
 
     @SuppressLint("MissingPermission")
@@ -1343,6 +1363,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
         final boolean nativeUIProjection = Boolean.TRUE.equals(call.getBoolean("nativeUIProjection", false));
         final String nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector");
+        if (!nativeUIProjection) {
+            tearDownNativeUIProjection();
+        }
         if (nativeUIProjection) {
             if (nativeUIProjectionSelector == null || nativeUIProjectionSelector.isEmpty()) {
                 call.reject("nativeUIProjectionSelector is required when nativeUIProjection is true");
@@ -2344,7 +2367,9 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                         nativeUIProjectionSelector,
                         () -> cameraXView != null ? cameraXView.getPreviewContainer() : null
                     );
-                    notifyListeners("previewShown", new JSObject());
+                    if (nativeUIProjectionBridge.isActive()) {
+                        notifyListeners("previewShown", new JSObject());
+                    }
                 }
             );
     }

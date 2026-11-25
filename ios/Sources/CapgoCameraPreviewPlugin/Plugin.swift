@@ -428,6 +428,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if self.isInitialized {
             self.makeWebViewTransparent()
         }
+        self.emitPreviewAppearanceChangedIfNeeded()
     }
 
     @objc func setAspectRatio(_ call: CAPPluginCall) {
@@ -820,6 +821,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
 
         let nativeUIProjection = call.getBool("nativeUIProjection") ?? false
+        if !nativeUIProjection {
+            self.deactivateNativeUIProjectionIfNeeded()
+        }
         if nativeUIProjection {
             guard let selector = call.getString("nativeUIProjectionSelector"), !selector.isEmpty else {
                 self.isInitializing = false
@@ -2860,7 +2864,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         ) { [weak self] in
             self?.previewView
         }
-        self.notifyListeners("previewShown", data: [:])
+        if self.nativeUIProjectionBridge.isActive {
+            self.notifyListeners("previewShown", data: [:])
+        }
     }
 
     private func deactivateNativeUIProjectionIfNeeded() {

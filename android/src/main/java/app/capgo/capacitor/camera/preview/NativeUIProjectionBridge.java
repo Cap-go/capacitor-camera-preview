@@ -6,8 +6,7 @@ import android.view.Window;
 import android.webkit.WebView;
 import com.getcapacitor.JSObject;
 import io.github.webview_native_ui.engine.NativeUIProjection;
-import java.util.List;
-import java.util.Map;
+import java.util.Collections;
 import java.util.function.Supplier;
 
 /** Optional WebView Native UI Engine registration for the camera preview surface. */
@@ -24,18 +23,17 @@ public final class NativeUIProjectionBridge {
             deactivate();
         }
         try {
-            NativeUIProjection.install(webView);
             NativeUIProjection.ReceiveListeners.Projection projectionListeners =
                 new NativeUIProjection.ReceiveListeners.Projection(
-                    List.of("previewShown"),
-                    List.of(),
-                    List.of("previewHidden")
+                    Collections.singletonList("previewShown"),
+                    Collections.emptyList(),
+                    Collections.singletonList("previewHidden")
                 );
             NativeUIProjection.ReceiveListeners receiveListeners =
                 new NativeUIProjection.ReceiveListeners(
-                    List.of("previewAppearanceChanged"),
+                    Collections.singletonList("previewAppearanceChanged"),
                     projectionListeners,
-                    Map.of()
+                    Collections.emptyMap()
                 );
             projection =
                 new NativeUIProjection(

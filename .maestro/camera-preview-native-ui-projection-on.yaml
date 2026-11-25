@@ -13,6 +13,8 @@ appId: app.capgo.camera.preview
 - extendedWaitUntil:
     visible: "Status:"
     timeout: 15000
+- assertVisible:
+    id: "camera-preview-projection-slot"
 - tapOn: "Test Web overlay"
 - assertVisible: "Web overlay projection test"
 - tapOn: "OK"

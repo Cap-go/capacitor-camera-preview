@@ -132,6 +132,12 @@ use https://capacitorjs.com/docs/apis/filesystem#deletefile for that
 
 Enable optional integration with [`@webview-native-ui/engine`](https://github.com/webview-native-ui/engine/) so HTML and Ionic overlays can sit above the live camera preview without breaking layout. With `nativeUIProjection: true`, the plugin registers the native preview surface with the engine. When a Web layer covers that area, the live preview freezes visually and the engine paints a snapshot into your DOM slot (`nativeUIProjectionSelector`). When coverage ends, native preview interaction resumes at the current position.
 
+Install the engine in the app when you enable projection:
+
+```sh
+bun add --exact '@webview-native-ui/engine@1.0.11'
+```
+
 ```ts
 import { enableSupportIonicOverlays } from '@webview-native-ui/engine/ionic';
 import { CameraPreview } from '@capgo/camera-preview';

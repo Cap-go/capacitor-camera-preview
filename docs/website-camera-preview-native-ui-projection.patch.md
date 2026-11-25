@@ -12,6 +12,10 @@ While a Web or Ionic overlay covers the preview region, the **live native stream
 
 Default is `false` (no engine registration, same behavior as before).
 
+```sh
+bun add --exact '@webview-native-ui/engine@1.0.11'
+```
+
 ```ts
 import { enableSupportIonicOverlays } from '@webview-native-ui/engine/ionic';
 import { CameraPreview } from '@capgo/camera-preview';
@@ -24,6 +28,15 @@ await CameraPreview.start({
   nativeUIProjectionSelector: '#camera-preview-projection',
 });
 ```
+
+```html
+<div
+  id="camera-preview-projection"
+  style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;"
+></div>
+```
+
+Size and position that element to match the native preview area in your layout.
 
 **iOS CocoaPods:** add `pod 'WebViewNativeUIEngine', :path => '../../node_modules/@webview-native-ui/engine'` in the App target.
 
