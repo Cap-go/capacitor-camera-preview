@@ -21,7 +21,7 @@ public final class NativeUIProjectionBridge {
 
     public void activate(Window window, WebView webView, String projectionSelector, Supplier<View> viewProvider) {
         if (projection != null) {
-            return;
+            deactivate();
         }
         try {
             NativeUIProjection.install(webView);

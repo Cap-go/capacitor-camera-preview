@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "@capgo/camera-preview",
+      "dependencies": {
+        "@webview-native-ui/engine": "1.0.11",
+      },
       "devDependencies": {
         "@capacitor/android": "^8.0.0",
         "@capacitor/cli": "^8.0.0",
@@ -114,6 +117,8 @@
     "@napi-rs/lzma-linux-x64-gnu": ["@napi-rs/lzma-linux-x64-gnu@1.5.1", "", { "os": "linux", "cpu": "x64" }, "sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.2.5", "", { "dependencies": { "@tybys/wasm-util": "^0.10.3" }, "peerDependencies": { "@emnapi/core": "^1.7.1 || ^2.0.0-alpha.4", "@emnapi/runtime": "^1.7.1 || ^2.0.0-alpha.4" } }, "sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA=="],
+
+    "@rdlabo/ionic-theme-utils": ["@rdlabo/ionic-theme-utils@0.1.5", "", { "peerDependencies": { "@ionic/core": ">=8.8.1 <10" }, "optionalPeers": ["@ionic/core"], "bin": { "rdlabo-check-esm": "scripts/check-esm.mjs", "rdlabo-build-theme": "scripts/build-theme.mjs", "rdlabo-copy-structured-list": "scripts/copy-structured-list.mjs" } }, "sha512-LTf+GQ3S786xF1R6ITs9PtfDfSZxPcWJqzIzk046X9dvwgS+9+cCmdA5ENXYbo2Xbdv4KnxS/LKvm4fPL9THGQ=="],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.64.2", "", { "os": "android", "cpu": "arm" }, "sha512-gjNDUwMswogkw3fNqV00u54uZlgmInuw5EU/1TeqQ6K0bEagoGvqjPdKzy112lKyhe7PkGudZ/kSQHsc9qroIg=="],
 
@@ -246,6 +251,8 @@
     "@unrs/resolver-binding-win32-ia32-msvc": ["@unrs/resolver-binding-win32-ia32-msvc@1.12.2", "", { "os": "win32", "cpu": "ia32" }, "sha512-WD9sY00OfpHVGfsnHZoA8jVT+esS/Bg8z8jzxp5BnDCjjwsuKsPQrzswwpFy4J1AUJbXPRfkpcX0mXrzeXW79g=="],
 
     "@unrs/resolver-binding-win32-x64-msvc": ["@unrs/resolver-binding-win32-x64-msvc@1.12.2", "", { "os": "win32", "cpu": "x64" }, "sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA=="],
+
+    "@webview-native-ui/engine": ["@webview-native-ui/engine@1.0.11", "", { "dependencies": { "@rdlabo/ionic-theme-utils": "0.1.5" }, "peerDependencies": { "@capacitor/core": ">=8.0.0 <9", "@ionic/core": ">=8.8.1 <10" }, "optionalPeers": ["@capacitor/core", "@ionic/core"] }, "sha512-+gSA43PpzOflopNNpR0jyDYvnw39eMcy77vhziWOug6nLpEwj14WZschM8c6k4OUNT9iJpUxRpDsrYBV6HMQJg=="],
 
     "@xmldom/xmldom": ["@xmldom/xmldom@0.9.12", "", {}, "sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A=="],
 

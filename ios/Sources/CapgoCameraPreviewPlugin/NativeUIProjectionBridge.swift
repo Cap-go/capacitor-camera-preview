@@ -16,7 +16,9 @@ final class NativeUIProjectionBridge {
         projectionSelector: String,
         viewProvider: @escaping () -> UIView?
     ) {
-        guard projection == nil else { return }
+        if projection != nil {
+            deactivate()
+        }
         do {
             projection = try NativeUIProjection(
                 webView: webView,

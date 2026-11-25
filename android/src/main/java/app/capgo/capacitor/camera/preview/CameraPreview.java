@@ -400,6 +400,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (force && cameraXView != null) {
             try {
                 Log.d(TAG, "start: force=true, force stopping camera regardless of state");
+                tearDownNativeUIProjection();
                 // Force stop the camera session no matter what state it's in
                 cameraXView.stopSession();
                 cameraXView = null;

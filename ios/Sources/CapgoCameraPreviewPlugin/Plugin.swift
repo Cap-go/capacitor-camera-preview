@@ -961,6 +961,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
         self.cameraController.invalidateActivePrepare()
         self.cameraController.cleanup()
+        self.deactivateNativeUIProjectionIfNeeded()
     }
 
     private func failPendingStart(_ call: CAPPluginCall, message: String, errorCode: String? = nil) {
@@ -1031,8 +1032,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.cameraController.addGridOverlay(to: self.previewView, gridMode: self.gridMode)
         }
 
-        self.activateNativeUIProjectionIfNeeded()
-
         // Setup observers for device rotation and app state changes
         if self.rotateWhenOrientationChanged == true {
             NotificationCenter.default.addObserver(self, selector: #selector(CameraPreview.rotated), name: UIDevice.orientationDidChangeNotification, object: nil)
@@ -1099,6 +1098,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.pendingStartBarcodeScannerOptions = nil
         }
 
+        self.activateNativeUIProjectionIfNeeded()
         call.resolve(returnedObject)
     }
 
@@ -2851,6 +2851,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     private func activateNativeUIProjectionIfNeeded() {
         guard self.nativeUIProjectionEnabled, let selector = self.nativeUIProjectionSelector else { return }
+        if self.nativeUIProjectionBridge.isActive {
+            self.nativeUIProjectionBridge.deactivate()
+        }
         self.nativeUIProjectionBridge.activate(
             webView: self.webView,
             projectionSelector: selector
