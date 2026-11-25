@@ -3211,6 +3211,8 @@ extension CameraController {
     }
 
     private func tearDownCaptureSession(_ captureSession: AVCaptureSession) {
+        // Balance beginConfiguration left open when prepare() fails or is interrupted.
+        captureSession.commitConfiguration()
         captureSession.stopRunning()
         captureSession.inputs.forEach { captureSession.removeInput($0) }
         captureSession.outputs.forEach { captureSession.removeOutput($0) }
