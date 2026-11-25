@@ -13,14 +13,21 @@ import java.util.function.Supplier;
 public final class NativeUIProjectionBridge {
 
     private static final String TAG = "CameraPreviewNUI";
-    private NativeUIProjection projection;
+
+    interface NativeUIProjectionSession {
+        void receive(String eventName, JSObject data);
+
+        void close();
+    }
+
+    private NativeUIProjectionSession session;
 
     public boolean isActive() {
-        return projection != null;
+        return session != null;
     }
 
     public void activate(Window window, WebView webView, String projectionSelector, Supplier<View> viewProvider) {
-        if (projection != null) {
+        if (session != null) {
             deactivate();
         }
         try {
@@ -34,32 +41,70 @@ public final class NativeUIProjectionBridge {
                 projectionListeners,
                 Collections.emptyMap()
             );
-            projection = new NativeUIProjection(window, webView, "CameraPreview", projectionSelector, receiveListeners, () ->
-                viewProvider.get()
+            NativeUIProjection projection = new NativeUIProjection(
+                window,
+                webView,
+                "CameraPreview",
+                projectionSelector,
+                receiveListeners,
+                () -> viewProvider.get()
             );
+            session = new EngineNativeUIProjectionSession(projection);
         } catch (Exception error) {
             Log.e(TAG, "Native UI projection unavailable", error);
-            projection = null;
+            session = null;
         }
     }
 
     public void deactivate() {
-        if (projection != null) {
-            projection.close();
-            projection = null;
+        if (session != null) {
+            session.close();
+            session = null;
         }
     }
 
     public void receive(String eventName, JSObject data) {
-        if (projection != null) {
-            projection.receive(eventName, data == null ? new JSObject() : data);
+        if (session != null) {
+            session.receive(eventName, data == null ? new JSObject() : data);
         }
     }
 
-    void assignProjectionForTesting(NativeUIProjection testProjection) {
-        if (projection != null) {
+    void assignSessionForTesting(NativeUIProjectionSession testSession) {
+        if (session != null) {
             deactivate();
         }
-        projection = testProjection;
+        session = testSession;
+    }
+
+    static final class TestNativeUIProjectionSession implements NativeUIProjectionSession {
+
+        boolean closed;
+
+        @Override
+        public void receive(String eventName, JSObject data) {}
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    private static final class EngineNativeUIProjectionSession implements NativeUIProjectionSession {
+
+        private final NativeUIProjection projection;
+
+        private EngineNativeUIProjectionSession(NativeUIProjection projection) {
+            this.projection = projection;
+        }
+
+        @Override
+        public void receive(String eventName, JSObject data) {
+            projection.receive(eventName, data);
+        }
+
+        @Override
+        public void close() {
+            projection.close();
+        }
     }
 }

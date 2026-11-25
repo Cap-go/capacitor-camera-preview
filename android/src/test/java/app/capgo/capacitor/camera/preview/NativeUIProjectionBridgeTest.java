@@ -3,15 +3,12 @@ package app.capgo.capacitor.camera.preview;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import android.app.Activity;
 import android.view.View;
 import android.webkit.WebView;
 import androidx.test.core.app.ApplicationProvider;
 import com.getcapacitor.JSObject;
-import io.github.webview_native_ui.engine.NativeUIProjection;
-import java.util.Collections;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -56,29 +53,7 @@ public class NativeUIProjectionBridgeTest {
         NativeUIProjectionBridge bridge = new NativeUIProjectionBridge();
         bridge.activate(activity.getWindow(), webView, "#slot", () -> preview);
         if (!bridge.isActive()) {
-            try {
-                NativeUIProjection.ReceiveListeners.Projection projectionListeners = new NativeUIProjection.ReceiveListeners.Projection(
-                    Collections.singletonList("previewShown"),
-                    Collections.emptyList(),
-                    Collections.singletonList("previewHidden")
-                );
-                NativeUIProjection.ReceiveListeners receiveListeners = new NativeUIProjection.ReceiveListeners(
-                    Collections.singletonList("previewAppearanceChanged"),
-                    projectionListeners,
-                    Collections.emptyMap()
-                );
-                NativeUIProjection projection = new NativeUIProjection(
-                    activity.getWindow(),
-                    webView,
-                    "CameraPreview",
-                    "#slot",
-                    receiveListeners,
-                    () -> preview
-                );
-                bridge.assignProjectionForTesting(projection);
-            } catch (Exception error) {
-                fail("Native UI projection engine unavailable: " + error.getMessage());
-            }
+            bridge.assignSessionForTesting(new NativeUIProjectionBridge.TestNativeUIProjectionSession());
         }
         assertTrue("projection bridge must be active for round-trip test", bridge.isActive());
         bridge.receive("previewAppearanceChanged", new JSObject());
