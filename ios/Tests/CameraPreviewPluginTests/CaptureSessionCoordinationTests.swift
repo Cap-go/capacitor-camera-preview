@@ -86,6 +86,7 @@ final class CaptureSessionCoordinationTests: XCTestCase {
         let session = AVCaptureSession()
         controller.captureSession = session
         session.beginConfiguration()
+        controller.markCaptureSessionPrepareConfigurationUncommittedForTesting()
         controller.cleanup()
         XCTAssertNil(controller.captureSession)
     }

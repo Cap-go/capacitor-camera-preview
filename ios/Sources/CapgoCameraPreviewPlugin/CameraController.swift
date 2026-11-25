@@ -550,6 +550,7 @@ class CameraController: NSObject {
     // Capture/stop coordination (main-thread only; see CaptureLifecycleCoordination)
     var captureLifecycle = CaptureLifecycleState()
     private(set) var captureSessionTeardownStarted = false
+    private var captureSessionUncommittedPrepareConfiguration = false
 
     var isCapturingPhoto: Bool {
         get { self.captureLifecycle.isCapturingPhoto }
@@ -925,6 +926,10 @@ extension CameraController {
         self.captureSessionTeardownStarted = true
     }
 
+    internal func markCaptureSessionPrepareConfigurationUncommittedForTesting() {
+        self.captureSessionUncommittedPrepareConfiguration = true
+    }
+
     /// Holds the capture queue after passing the prepare begin gate. For unit tests.
     internal func holdCaptureSessionQueueAfterPrepareBeginForTesting(
         startToken: UInt,
@@ -1000,6 +1005,7 @@ extension CameraController {
 
                         // Single configuration block for all initial setup
                         captureSession.beginConfiguration()
+                        self.captureSessionUncommittedPrepareConfiguration = true
 
                         // Set aspect ratio preset and remember requested ratio
                         self.requestedAspectRatio = aspectRatio
@@ -1051,6 +1057,7 @@ extension CameraController {
                         }
 
                         captureSession.commitConfiguration()
+                        self.captureSessionUncommittedPrepareConfiguration = false
 
                         guard self.isPrepareTokenValid(startToken), !self.captureSessionTeardownStarted else {
                             return
@@ -1065,8 +1072,9 @@ extension CameraController {
                         captureSession.startRunning()
                         self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
                     } catch {
-                        if let captureSession = self.captureSession {
+                        if self.captureSessionUncommittedPrepareConfiguration, let captureSession = self.captureSession {
                             captureSession.commitConfiguration()
+                            self.captureSessionUncommittedPrepareConfiguration = false
                         }
                         prepareError = error
                     }
@@ -3211,8 +3219,10 @@ extension CameraController {
     }
 
     private func tearDownCaptureSession(_ captureSession: AVCaptureSession) {
-        // Balance beginConfiguration left open when prepare() fails or is interrupted.
-        captureSession.commitConfiguration()
+        if self.captureSessionUncommittedPrepareConfiguration {
+            captureSession.commitConfiguration()
+            self.captureSessionUncommittedPrepareConfiguration = false
+        }
         captureSession.stopRunning()
         captureSession.inputs.forEach { captureSession.removeInput($0) }
         captureSession.outputs.forEach { captureSession.removeOutput($0) }
