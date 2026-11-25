@@ -832,7 +832,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 return
             }
             self.nativeUIProjectionEnabled = true
-            self.nativeUIProjectionSelector = selector
+            self.nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector")
         } else {
             self.nativeUIProjectionEnabled = false
             self.nativeUIProjectionSelector = nil
