@@ -35,7 +35,7 @@ extension UIWindow {
  */
 @objc(CameraPreview)
 public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
-    private let pluginVersion: String = "8.16.0"
+    private let pluginVersion: String = "8.15.5"
     public let identifier = "CameraPreviewPlugin"
     public let jsName = "CameraPreview"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -821,14 +821,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
 
         let nativeUIProjection = call.getBool("nativeUIProjection") ?? false
-        if !nativeUIProjection {
-            self.deactivateNativeUIProjectionIfNeeded()
-        }
         if nativeUIProjection {
-            guard let selector = call.getString("nativeUIProjectionSelector"), !selector.isEmpty else {
+            guard !NativeUIProjectionStartValidation.isMissingSelector(
+                enabled: true,
+                selector: call.getString("nativeUIProjectionSelector")
+            ) else {
                 self.isInitializing = false
                 self.pendingStartCall = nil
-                call.reject("nativeUIProjectionSelector is required when nativeUIProjection is true")
+                call.reject(NativeUIProjectionStartValidation.missingSelectorMessage)
                 return
             }
             self.nativeUIProjectionEnabled = true
@@ -856,6 +856,10 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     call.reject("camera already started")
                 }
                 return
+            }
+
+            if !self.nativeUIProjectionEnabled {
+                self.deactivateNativeUIProjectionIfNeeded()
             }
 
             if let videoStabilizationMode = videoStabilizationMode {

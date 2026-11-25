@@ -81,6 +81,15 @@ final class CaptureSessionCoordinationTests: XCTestCase {
         XCTAssertFalse(controller.captureSessionTeardownStarted)
     }
 
+    func testCleanupAfterUncommittedCaptureSessionConfigurationDoesNotCrash() {
+        let controller = CameraController()
+        let session = AVCaptureSession()
+        controller.captureSession = session
+        session.beginConfiguration()
+        controller.cleanup()
+        XCTAssertNil(controller.captureSession)
+    }
+
     func testControllerCleanupWhilePrepareMutationHeldOnCaptureQueueClearsSession() {
         let controller = CameraController()
         let passedGate = DispatchSemaphore(value: 0)

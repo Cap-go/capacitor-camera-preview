@@ -36,6 +36,8 @@ import {
   CameraDevice,
   CameraPosition,
   CameraPermissionStatus,
+  CameraPreview,
+  NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE,
   ExifData,
   FlashMode,
   PictureFormat,
@@ -493,6 +495,22 @@ export class CameraViewPage implements OnInit {
       results += `\n✓ Invalid zoom correctly failed`;
     }
 
+    this.testResults.set(results);
+  }
+
+  protected async testNativeUIProjectionMissingSelector(): Promise<void> {
+    let results = `${this.testResults()}\n=== Native UI projection validation ===`;
+    try {
+      await CameraPreview.start({ nativeUIProjection: true, parent: 'cameraView' });
+      results += `\n✗ Expected rejection: ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      if (text.includes(NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE)) {
+        results += `\n✓ ${NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE}`;
+      } else {
+        results += `\n✗ Unexpected error: ${text}`;
+      }
+    }
     this.testResults.set(results);
   }
 

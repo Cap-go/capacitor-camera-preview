@@ -622,6 +622,16 @@
 
       <div class="quick-tests ion-margin-top">
         <ion-button
+          (click)="testNativeUIProjectionMissingSelector()"
+          fill="outline"
+          size="small"
+          aria-label="Test native UI projection missing selector"
+        >
+          <ion-icon name="layers-outline" slot="start"></ion-icon>
+          Test native UI projection missing selector
+        </ion-button>
+
+        <ion-button
           (click)="quickTestHighQuality()"
           fill="outline"
           size="small"

@@ -9,7 +9,7 @@ appId: app.capgo.camera.preview
 - assertVisible: "Enable Physical Camera Selection (Android)"
 - tapOn: "Enable Physical Camera Selection (Android)"
 - tapOn:
-    text: "Start Camera with Current Settings"
+    text: "Start camera with current settings"
     retryTapIfNoChange: false
 - extendedWaitUntil:
     visible: "Status:"

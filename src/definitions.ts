@@ -291,12 +291,11 @@ export interface CameraPreviewOptions {
   /**
    * When true, registers the live preview with `@webview-native-ui/engine` so Web UI can cover it.
    * While a Web overlay owns the screen, the engine shows a captured snapshot in the DOM slot
-   * tied to `nativeUIProjectionSelector`; the live native preview pauses visually until the
-   * overlay closes. Requires `nativeUIProjectionSelector`. Ionic apps should call
+   * tied to `nativeUIProjectionSelector`; the live native preview freezes until the overlay
+   * closes. Requires `nativeUIProjectionSelector`. Ionic apps should call
    * `enableSupportIonicOverlays()` once at startup when using this option.
    * @platform android, ios
    * @default false
-   * @since 8.16.0
    */
   nativeUIProjection?: boolean;
   /**
@@ -304,7 +303,6 @@ export interface CameraPreviewOptions {
    * covers the native view. Required when `nativeUIProjection` is true. Size and position this
    * element to match the preview area in your layout.
    * @platform android, ios
-   * @since 8.16.0
    */
   nativeUIProjectionSelector?: string;
   /**

@@ -1367,8 +1367,8 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             tearDownNativeUIProjection();
         }
         if (nativeUIProjection) {
-            if (nativeUIProjectionSelector == null || nativeUIProjectionSelector.isEmpty()) {
-                call.reject("nativeUIProjectionSelector is required when nativeUIProjection is true");
+            if (NativeUIProjectionStartValidation.isMissingSelector(nativeUIProjection, nativeUIProjectionSelector)) {
+                call.reject(NativeUIProjectionStartValidation.MISSING_SELECTOR_MESSAGE);
                 return;
             }
             this.nativeUIProjectionEnabled = true;

@@ -8,15 +8,15 @@ appId: app.capgo.camera.preview
 - assertVisible: "Camera Preview"
 - scrollUntilVisible:
     element:
-      text: "Start Camera with Current Settings"
+      text: "Start camera with current settings"
 - tapOn:
-    text: "Start Camera with Current Settings"
+    text: "Start camera with current settings"
     retryTapIfNoChange: false
 - extendedWaitUntil:
     visible: "Status:"
     timeout: 15000
 - tapOn: "Run feature diagnostics"
 - assertVisible: "=== Camera Modal Test Results ==="
-- assertVisible: "Native UI projection enabled: false"
+- assertVisible: "Native UI projection bridge active (previewShown): false"
 - tapOn: "Close camera modal"
 - assertVisible: "Camera Preview"

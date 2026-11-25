@@ -1065,6 +1065,9 @@ extension CameraController {
                         captureSession.startRunning()
                         self.applyAllowHapticsAndSystemSoundsDuringRecordingPolicy()
                     } catch {
+                        if let captureSession = self.captureSession {
+                            captureSession.commitConfiguration()
+                        }
                         prepareError = error
                     }
                 }
