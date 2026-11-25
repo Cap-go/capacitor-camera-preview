@@ -6,7 +6,13 @@ appId: app.capgo.camera.preview
       camera: allow
       microphone: allow
 - assertVisible: "Camera Preview"
+- scrollUntilVisible:
+    element:
+      text: "Enable Native UI projection (engine)"
 - tapOn: "Enable Native UI projection (engine)"
+- scrollUntilVisible:
+    element:
+      text: "Start Camera with Current Settings"
 - tapOn:
     text: "Start Camera with Current Settings"
     retryTapIfNoChange: false

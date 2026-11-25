@@ -6,6 +6,9 @@ appId: app.capgo.camera.preview
       camera: allow
       microphone: allow
 - assertVisible: "Camera Preview"
+- scrollUntilVisible:
+    element:
+      text: "Start Camera with Current Settings"
 - tapOn:
     text: "Start Camera with Current Settings"
     retryTapIfNoChange: false

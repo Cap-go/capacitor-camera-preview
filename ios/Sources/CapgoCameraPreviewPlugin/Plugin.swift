@@ -949,6 +949,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     private func teardownAfterFailedStart() {
+        self.deactivateNativeUIProjectionIfNeeded()
         self.cameraController.removeGridOverlay()
         if let previewView = self.previewView {
             previewView.removeFromSuperview()
@@ -965,7 +966,6 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         }
         self.cameraController.invalidateActivePrepare()
         self.cameraController.cleanup()
-        self.deactivateNativeUIProjectionIfNeeded()
     }
 
     private func failPendingStart(_ call: CAPPluginCall, message: String, errorCode: String? = nil) {

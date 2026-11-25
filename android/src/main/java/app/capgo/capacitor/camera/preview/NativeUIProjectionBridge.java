@@ -42,7 +42,7 @@ public final class NativeUIProjectionBridge {
                     "CameraPreview",
                     projectionSelector,
                     receiveListeners,
-                    viewProvider
+                    () -> viewProvider.get()
                 );
         } catch (Exception error) {
             Log.e(TAG, "Native UI projection unavailable", error);

@@ -406,17 +406,19 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
 
         // If force is true, kill everything and restart no matter what
-        if (force && cameraXView != null) {
-            try {
-                Log.d(TAG, "start: force=true, force stopping camera regardless of state");
-                tearDownNativeUIProjection();
-                // Force stop the camera session no matter what state it's in
-                cameraXView.stopSession();
-                cameraXView = null;
-            } catch (Exception e) {
-                Log.w(TAG, "start: Exception while force stopping camera", e);
-                // Continue anyway - we're forcing a restart
-                cameraXView = null;
+        if (force) {
+            tearDownNativeUIProjection();
+            if (cameraXView != null) {
+                try {
+                    Log.d(TAG, "start: force=true, force stopping camera regardless of state");
+                    // Force stop the camera session no matter what state it's in
+                    cameraXView.stopSession();
+                    cameraXView = null;
+                } catch (Exception e) {
+                    Log.w(TAG, "start: Exception while force stopping camera", e);
+                    // Continue anyway - we're forcing a restart
+                    cameraXView = null;
+                }
             }
         } else if (cameraXView != null) {
             // Normal checks only when force is false
