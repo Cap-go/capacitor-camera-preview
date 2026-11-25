@@ -289,6 +289,23 @@ export interface CameraPreviewOptions {
    */
   toBack?: boolean;
   /**
+   * When true, registers the live preview with `@webview-native-ui/engine` so Web UI can cover it.
+   * While a Web overlay owns the screen, the engine shows a captured snapshot in the DOM slot
+   * tied to `nativeUIProjectionSelector`; the live native preview freezes until the overlay
+   * closes. Requires `nativeUIProjectionSelector`. Ionic apps should call
+   * `enableSupportIonicOverlays()` once at startup when using this option.
+   * @platform android, ios
+   * @default false
+   */
+  nativeUIProjection?: boolean;
+  /**
+   * CSS selector for the DOM container that receives the projected preview image when Web UI
+   * covers the native view. Required when `nativeUIProjection` is true. Size and position this
+   * element to match the preview area in your layout.
+   * @platform android, ios
+   */
+  nativeUIProjectionSelector?: string;
+  /**
    * Bottom padding for the preview, in pixels.
    * @platform android, ios
    */
@@ -1172,6 +1189,30 @@ export interface CameraPreviewPlugin {
    * @platform ios
    */
   addListener(eventName: 'cameraInterruptionEnded', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when native UI projection exposes the live preview in the Web layer.
+   *
+   * @platform android, ios
+   */
+  addListener(eventName: 'previewShown', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when native UI projection hides the live preview in the Web layer.
+   *
+   * @platform android, ios
+   */
+  addListener(eventName: 'previewHidden', listenerFunc: () => void): Promise<PluginListenerHandle>;
+
+  /**
+   * Fired when preview size, position, or related layout changes while native UI projection is active.
+   *
+   * @platform android, ios
+   */
+  addListener(
+    eventName: 'previewAppearanceChanged',
+    listenerFunc: (data: Record<string, unknown>) => void,
+  ): Promise<PluginListenerHandle>;
 
   /**
    * Deletes a file at the given absolute path on the device.

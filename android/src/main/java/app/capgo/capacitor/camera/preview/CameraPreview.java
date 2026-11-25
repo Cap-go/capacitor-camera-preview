@@ -48,6 +48,7 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
+import io.github.webview_native_ui.engine.NativeUIProjection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -71,10 +72,29 @@ import org.json.JSONObject;
 public class CameraPreview extends Plugin implements CameraXView.CameraXViewListener {
 
     private final String pluginVersion = "";
+    private final NativeUIProjectionBridge nativeUIProjectionBridge = new NativeUIProjectionBridge();
+    private boolean nativeUIProjectionEnabled = false;
+    private String nativeUIProjectionSelector;
 
     @Override
     public void load() {
         registerScreenLockReceiver();
+        WebView webView = getBridge().getWebView();
+        if (webView != null) {
+            try {
+                NativeUIProjection.install(webView);
+            } catch (Exception error) {
+                Log.w(TAG, "Native UI engine channel install skipped", error);
+            }
+        }
+    }
+
+    @Override
+    protected void notifyListeners(String eventName, JSObject data, boolean retainUntilConsumed) {
+        if (nativeUIProjectionBridge.isActive()) {
+            nativeUIProjectionBridge.receive(eventName, data);
+        }
+        super.notifyListeners(eventName, data, retainUntilConsumed);
     }
 
     @Override
@@ -85,6 +105,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             // Store the current configuration before stopping
             lastSessionConfig = cameraXView.getSessionConfig();
             requestBarcodeScannerRestartAfterCameraResume();
+            deactivateNativeUIProjectionBridgeOnly();
             cameraXView.stopSession();
         }
     }
@@ -122,6 +143,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         clearActiveBarcodeScanner();
         toBackVisualStateActive = false;
         restoreWebViewVisualState();
+        tearDownNativeUIProjection();
         unregisterScreenLockReceiver();
     }
 
@@ -385,16 +407,33 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         boolean force = Boolean.TRUE.equals(call.getBoolean("force", false));
 
         // If force is true, kill everything and restart no matter what
-        if (force && cameraXView != null) {
+        if (force) {
             try {
-                Log.d(TAG, "start: force=true, force stopping camera regardless of state");
-                // Force stop the camera session no matter what state it's in
-                cameraXView.stopSession();
-                cameraXView = null;
-            } catch (Exception e) {
-                Log.w(TAG, "start: Exception while force stopping camera", e);
-                // Continue anyway - we're forcing a restart
-                cameraXView = null;
+                java.util.concurrent.CountDownLatch projectionTeardownLatch = new java.util.concurrent.CountDownLatch(1);
+                getBridge()
+                    .getActivity()
+                    .runOnUiThread(() -> {
+                        try {
+                            tearDownNativeUIProjection();
+                        } finally {
+                            projectionTeardownLatch.countDown();
+                        }
+                    });
+                projectionTeardownLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            if (cameraXView != null) {
+                try {
+                    Log.d(TAG, "start: force=true, force stopping camera regardless of state");
+                    // Force stop the camera session no matter what state it's in
+                    cameraXView.stopSession();
+                    cameraXView = null;
+                } catch (Exception e) {
+                    Log.w(TAG, "start: Exception while force stopping camera", e);
+                    // Continue anyway - we're forcing a restart
+                    cameraXView = null;
+                }
             }
         } else if (cameraXView != null) {
             // Normal checks only when force is false
@@ -440,8 +479,22 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             call.reject("Camera is not running");
             return;
         }
-        cameraXView.flipCamera();
-        call.resolve();
+        getBridge()
+            .getActivity()
+            .runOnUiThread(() -> {
+                if (cameraXView == null || !cameraXView.isRunning()) {
+                    call.reject("Camera is not running");
+                    return;
+                }
+                cameraXView.flipCamera();
+                WebView webView = getBridge().getWebView();
+                if (webView != null) {
+                    webView.postDelayed(() -> emitPreviewAppearanceChangedIfNeeded(), 400);
+                } else {
+                    emitPreviewAppearanceChangedIfNeeded();
+                }
+                call.resolve();
+            });
     }
 
     @SuppressLint("MissingPermission")
@@ -847,6 +900,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             clearActiveBarcodeScanner();
             toBackVisualStateActive = false;
             restoreWebViewVisualState();
+            tearDownNativeUIProjection();
             call.resolve();
         });
     }
@@ -1326,6 +1380,14 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         final boolean enablePhysicalDeviceSelection = Boolean.TRUE.equals(call.getBoolean("enablePhysicalDeviceSelection", false));
         final String videoQuality = call.getString("videoQuality", "high");
         final JSONObject barcodeScannerOptions = getStartBarcodeScannerOptions(call);
+        final boolean nativeUIProjection = Boolean.TRUE.equals(call.getBoolean("nativeUIProjection", false));
+        final String nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector");
+        if (nativeUIProjection) {
+            if (NativeUIProjectionStartValidation.isMissingSelector(nativeUIProjection, nativeUIProjectionSelector)) {
+                call.reject(NativeUIProjectionStartValidation.MISSING_SELECTOR_MESSAGE);
+                return;
+            }
+        }
 
         final Integer captureResolutionWidth;
         final Integer captureResolutionHeight;
@@ -1343,6 +1405,15 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         if (call.getData().has("aspectRatio") && (call.getData().has("width") || call.getData().has("height"))) {
             call.reject("Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.");
             return;
+        }
+
+        if (nativeUIProjection) {
+            this.nativeUIProjectionEnabled = true;
+            this.nativeUIProjectionSelector = nativeUIProjectionSelector;
+        } else {
+            tearDownNativeUIProjection();
+            this.nativeUIProjectionEnabled = false;
+            this.nativeUIProjectionSelector = null;
         }
 
         float targetZoom = initialZoomLevel;
@@ -1839,6 +1910,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                     data.put("width", bounds[2]);
                     data.put("height", bounds[3]);
                     notifyListeners("screenResize", data);
+                    emitPreviewAppearanceChangedIfNeeded();
 
                     // Also emit orientationChange with a unified string value matching iOS
                     String o = getDeviceOrientationString();
@@ -2287,15 +2359,56 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             }
 
             resolveCameraStartCall(call, result);
+        } else {
+            maybeActivateNativeUIProjection();
         }
         restartBarcodeScannerAfterCameraResumeIfNeeded();
     }
 
     private void resolveCameraStartCall(PluginCall call, JSObject result) {
+        maybeActivateNativeUIProjection();
         call.resolve(result);
         bridge.releaseCall(call);
         cameraStartCallbackId = null; // Prevent re-use
         resetPendingStartBarcodeScanner();
+    }
+
+    private void maybeActivateNativeUIProjection() {
+        if (!nativeUIProjectionEnabled || nativeUIProjectionSelector == null || cameraXView == null) {
+            return;
+        }
+        getBridge()
+            .getActivity()
+            .runOnUiThread(() -> {
+                if (!nativeUIProjectionEnabled || nativeUIProjectionSelector == null || cameraXView == null) {
+                    return;
+                }
+                nativeUIProjectionBridge.activate(getActivity().getWindow(), getBridge().getWebView(), nativeUIProjectionSelector, () ->
+                    cameraXView != null ? cameraXView.getPreviewContainer() : null
+                );
+                if (nativeUIProjectionBridge.isActive()) {
+                    notifyListeners("previewShown", new JSObject());
+                }
+            });
+    }
+
+    private void deactivateNativeUIProjectionBridgeOnly() {
+        if (nativeUIProjectionBridge.isActive()) {
+            notifyListeners("previewHidden", new JSObject());
+            nativeUIProjectionBridge.deactivate();
+        }
+    }
+
+    private void tearDownNativeUIProjection() {
+        deactivateNativeUIProjectionBridgeOnly();
+        nativeUIProjectionEnabled = false;
+        nativeUIProjectionSelector = null;
+    }
+
+    private void emitPreviewAppearanceChangedIfNeeded() {
+        if (nativeUIProjectionBridge.isActive()) {
+            notifyListeners("previewAppearanceChanged", new JSObject());
+        }
     }
 
     private void rejectCameraStartCall(PluginCall call, String message) {
@@ -2421,6 +2534,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
                 ret.put("y", bounds[1]);
                 ret.put("width", bounds[2]);
                 ret.put("height", bounds[3]);
+                emitPreviewAppearanceChangedIfNeeded();
                 call.resolve(ret);
             });
         });
@@ -2447,6 +2561,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
         String gridMode = call.getString("gridMode", "none");
         getActivity().runOnUiThread(() -> {
             cameraXView.setGridMode(gridMode);
+            emitPreviewAppearanceChangedIfNeeded();
             call.resolve();
         });
     }
@@ -2559,6 +2674,7 @@ public class CameraPreview extends Plugin implements CameraXView.CameraXViewList
             ret.put("y", bounds[1]);
             ret.put("width", bounds[2]);
             ret.put("height", bounds[3]);
+            emitPreviewAppearanceChangedIfNeeded();
             call.resolve(ret);
         });
     }

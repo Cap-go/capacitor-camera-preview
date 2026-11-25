@@ -23,6 +23,7 @@ import {
   IonFabButton,
   IonIcon,
   IonSpinner,
+  AlertController,
   ModalController,
 } from '@ionic/angular/standalone';
 import {
@@ -67,6 +68,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   readonly #cameraViewService = inject(CapacitorCameraViewService);
   readonly #elementRef = inject(ElementRef);
   readonly #modalController = inject(ModalController);
+  readonly #alertController = inject(AlertController);
   readonly #galleryService = inject(GalleryService);
 
   // Basic camera inputs
@@ -97,6 +99,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   public readonly withExifLocation = input<boolean>(false);
   public readonly gridMode = input<'none' | '3x3' | '4x4'>('none');
   public readonly showBoundary = input<boolean>(false);
+  public readonly nativeUIProjection = input<boolean>(false);
 
   protected readonly cameraStarted = toSignal(
     this.#cameraViewService.cameraStarted,
@@ -114,6 +117,8 @@ export class CameraModalComponent implements OnInit, OnDestroy {
   protected readonly currentDeviceId = signal<string>('');
   protected readonly currentLens = signal<LensInfo | null>(null);
   protected readonly isRunning = signal(false);
+  protected readonly nativeUIProjectionBridgeActive = signal(false);
+  protected readonly nativeUIProjectionStartError = signal<string | null>(null);
   protected readonly zoomButtonValues = signal<number[]>([]);
 
   // Video recording and testing state
@@ -181,6 +186,9 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   // Listener handle for screen resize events
   #screenResizeListener?: PluginListenerHandle;
+  #nativeUIProjectionListenerHandles: PluginListenerHandle[] = [];
+  #nativeUIProjectionTelemetryGeneration = 0;
+  #destroyed = false;
 
   // Status bar and home indicator state tracking
   #previousStatusBarVisible = true;
@@ -273,14 +281,62 @@ export class CameraModalComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     await this.#hideStatusBarAndHomeIndicator();
+    await this.#setupNativeUIProjectionTelemetry();
     await this.startCamera();
     await this.setupScreenResizeListener();
   }
 
   ngOnDestroy(): void {
+    this.#destroyed = true;
+    this.#nativeUIProjectionTelemetryGeneration += 1;
+    void this.#clearNativeUIProjectionTelemetry();
     this.stop();
     this.removeScreenResizeListener();
     this.#showStatusBarAndHomeIndicator();
+  }
+
+  async #setupNativeUIProjectionTelemetry(): Promise<void> {
+    await this.#clearNativeUIProjectionTelemetry();
+    this.nativeUIProjectionBridgeActive.set(false);
+    this.nativeUIProjectionStartError.set(null);
+    if (!this.nativeUIProjection() || this.isWeb) {
+      return;
+    }
+    const generation = this.#nativeUIProjectionTelemetryGeneration + 1;
+    this.#nativeUIProjectionTelemetryGeneration = generation;
+    if (this.#destroyed) {
+      return;
+    }
+    const previewShown = await CameraPreview.addListener('previewShown', () => {
+      if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+        return;
+      }
+      this.nativeUIProjectionBridgeActive.set(true);
+    });
+    if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+      await previewShown.remove();
+      return;
+    }
+    const previewHidden = await CameraPreview.addListener('previewHidden', () => {
+      if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+        return;
+      }
+      this.nativeUIProjectionBridgeActive.set(false);
+    });
+    if (this.#destroyed || generation !== this.#nativeUIProjectionTelemetryGeneration) {
+      await previewShown.remove();
+      await previewHidden.remove();
+      return;
+    }
+    this.#nativeUIProjectionListenerHandles.push(previewShown, previewHidden);
+  }
+
+  async #clearNativeUIProjectionTelemetry(): Promise<void> {
+    await Promise.all(
+      this.#nativeUIProjectionListenerHandles.map((handle) => handle.remove()),
+    );
+    this.#nativeUIProjectionListenerHandles = [];
+    this.nativeUIProjectionBridgeActive.set(false);
   }
 
   protected async startCamera(): Promise<void> {
@@ -298,6 +354,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       enableVideoMode: true,
       enablePhysicalDeviceSelection: this.enablePhysicalDeviceSelection(),
     };
+
+    if (this.nativeUIProjection()) {
+      startOptions.nativeUIProjection = true;
+      startOptions.nativeUIProjectionSelector = '#camera-preview-projection';
+    }
 
     // Only add x and y if they are not null
     const x = this.x();
@@ -317,6 +378,7 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     startOptions.aspectRatio = this.currentAspectRatio();
 
     try {
+      this.nativeUIProjectionStartError.set(null);
       const nativeResult = await this.#cameraViewService.start(startOptions);
 
       // Store native-returned position
@@ -370,10 +432,12 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       // Setup camera switching after devices are loaded
       this.#setupCameraSwitchButtons();
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.nativeUIProjectionStartError.set(message);
       console.error('Failed to start camera:', error);
       // Close modal and show error
       await this.#modalController.dismiss({
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
         type: 'error',
       });
     }
@@ -717,6 +781,17 @@ export class CameraModalComponent implements OnInit, OnDestroy {
     ]);
   }
 
+  protected async openWebOverlayTest(): Promise<void> {
+    const alert = await this.#alertController.create({
+      header: 'Web overlay projection test',
+      message:
+        'With native UI projection enabled, the preview should appear as a snapshot under this alert.',
+      buttons: ['OK'],
+    });
+    await alert.present();
+    await alert.onDidDismiss();
+  }
+
   protected async testAllFeatures(): Promise<void> {
     if (this.showTestResults()) {
       // Hide test results
@@ -736,6 +811,11 @@ export class CameraModalComponent implements OnInit, OnDestroy {
       const currentId = await this.#cameraViewService.getDeviceId();
       results += `\n✓ Current device: ${currentId}`;
       results += `\n✓ Physical selection enabled: ${this.enablePhysicalDeviceSelection()}`;
+      results += `\n✓ Native UI projection requested: ${this.nativeUIProjection()}`;
+      results += `\n✓ Native UI projection bridge active (previewShown): ${this.nativeUIProjectionBridgeActive()}`;
+      if (this.nativeUIProjectionStartError()) {
+        results += `\n✗ Native UI projection start error: ${this.nativeUIProjectionStartError()}`;
+      }
 
       // Test zoom capabilities and lens info
       const zoomData = await this.#cameraViewService.getZoom();

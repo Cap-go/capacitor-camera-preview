@@ -1,0 +1,24 @@
+appId: app.capgo.camera.preview
+---
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+      microphone: allow
+- assertVisible: "Camera Preview"
+- scrollUntilVisible:
+    element:
+      text: "Test native UI projection missing selector"
+    timeout: 60000
+    speed: 40
+    visibilityPercentage: 50
+- tapOn:
+    text: "Test native UI projection missing selector"
+    retryTapIfNoChange: false
+- scrollUntilVisible:
+    element:
+      text: ".*✓ nativeUIProjectionSelector is required when nativeUIProjection is true.*"
+    timeout: 60000
+    speed: 40
+    visibilityPercentage: 10
+- assertVisible: ".*✓ nativeUIProjectionSelector is required when nativeUIProjection is true.*"

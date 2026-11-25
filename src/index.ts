@@ -7,6 +7,10 @@ const CameraPreview = registerPlugin<CameraPreviewPlugin>('CameraPreview', {
 });
 
 export * from './definitions';
+export {
+  NATIVE_UI_PROJECTION_MISSING_SELECTOR_MESSAGE,
+  nativeUIProjectionMissingSelectorMessage,
+} from './native-ui-projection-start-validation';
 export { CameraPreview };
 
 export async function getBase64FromFilePath(filePath: string): Promise<string> {

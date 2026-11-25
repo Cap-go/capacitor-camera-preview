@@ -46,7 +46,7 @@
     "test:ios": "bash ./scripts/test-ios.sh",
     "verify:android": "cd android && ./gradlew clean build test && cd ..",
     "verify:web": "bun run build && bun run test:web && bun run test:config",
-    "test:web": "bun test src/web.stop.test.ts src/web-capture-scaling.test.ts src/web.videoBitrate.test.ts",
+    "test:web": "bun test src/web.stop.test.ts src/web-capture-scaling.test.ts src/web.videoBitrate.test.ts src/native-ui-projection-options.test.ts src/native-ui-projection-web.start.test.ts",
     "lint": "bun run eslint && bun run prettier -- --check && bun run swiftlint -- lint",
     "fmt": "bun run eslint -- --fix && bun run prettier -- --write && bun run swiftlint -- --fix --format",
     "eslint": "eslint .",
@@ -79,15 +79,15 @@
     "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.70.0",
     "eslint": "^10.0.0",
+    "happy-dom": "^21.0.0",
     "husky": "^9.1.7",
     "prettier": "^3.6.2",
     "prettier-plugin-java": "^2.7.7",
+    "prettier-pretty-check": "^0.2.0",
     "rimraf": "^6.1.0",
     "rollup": "^4.53.2",
     "swiftlint": "^2.0.0",
-    "typescript": "^6.0.3",
-    "prettier-pretty-check": "^0.2.0",
-    "happy-dom": "^21.0.0"
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0"
@@ -101,5 +101,8 @@
     "android": {
       "src": "android"
     }
+  },
+  "dependencies": {
+    "@webview-native-ui/engine": "1.0.11"
   }
 }

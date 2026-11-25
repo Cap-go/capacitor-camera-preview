@@ -13,6 +13,13 @@ ion-content::part(background) {
   overflow: hidden;
 }
 
+.camera-preview-projection-slot {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
 .boundary-overlay {
   position: absolute;
   border: 2px solid red;

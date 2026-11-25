@@ -1,0 +1,47 @@
+# Simulator without hardware camera: start fails and results show Camera start failed.
+# Projection slot, overlay, and bridge assertions require a physical device with a camera.
+appId: app.capgo.camera.preview
+---
+- launchApp:
+    clearState: true
+    permissions:
+      camera: allow
+      microphone: allow
+- assertVisible: "Camera Preview"
+- scrollUntilVisible:
+    element:
+      text: 'Enable Native UI projection \(engine\)'
+    timeout: 30000
+    speed: 40
+- tapOn: 'Enable Native UI projection (engine)'
+- scrollUntilVisible:
+    element:
+      text: "Start camera with current settings"
+    timeout: 30000
+    speed: 40
+- tapOn:
+    text: "Start camera with current settings"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: ".*(Camera start failed:|Status:).*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: ".*Camera start failed:.*"
+    commands:
+      - assertVisible: ".*Camera start failed:.*"
+- runFlow:
+    when:
+      visible: "Status:"
+    commands:
+      - extendedWaitUntil:
+          visible: "Camera preview projection slot"
+          timeout: 15000
+      - tapOn: "Test Web overlay"
+      - assertVisible: "Web overlay projection test"
+      - tapOn: "OK"
+      - tapOn: "Run feature diagnostics"
+      - assertVisible: "=== Camera Modal Test Results ==="
+      - assertVisible: 'Native UI projection bridge active \(previewShown\): true'
+      - tapOn: "Close camera modal"
+      - assertVisible: "Camera Preview"

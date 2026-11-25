@@ -12,6 +12,24 @@
     }
   </div>
 
+  @if (
+    nativeUIProjection() &&
+    cameraStarted() &&
+    nativePreviewWidth() > 0 &&
+    nativePreviewHeight() > 0
+  ) {
+    <div
+      id="camera-preview-projection"
+      data-testid="camera-preview-projection-slot"
+      aria-label="Camera preview projection slot"
+      class="camera-preview-projection-slot"
+      [style.left.px]="nativePreviewX()"
+      [style.top.px]="nativePreviewY()"
+      [style.width.px]="nativePreviewWidth()"
+      [style.height.px]="nativePreviewHeight()"
+    ></div>
+  }
+
   <!-- Black background mask around camera preview -->
   @if (
     cameraStarted() && nativePreviewWidth() > 0 && nativePreviewHeight() > 0
@@ -177,6 +195,16 @@
     <ion-fab-button (click)="testAllFeatures()" size="small" aria-label="Run feature diagnostics">
       <ion-icon name="bug-outline"></ion-icon>
     </ion-fab-button>
+
+    @if (!isWeb && nativeUIProjection() && cameraStarted()) {
+      <ion-fab-button
+        (click)="openWebOverlayTest()"
+        size="small"
+        aria-label="Test Web overlay"
+      >
+        <ion-icon name="layers-outline"></ion-icon>
+      </ion-fab-button>
+    }
 
     <ion-fab-button (click)="refreshDeviceInfo()" size="small" aria-label="Refresh device info">
       <ion-icon name="refresh-outline"></ion-icon>

@@ -41,7 +41,8 @@ import {
   sunnyOutline,
   videocam,
   warningOutline,
-  chevronDownOutline
+  chevronDownOutline,
+  layersOutline,
 } from 'ionicons/icons';
 
 @Component({
@@ -91,7 +92,8 @@ export class AppComponent {
       sunnyOutline,
       videocam,
       warningOutline,
-      chevronDownOutline
+      chevronDownOutline,
+      layersOutline,
     });
   }
 }

@@ -1,5 +1,4 @@
 import { CapacitorUpdater } from '@capgo/capacitor-updater';
-import { Capacitor } from '@capacitor/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import {
   PreloadAllModules,
@@ -14,6 +13,12 @@ import {
 
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
+import { Capacitor } from '@capacitor/core';
+import { enableSupportIonicOverlays } from '@webview-native-ui/engine/ionic';
+
+if (Capacitor.isNativePlatform()) {
+  enableSupportIonicOverlays();
+}
 
 bootstrapApplication(AppComponent, {
   providers: [

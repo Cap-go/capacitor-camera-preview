@@ -135,6 +135,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     private var startGeneration: UInt = 0
     private var firstFrameTimeoutWorkItem: DispatchWorkItem?
     private var pendingStartCall: CAPPluginCall?
+    private let nativeUIProjectionBridge = NativeUIProjectionBridge()
+    private var nativeUIProjectionEnabled = false
+    private var nativeUIProjectionSelector: String?
 
     // Store original webview colors to restore them when stopping
     private var originalWebViewBackgroundColor: UIColor?
@@ -425,6 +428,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         if self.isInitialized {
             self.makeWebViewTransparent()
         }
+        self.emitPreviewAppearanceChangedIfNeeded()
     }
 
     @objc func setAspectRatio(_ call: CAPPluginCall) {
@@ -444,7 +448,9 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.cameraController.updateAspectRatio(newAspectRatio)
 
         DispatchQueue.main.async {
-            call.resolve(self.rawSetAspectRatio())
+            let result = self.rawSetAspectRatio()
+            self.emitPreviewAppearanceChangedIfNeeded()
+            call.resolve(result)
         }
     }
 
@@ -532,6 +538,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             } else {
                 self.cameraController.addGridOverlay(to: self.previewView, gridMode: gridMode)
             }
+            self.emitPreviewAppearanceChangedIfNeeded()
         }
 
         call.resolve()
@@ -690,6 +697,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                         self.previewView = nil
                     }
 
+                    self.deactivateNativeUIProjectionIfNeeded()
+
                     // Restore webView to opaque state with original background
                     if let webView = self.webView {
                         webView.isOpaque = true
@@ -811,6 +820,20 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.positioning = call.getString("positioning") ?? "top"
         self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
 
+        let nativeUIProjection = call.getBool("nativeUIProjection") ?? false
+        let nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector")
+        if nativeUIProjection {
+            guard !NativeUIProjectionStartValidation.isMissingSelector(
+                enabled: true,
+                selector: nativeUIProjectionSelector
+            ) else {
+                self.isInitializing = false
+                self.pendingStartCall = nil
+                call.reject(NativeUIProjectionStartValidation.missingSelectorMessage)
+                return
+            }
+        }
+
         // Default to high if not provided
         let videoQuality = call.getString("videoQuality") ?? "high"
         self.cameraController.setPreviewVideoBitrate(
@@ -829,6 +852,18 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     call.reject("camera already started")
                 }
                 return
+            }
+
+            if nativeUIProjection {
+                self.nativeUIProjectionEnabled = true
+                self.nativeUIProjectionSelector = nativeUIProjectionSelector
+            } else {
+                self.nativeUIProjectionEnabled = false
+                self.nativeUIProjectionSelector = nil
+            }
+
+            if !self.nativeUIProjectionEnabled {
+                self.deactivateNativeUIProjectionIfNeeded()
             }
 
             if let videoStabilizationMode = videoStabilizationMode {
@@ -922,6 +957,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
     }
 
     private func teardownAfterFailedStart() {
+        self.deactivateNativeUIProjectionIfNeeded()
         self.cameraController.removeGridOverlay()
         if let previewView = self.previewView {
             previewView.removeFromSuperview()
@@ -1074,6 +1110,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.pendingStartBarcodeScannerOptions = nil
         }
 
+        self.activateNativeUIProjectionIfNeeded()
         call.resolve(returnedObject)
     }
 
@@ -1122,6 +1159,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 // Ensure webview remains transparent after flip
                 self.makeWebViewTransparent()
 
+                self.emitPreviewAppearanceChangedIfNeeded()
                 call.resolve()
             } catch {
                 self.previewView.isUserInteractionEnabled = true
@@ -1159,6 +1197,8 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                 previewView.removeFromSuperview()
                 self.previewView = nil
             }
+
+            self.deactivateNativeUIProjectionIfNeeded()
 
             // Restore webView to opaque state with original background
             if let webView = self.webView {
@@ -2490,6 +2530,7 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
             self.updateCameraFrame()
             self.makeWebViewTransparent()
 
+            self.emitPreviewAppearanceChangedIfNeeded()
             call.resolve(self.visiblePreviewSizeJSObject())
         }
     }
@@ -2806,6 +2847,46 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
         call.resolve(["version": self.pluginVersion])
+    }
+
+    override public func notifyListeners(_ eventName: String, data: [String: Any]?, retainUntilConsumed: Bool = false) {
+        if self.nativeUIProjectionBridge.isActive {
+            self.nativeUIProjectionBridge.receive(eventName: eventName, data: data)
+        }
+        super.notifyListeners(eventName, data: data, retainUntilConsumed: retainUntilConsumed)
+    }
+
+    private func emitPreviewAppearanceChangedIfNeeded() {
+        guard self.nativeUIProjectionBridge.isActive else { return }
+        self.notifyListeners("previewAppearanceChanged", data: [:])
+    }
+
+    private func activateNativeUIProjectionIfNeeded() {
+        guard self.nativeUIProjectionEnabled, let selector = self.nativeUIProjectionSelector else { return }
+        if self.nativeUIProjectionBridge.isActive {
+            self.nativeUIProjectionBridge.deactivate()
+        }
+        self.nativeUIProjectionBridge.activate(
+            webView: self.webView,
+            projectionSelector: selector
+        ) { [weak self] in
+            self?.previewView
+        }
+        if self.nativeUIProjectionBridge.isActive {
+            self.notifyListeners("previewShown", data: [:])
+        }
+    }
+
+    private func deactivateNativeUIProjectionIfNeeded() {
+        guard self.nativeUIProjectionBridge.isActive else {
+            self.nativeUIProjectionEnabled = false
+            self.nativeUIProjectionSelector = nil
+            return
+        }
+        self.notifyListeners("previewHidden", data: [:])
+        self.nativeUIProjectionBridge.deactivate()
+        self.nativeUIProjectionEnabled = false
+        self.nativeUIProjectionSelector = nil
     }
 
 }

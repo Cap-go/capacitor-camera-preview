@@ -128,6 +128,47 @@ Video and photo taken with the plugin are never removed, so do not forget to rem
 use https://capacitorjs.com/docs/apis/filesystem#deletefile for that
 
 
+## Web overlay coexistence (`nativeUIProjection`)
+
+Enable optional integration with [`@webview-native-ui/engine`](https://github.com/webview-native-ui/engine/) so HTML and Ionic overlays can sit above the live camera preview without breaking layout. With `nativeUIProjection: true`, the plugin registers the native preview surface with the engine at runtime. When a Web layer covers that area, the live preview freezes and the engine paints a snapshot into your DOM slot (`nativeUIProjectionSelector`). When coverage ends, native preview interaction resumes at the current position.
+
+Default is `false`: no engine registration, no extra listeners, same behavior as before.
+
+### iOS native dependency (CocoaPods and SPM)
+
+This plugin links **WebViewNativeUIEngine** on every iOS native build (`CapgoCameraPreview.podspec` and `Package.swift`). That is separate from the `nativeUIProjection` start flag: CocoaPods apps must add the engine pod in the **App** `Podfile` or `pod install` fails after upgrading this plugin, even when you never pass `nativeUIProjection: true`.
+
+```ruby
+pod 'WebViewNativeUIEngine', :path => '../../node_modules/@webview-native-ui/engine'
+```
+
+Install the npm package in the app workspace so the `:path` resolves (see the [engine Capacitor guide](https://github.com/webview-native-ui/engine/blob/v1.0.11/docs/getting-started/capacitor.md)):
+
+```sh
+bun add --exact '@webview-native-ui/engine@1.0.11'
+```
+
+### When you enable `nativeUIProjection` at runtime
+
+```ts
+import { enableSupportIonicOverlays } from '@webview-native-ui/engine/ionic';
+import { CameraPreview } from '@capgo/camera-preview';
+
+// Once at app startup (Ionic apps)
+enableSupportIonicOverlays();
+
+await CameraPreview.start({
+  toBack: true,
+  nativeUIProjection: true,
+  nativeUIProjectionSelector: '#camera-preview-projection',
+});
+```
+
+```html
+<!-- Match the preview bounds in your layout -->
+<div id="camera-preview-projection" class="camera-preview-projection-slot"></div>
+```
+
 ## Touch & Gestures (JS‑Driven)
 
 - Native tap‑to‑focus and pinch‑to‑zoom gesture handling are intentionally disabled on both Android and iOS.
@@ -494,6 +535,9 @@ Documentation for the [uploader](https://github.com/Cap-go/capacitor-uploader)
 * [`addListener('recordingFinished', ...)`](#addlistenerrecordingfinished-)
 * [`addListener('cameraInterrupted', ...)`](#addlistenercamerainterrupted-)
 * [`addListener('cameraInterruptionEnded', ...)`](#addlistenercamerainterruptionended-)
+* [`addListener('previewShown', ...)`](#addlistenerpreviewshown-)
+* [`addListener('previewHidden', ...)`](#addlistenerpreviewhidden-)
+* [`addListener('previewAppearanceChanged', ...)`](#addlistenerpreviewappearancechanged-)
 * [`deleteFile(...)`](#deletefile)
 * [`getSafeAreaInsets()`](#getsafeareainsets)
 * [`getOrientation()`](#getorientation)
@@ -1364,6 +1408,60 @@ Native recovery may still be restarting the session; wait for preview frames bef
 --------------------
 
 
+### addListener('previewShown', ...)
+
+```typescript
+addListener(eventName: 'previewShown', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Fired when native UI projection exposes the live preview in the Web layer.
+
+| Param              | Type                        |
+| ------------------ | --------------------------- |
+| **`eventName`**    | <code>'previewShown'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>  |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('previewHidden', ...)
+
+```typescript
+addListener(eventName: 'previewHidden', listenerFunc: () => void) => Promise<PluginListenerHandle>
+```
+
+Fired when native UI projection hides the live preview in the Web layer.
+
+| Param              | Type                         |
+| ------------------ | ---------------------------- |
+| **`eventName`**    | <code>'previewHidden'</code> |
+| **`listenerFunc`** | <code>() =&gt; void</code>   |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
+### addListener('previewAppearanceChanged', ...)
+
+```typescript
+addListener(eventName: 'previewAppearanceChanged', listenerFunc: (data: Record<string, unknown>) => void) => Promise<PluginListenerHandle>
+```
+
+Fired when preview size, position, or related layout changes while native UI projection is active.
+
+| Param              | Type                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| **`eventName`**    | <code>'previewAppearanceChanged'</code>                                             |
+| **`listenerFunc`** | <code>(data: <a href="#record">Record</a>&lt;string, unknown&gt;) =&gt; void</code> |
+
+**Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt;</code>
+
+--------------------
+
+
 ### deleteFile(...)
 
 ```typescript
@@ -1633,6 +1731,8 @@ Defines the configuration options for starting the camera preview.
 | **`gridMode`**                                   | <code><a href="#gridmode">GridMode</a></code>                                      | The grid overlay to display on the camera preview.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | <code>"none"</code>           | 2.1.0  |
 | **`includeSafeAreaInsets`**                      | <code>boolean</code>                                                               | Adjusts the y-position to account for safe areas (e.g., notches).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | <code>false</code>            |        |
 | **`toBack`**                                     | <code>boolean</code>                                                               | If true, places the preview behind the webview.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | <code>true</code>             |        |
+| **`nativeUIProjection`**                         | <code>boolean</code>                                                               | When true, registers the live preview with `@webview-native-ui/engine` so Web UI can cover it. While a Web overlay owns the screen, the engine shows a captured snapshot in the DOM slot tied to `nativeUIProjectionSelector`; the live native preview freezes until the overlay closes. Requires `nativeUIProjectionSelector`. Ionic apps should call `enableSupportIonicOverlays()` once at startup when using this option.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | <code>false</code>            |        |
+| **`nativeUIProjectionSelector`**                 | <code>string</code>                                                                | CSS selector for the DOM container that receives the projected preview image when Web UI covers the native view. Required when `nativeUIProjection` is true. Size and position this element to match the preview area in your layout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |                               |        |
 | **`paddingBottom`**                              | <code>number</code>                                                                | Bottom padding for the preview, in pixels.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |                               |        |
 | **`rotateWhenOrientationChanged`**               | <code>boolean</code>                                                               | Whether to rotate the preview when the device orientation changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | <code>true</code>             |        |
 | **`position`**                                   | <code>string</code>                                                                | The camera to use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | <code>"rear"</code>           |        |
@@ -1964,6 +2064,13 @@ Canonical device orientation values across platforms.
 #### BarcodeFormat
 
 <code><a href="#barcodescannerformat">BarcodeScannerFormat</a> | 'unknown'</code>
+
+
+#### Record
+
+Construct a type with a set of properties K of type T
+
+<code>{ [P in K]: T; }</code>
 
 
 #### ExposureMode

@@ -13,6 +13,7 @@ Pod::Spec.new do |s|
   s.source_files = 'ios/Sources/**/*.{swift,h,m,c,cc,mm,cpp}'
   s.ios.deployment_target = '15.0'
   s.dependency 'Capacitor'
+  s.dependency 'WebViewNativeUIEngine', '1.0.11'
   s.swift_version = '5.1'
   s.pod_target_xcconfig = { 'SWIFT_ACTIVE_COMPILATION_CONDITIONS' => '$(inherited) CAPGO_CAMERA_PREVIEW_DISABLE_CALLKIT' } # CameraPreview CallKit (configured by sync hook)
 end
