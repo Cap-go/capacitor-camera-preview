@@ -28,6 +28,7 @@ import type {
   VideoQuality,
 } from './definitions';
 import { DeviceType } from './definitions';
+import { nativeUIProjectionMissingSelectorMessage } from './native-ui-projection-start-validation';
 import { getWebCaptureImageDrawRects } from './web-capture-scaling';
 
 type WebPermissionState = 'granted' | 'denied' | 'prompt';
@@ -226,6 +227,11 @@ export class CameraPreviewWeb extends WebPlugin implements CameraPreviewPlugin {
   }
 
   async start(options: CameraPreviewOptions): Promise<{ width: number; height: number; x: number; y: number }> {
+    const missingSelector = nativeUIProjectionMissingSelectorMessage(options);
+    if (missingSelector) {
+      throw new Error(missingSelector);
+    }
+
     if (options.aspectRatio && (options.width || options.height)) {
       throw new Error('Cannot set both aspectRatio and size (width/height). Use setPreviewSize after start.');
     }

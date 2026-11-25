@@ -821,21 +821,17 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
         self.disableFocusIndicator = call.getBool("disableFocusIndicator") ?? false
 
         let nativeUIProjection = call.getBool("nativeUIProjection") ?? false
+        let nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector")
         if nativeUIProjection {
             guard !NativeUIProjectionStartValidation.isMissingSelector(
                 enabled: true,
-                selector: call.getString("nativeUIProjectionSelector")
+                selector: nativeUIProjectionSelector
             ) else {
                 self.isInitializing = false
                 self.pendingStartCall = nil
                 call.reject(NativeUIProjectionStartValidation.missingSelectorMessage)
                 return
             }
-            self.nativeUIProjectionEnabled = true
-            self.nativeUIProjectionSelector = call.getString("nativeUIProjectionSelector")
-        } else {
-            self.nativeUIProjectionEnabled = false
-            self.nativeUIProjectionSelector = nil
         }
 
         // Default to high if not provided
@@ -856,6 +852,14 @@ public class CameraPreview: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelega
                     call.reject("camera already started")
                 }
                 return
+            }
+
+            if nativeUIProjection {
+                self.nativeUIProjectionEnabled = true
+                self.nativeUIProjectionSelector = nativeUIProjectionSelector
+            } else {
+                self.nativeUIProjectionEnabled = false
+                self.nativeUIProjectionSelector = nil
             }
 
             if !self.nativeUIProjectionEnabled {

@@ -55,4 +55,11 @@ public final class NativeUIProjectionBridge {
             projection.receive(eventName, data == null ? new JSObject() : data);
         }
     }
+
+    void assignProjectionForTesting(NativeUIProjection testProjection) {
+        if (projection != null) {
+            deactivate();
+        }
+        projection = testProjection;
+    }
 }

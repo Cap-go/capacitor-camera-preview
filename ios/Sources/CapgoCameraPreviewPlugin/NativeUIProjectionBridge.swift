@@ -47,4 +47,11 @@ final class NativeUIProjectionBridge {
     func receive(eventName: String, data: [String: Any]?) {
         projection?.receive(eventName, data: data)
     }
+
+    internal func assignProjectionForTesting(_ projection: NativeUIProjection?) {
+        if self.projection != nil {
+            deactivate()
+        }
+        self.projection = projection
+    }
 }

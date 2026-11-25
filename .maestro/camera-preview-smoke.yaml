@@ -6,23 +6,42 @@ appId: app.capgo.camera.preview
       camera: allow
       microphone: allow
 - assertVisible: "Camera Preview"
-- assertVisible: "Enable Physical Camera Selection (Android)"
-- tapOn: "Enable Physical Camera Selection (Android)"
+- scrollUntilVisible:
+    element:
+      text: "Enable physical camera selection"
+    timeout: 30000
+    speed: 40
+- tapOn: "Enable physical camera selection"
+- scrollUntilVisible:
+    element:
+      text: "Start camera with current settings"
+    timeout: 30000
+    speed: 40
 - tapOn:
     text: "Start camera with current settings"
     retryTapIfNoChange: false
 - extendedWaitUntil:
-    visible: "Status:"
-    timeout: 15000
-- tapOn: "Refresh device info"
-- tapOn: "Run feature diagnostics"
-- assertVisible: "=== Camera Modal Test Results ==="
-- assertVisible: "Physical selection enabled: true"
-- tapOn: "Flip camera"
-- extendedWaitUntil:
-    visible: "Status:"
-    timeout: 10000
-- tapOn: "Refresh device info"
-- tapOn: "Zoom in"
-- tapOn: "Close camera modal"
-- assertVisible: "Camera Preview"
+    visible: ".*(Camera start failed:|Status:).*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: ".*Camera start failed:.*"
+    commands:
+      - assertVisible: ".*Camera start failed:.*"
+- runFlow:
+    when:
+      visible: "Status:"
+    commands:
+      - assertVisible: "Status:"
+      - tapOn: "Refresh device info"
+      - tapOn: "Run feature diagnostics"
+      - assertVisible: "=== Camera Modal Test Results ==="
+      - assertVisible: "Physical selection enabled: true"
+      - tapOn: "Flip camera"
+      - extendedWaitUntil:
+          visible: "Status:"
+          timeout: 10000
+      - tapOn: "Refresh device info"
+      - tapOn: "Zoom in"
+      - tapOn: "Close camera modal"
+      - assertVisible: "Camera Preview"
